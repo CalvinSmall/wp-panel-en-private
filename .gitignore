@@ -1,0 +1,31 @@
+# 编译产物
+/wp-panel
+/wp-panel-*
+!/wp-panel-optimizer
+/bin/tailwindcss
+
+
+# Go
+
+# 系统
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Claude
+.claude/
+CLAUDE.md
+AGENTS.md
+setup.sh
+
+# Wrangler
+stats-worker/.wrangler/
+stats-worker/wrangler.toml
+
+# Scratch
+scratch/

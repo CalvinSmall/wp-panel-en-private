@@ -1,0 +1,240 @@
+{{template "base" .}}
+{{define "security_content"}}
+<div x-data="securitySettings()" x-init="fetchSettings()">
+    <div class="flex items-center justify-between mb-6">
+        <h2 class="text-xl font-bold text-white">安全设置</h2>
+        <button @click="showHelp = true" class="btn-secondary text-sm">帮助说明</button>
+    </div>
+
+    <div x-show="showHelp" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/60" @click.self="showHelp = false">
+        <div class="bg-gray-800 rounded-lg p-6 max-w-4xl w-full mx-4 shadow-xl max-h-[80vh] overflow-y-auto">
+            <h3 class="text-lg font-bold text-white mb-4">安全设置说明</h3>
+            <div class="text-sm text-gray-300 space-y-4">
+                <div>
+                    <p class="text-white font-semibold mb-2">Fail2ban 配置项</p>
+                    <ul class="space-y-3 ml-2">
+                        <li>
+                            <p class="text-blue-400 font-medium">触发阈值（次）</p>
+                            <p>在统计窗口内，单个 IP 触发特征规则的次数达到此值即自动封禁。默认 <span class="text-blue-400">5</span> 次。调低更敏感（容易误封），调高更宽松。具体检测特征规则详见「安全防御」页面。</p>
+                        </li>
+                        <li>
+                            <p class="text-blue-400 font-medium">统计窗口（秒）</p>
+                            <p>用于累计违规次数的时间范围。默认 <span class="text-blue-400">60</span> 秒。与触发阈值配合使用：例如默认配置即"60 秒内违规 5 次则封禁"。窗口越大，累计越容易触发。</p>
+                        </li>
+                        <li>
+                            <p class="text-blue-400 font-medium">封禁时长（秒）</p>
+                            <p>首次违规触发封禁后，IP 被防火墙拦截的时长。默认 <span class="text-blue-400">600</span> 秒（10 分钟）。到期后 fail2ban 自动解封，但若该 IP 在 24 小时内再次违规，将自动升级为 24 小时封禁。</p>
+                        </li>
+                    </ul>
+                </div>
+                <div>
+                    <p class="text-white font-semibold mb-2">白名单机制</p>
+                    <ul class="space-y-3 ml-2">
+                        <li>
+                            <p class="text-blue-400 font-medium">官方白名单</p>
+                            <p>面板自动从以下官方来源拉取最新 IP 段，加入 fail2ban 白名单，防止误封合法爬虫和 CDN 节点：</p>
+                            <ul class="list-disc list-inside ml-2 mt-1 space-y-0.5">
+                                <li><span class="text-white">Cloudflare</span> — 全球 CDN 和反向代理 IP 段（ipv4 + ipv6）</li>
+                                <li><span class="text-white">Googlebot</span> — Google 搜索爬虫官方 IP 段</li>
+                                <li><span class="text-white">Bingbot</span> — Bing 搜索爬虫官方 IP 段</li>
+                            </ul>
+                            <p class="text-gray-500 mt-1">勾选"每周自动更新"后，系统将在每周一凌晨 4:00 自动重新拉取最新 IP。</p>
+                        </li>
+                        <li>
+                            <p class="text-blue-400 font-medium">自定义白名单</p>
+                            <p>手动添加不会被封禁的 IP 或 IP 段，每行一个。支持 IPv4/IPv6 地址和 CIDR 格式（如 <code>10.0.0.0/8</code>）。自定义白名单不会被官方拉取覆盖。</p>
+                        </li>
+                    </ul>
+                </div>
+                <div>
+                    <p class="text-white font-semibold mb-2">请求频率限制详解</p>
+                    <ul class="space-y-3 ml-2">
+                        <li>
+                            <p class="text-blue-400 font-medium">工作原理：令牌桶算法</p>
+                            <p>系统为每个 IP 维护一个容量等于「突发缓冲」的令牌桶，每秒自动补充 1 个令牌（由请求频率决定）。请求到达时消耗令牌，耗尽后返回 429。<span class="text-green-400">人类浏览有自然停顿（阅读页面），停顿期间桶自动回满</span>；机器人持续不断请求，令牌耗尽后被限制在每秒仅 1 次请求。</p>
+                        </li>
+                        <li>
+                            <p class="text-blue-400 font-medium">请求频率（次/分钟）</p>
+                            <p>控制长期持续速率，即令牌补充速度。默认 <span class="text-blue-400">60</span> 次/分钟（= 1 次/秒）。机器人扫描通常远超此值，因此会在数秒内耗尽令牌桶，几乎所有请求都被返回 429。</p>
+                        </li>
+                        <li>
+                            <p class="text-blue-400 font-medium">突发缓冲（次）</p>
+                            <p>控制令牌桶容量，即页面打开瞬间允许的最大并发请求数。默认 <span class="text-blue-400">300</span> 次，可覆盖 Elementor + 多插件站点（单页 100+ 请求）同时打开 2-3 个标签页的场景。如需同时打开更多标签页，请设置更大值（如 500-600）。非 Elementor / 轻量站点可适当调低至 30-120。</p>
+                            <p class="text-green-400 mt-1">增大此值<span class="text-green-300 font-semibold">不会</span>延迟拦截机器人——机器人被持续速率（1 次/秒）压制，与突发缓冲大小无关，安全防护不削弱。</p>
+                        </li>
+                        <li>
+                            <p class="text-red-400 font-semibold">⚠ 警告：多次返回 429 的 IP 将被 Fail2ban 自动封禁</p>
+                            <p class="text-red-400">429 响应会被 Fail2ban 规则捕获并计入违规次数（与 wp-login 暴力破解等同级处理）。累计触发阈值后将导致该 IP 被防火墙封锁。请确保突发缓冲足够日常使用，避免正常访客误触发 429 而被拉黑。</p>
+                        </li>
+                        <li>
+                            <p class="text-green-400 font-semibold">✓ 提高突发缓冲不影响拦截机器人</p>
+                            <p>机器人的特征是持续不断发请求（无人类浏览停顿），会被「请求频率」死死限制在 1 次/秒，令牌桶耗尽后几乎所有请求都返回 429。提高突发缓冲只会给人类访客更宽松的首屏加载空间，<span class="text-green-400">安全防护能力完全不受影响</span>。真正的限制来自持续速率，而非突发上限。</p>
+                        </li>
+                        <li>
+                            <p class="text-blue-400 font-medium">如何测试配置是否合适</p>
+                            <p>用浏览器无痕窗口打开网站，随机浏览 5-10 个页面（含首页、分类页、文章页）。打开开发者工具（F12）→ Network 标签，观察是否有红色 429 状态码。全部 200/304 即表示配置合理。</p>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+            <div class="mt-5 text-right">
+                <button @click="showHelp = false" class="btn-primary text-sm">知道了</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-6">
+        <div class="card">
+            <h3 class="text-lg font-semibold text-white mb-4">Fail2ban 配置</h3>
+            <form @submit.prevent="save">
+                <div class="mb-4">
+                    <label class="label">触发阈值 (次)</label>
+                    <input type="number" x-model="settings.fail2ban_maxretry" class="input-field" min="1" max="20">
+                </div>
+                <div class="mb-4">
+                    <label class="label">统计窗口 (秒)</label>
+                    <input type="number" x-model="settings.fail2ban_findtime" class="input-field" min="10" max="3600">
+                </div>
+                <div class="mb-4">
+                    <label class="label">封禁时长 (秒)</label>
+                    <input type="number" x-model="settings.fail2ban_bantime" class="input-field" min="60" max="86400">
+                </div>
+                <div class="mb-6">
+                    <label class="flex items-center space-x-2 cursor-pointer">
+                        <input type="checkbox" x-model="settings.auto_whitelist_enabled" class="w-4 h-4 rounded border-gray-600 bg-gray-700 text-blue-600">
+                        <span class="text-gray-300">每周自动更新官方白名单</span>
+                    </label>
+                </div>
+                <button type="submit" class="btn-primary">保存设置</button>
+            </form>
+        </div>
+
+        <div class="card">
+            <h3 class="text-lg font-semibold text-white mb-4">请求频率限制</h3>
+            <form @submit.prevent="saveRateLimit">
+                <div class="mb-4">
+                    <label class="flex items-center space-x-2 cursor-pointer">
+                        <input type="checkbox" x-model="settings.rate_limit_enabled" class="w-4 h-4 rounded border-gray-600 bg-gray-700 text-blue-600">
+                        <span class="text-gray-300">开启全局限速</span>
+                    </label>
+                    <p class="text-xs text-gray-500 mt-1">开启后未登录访客受频率限制，已登录 WordPress 用户自动豁免。触发多次 429 将被 Fail2ban 封禁</p>
+                </div>
+                <div class="mb-4">
+                    <label class="label">请求频率限制 (次/分钟)</label>
+                    <input type="number" x-model="settings.rate_limit_rpm" class="input-field" min="10" max="600">
+                    <p class="text-xs text-gray-500 mt-1">非 Elementor 等重型页面建议 30-60。Elementor / 多插件站点建议 60-120。调整建议和测试方法详见右上角「帮助说明」</p>
+                </div>
+                <div class="mb-4">
+                    <label class="label">突发缓冲 (次)</label>
+                    <input type="number" x-model="settings.rate_limit_burst" class="input-field" min="5" max="600">
+                    <p class="text-xs text-gray-500 mt-1">页面首屏瞬间并发请求缓冲量。Elementor / 多插件站点建议 150-300，非 Elementor 建议 30-120。调整建议和测试方法详见右上角「帮助说明」</p>
+                    <p class="text-xs text-red-400 mt-1">注意：多次触发 429 的 IP 将被 Fail2ban 自动封禁，请确保预留足够缓冲</p>
+                </div>
+                <button type="submit" class="btn-primary">保存限速设置</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-6">
+        <div class="card">
+            <h3 class="text-lg font-semibold text-white mb-4">白名单管理</h3>
+        <div class="mb-4">
+            <div class="flex items-center justify-between mb-2">
+                <label class="label">官方白名单（由面板自动拉取）</label>
+                <button @click="refreshWhitelist" class="text-sm py-1 px-3 rounded" style="background-color: #166534; color: #bbf7d0;">立即拉取</button>
+            </div>
+            <textarea x-model="settings.official_whitelist_ips" class="input-field font-mono text-sm" rows="5" readonly disabled style="opacity: 0.6;"></textarea>
+            <p class="text-gray-500 text-xs mt-1" x-text="'上次更新: ' + (settings.last_whitelist_update || '从未')"></p>
+        </div>
+        <div class="mb-4">
+            <label class="label">自定义白名单（不会被官方拉取覆盖）</label>
+            <textarea x-model="settings.whitelist_ips" class="input-field font-mono text-sm" rows="4" placeholder="1.2.3.4&#10;10.0.0.0/8"></textarea>
+        </div>
+        <button @click="saveWhitelist" class="btn-primary">保存自定义白名单</button>
+    </div>
+
+    <div class="card">
+        <h3 class="text-lg font-semibold text-white mb-4">匿名安装统计</h3>
+        <div class="mb-4">
+            <label class="flex items-center space-x-2 cursor-pointer">
+                <input type="checkbox" x-model="settings.telemetry_enabled" @change="saveTelemetry" class="w-4 h-4 rounded border-gray-600 bg-gray-700 text-blue-600">
+                <span class="text-gray-300">开启匿名安装统计</span>
+            </label>
+            <p class="text-xs text-gray-500 mt-2">每天上报一次匿名心跳到 stats.wp-panel.org，内容仅包含机器匿名标识（/etc/machine-id 的 SHA256 哈希）和面板版本号。<strong>不含</strong> IP、域名、网站信息等任何敏感数据。这可以让我们知道 WP Panel 受到了多少用户的支持。</p>
+        </div>
+    </div>
+</div>
+
+<script>
+function securitySettings() {
+    return {
+        settings: {},
+        showHelp: false,
+        async fetchSettings() {
+            try {
+                const r = await api('/security/settings');
+                if (r.success) {
+                    const map = {};
+                    r.data.forEach(s => {
+                        let v = s.svalue;
+                        if (['auto_whitelist_enabled','rate_limit_enabled','telemetry_enabled'].includes(s.skey)) v = v === 'true';
+                        else if (['fail2ban_maxretry','fail2ban_findtime','fail2ban_bantime','rate_limit_rpm','rate_limit_burst'].includes(s.skey)) v = parseInt(v) || 0;
+                        map[s.skey] = v;
+                    });
+                    this.settings = map;
+                }
+            } catch(e) {}
+        },
+        async save() {
+            try {
+                await api('/security/settings', { method: 'PUT', body: this.settings });
+                showToast('设置已保存', 'success');
+            } catch(e) { showToast(e.message, 'error'); }
+        },
+        async saveRateLimit() {
+            try {
+                await api('/security/settings', { method: 'PUT', body: {
+                    rate_limit_enabled: this.settings.rate_limit_enabled ? 'true' : 'false',
+                    rate_limit_rpm: String(this.settings.rate_limit_rpm || 60),
+                    rate_limit_burst: String(this.settings.rate_limit_burst || 300),
+                } });
+                showToast('限速设置已保存', 'success');
+            } catch(e) { showToast(e.message, 'error'); }
+        },
+        async saveTelemetry() {
+            if (!this.settings.telemetry_enabled) {
+                const confirmed = await confirmModal(
+                    '关闭后将无法统计到您的服务器安装。\n\n' +
+                    '上报内容绝对不包含任何敏感信息——只有机器匿名标识（SHA256 哈希）和面板版本号。' +
+                    '这仅是让我们知道 WP Panel 受到了多少用户的支持。\n\n' +
+                    '确认关闭？'
+                );
+                if (!confirmed) {
+                    this.settings.telemetry_enabled = true;
+                    return;
+                }
+            }
+            try {
+                await api('/security/settings', { method: 'PUT', body: {
+                    telemetry_enabled: this.settings.telemetry_enabled ? 'true' : 'false',
+                } });
+                showToast(this.settings.telemetry_enabled ? '匿名统计已开启' : '匿名统计已关闭', 'success');
+            } catch(e) { showToast(e.message, 'error'); }
+        },
+        async saveWhitelist() {
+            try {
+                await api('/security/settings', { method: 'PUT', body: { whitelist_ips: this.settings.whitelist_ips || '' } });
+                showToast('白名单已更新', 'success');
+            } catch(e) { showToast(e.message, 'error'); }
+        },
+        async refreshWhitelist() {
+            try {
+                const r = await api('/security/whitelist/refresh', { method: 'POST' });
+                showToast(r.data?.message || '已触发', 'success');
+                await this.fetchSettings();
+            } catch(e) { showToast(e.message, 'error'); }
+        }
+    }
+}
+</script>
+{{end}}
