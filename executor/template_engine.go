@@ -318,7 +318,9 @@ server {
         add_header Cache-Control "public, immutable";
     }
 
+    # uploads 目录 zip 例外，必须在通用阻断规则之前
     location ~* /wp-content/uploads/.*\.zip$ {
+        try_files $uri =404;
     }
 
     location ~* \.(env|git|config\.bak|sql|tar|gz|zip|old|swp|save)$ {
@@ -455,7 +457,9 @@ server {
         add_header Cache-Control "public, immutable";
     }
 
+    # uploads 目录 zip 例外，必须在通用阻断规则之前
     location ~* /wp-content/uploads/.*\.zip$ {
+        try_files $uri =404;
     }
 
     location ~* \.(env|git|config\.bak|sql|tar|gz|zip|old|swp|save)$ {
