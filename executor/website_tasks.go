@@ -1,6 +1,7 @@
 package executor
 
 import (
+	"database/sql"
 	"fmt"
 	"log"
 	"os"
@@ -16,6 +17,52 @@ import (
 type rollbackStep struct {
 	desc string
 	fn   func() error
+}
+
+func ensureCreateSiteResourcesAvailable(systemUser, webRoot, logDir, dbName, dbUser, phpPoolPath, nginxConfPath, nginxEnabledPath, phpSockPath string) error {
+	db := database.GetDB()
+	if db != nil {
+		var domain string
+		err := db.QueryRow(`
+			SELECT domain
+			FROM websites
+			WHERE system_user = ?
+			   OR web_root = ?
+			   OR log_dir = ?
+			   OR db_name = ?
+			   OR db_user = ?
+			   OR php_pool_path = ?
+			   OR nginx_conf_path = ?
+			LIMIT 1
+		`, systemUser, webRoot, logDir, dbName, dbUser, phpPoolPath, nginxConfPath).Scan(&domain)
+		if err == nil {
+			return fmt.Errorf("internal resource is already used by site %s", domain)
+		}
+		if err != sql.ErrNoRows {
+			return fmt.Errorf("check existing site resources: %w", err)
+		}
+	}
+
+	if _, err := executeCommand("id", "-u", systemUser); err == nil {
+		return fmt.Errorf("system user already exists: %s", systemUser)
+	}
+
+	for label, path := range map[string]string{
+		"web root":            webRoot,
+		"log dir":             logDir,
+		"php-fpm pool":        phpPoolPath,
+		"nginx config":        nginxConfPath,
+		"nginx enabled link":  nginxEnabledPath,
+		"php-fpm socket file": phpSockPath,
+	} {
+		if _, err := os.Stat(path); err == nil {
+			return fmt.Errorf("%s already exists: %s", label, path)
+		} else if !os.IsNotExist(err) {
+			return fmt.Errorf("check %s: %w", label, err)
+		}
+	}
+
+	return nil
 }
 
 func executeCreateSite(task *Task) TaskResult {
@@ -64,6 +111,11 @@ func executeCreateSite(task *Task) TaskResult {
 	nginxConfPath := filepath.Join(cfg.Paths.NginxSitesAvailable, domain+".conf")
 	nginxEnabledPath := filepath.Join(cfg.Paths.NginxSitesEnabled, domain+".conf")
 	phpSockPath := filepath.Join(cfg.Paths.PHPFPMSock, domain+".sock")
+
+	if err := ensureCreateSiteResourcesAvailable(systemUser, webRoot, logDir, dbName, dbUser, phpPoolPath, nginxConfPath, nginxEnabledPath, phpSockPath); err != nil {
+		log.Printf("站点资源名冲突 domain=%s: %v", domain, err)
+		return TaskResult{Success: false, Message: "站点资源名冲突: " + err.Error()}
+	}
 
 	// Step 1: Create system user
 	if _, err := executeCommand("useradd", "-r", "-U", "-s", "/usr/sbin/nologin", "-M", "-d", "/nonexistent", systemUser); err != nil {

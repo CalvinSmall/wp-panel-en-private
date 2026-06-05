@@ -1,8 +1,11 @@
 package executor
 
 import (
+	"crypto/sha1"
+	"encoding/hex"
 	"fmt"
 	"log"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -198,17 +201,43 @@ func logOp(task *Task, result TaskResult) {
 }
 
 func buildSiteName(domain string) string {
-	name := ""
-	for _, c := range domain {
-		if c == '.' {
-			name += "_"
-		} else if (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') {
-			name += string(c)
-		} else if c >= 'A' && c <= 'Z' {
-			name += string(c + 32)
+	normalized := strings.TrimSpace(domain)
+	normalized = strings.TrimSuffix(normalized, ".")
+	normalized = strings.ToLower(normalized)
+	sum := sha1.Sum([]byte(normalized))
+	suffix := hex.EncodeToString(sum[:])[:8]
+
+	var b strings.Builder
+	lastUnderscore := false
+	for _, c := range normalized {
+		isAlphaNum := (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')
+		if isAlphaNum {
+			b.WriteRune(c)
+			lastUnderscore = false
+		} else if c == '.' || c == '-' {
+			if b.Len() > 0 && !lastUnderscore {
+				b.WriteByte('_')
+				lastUnderscore = true
+			}
 		}
 	}
-	return name
+
+	name := strings.Trim(b.String(), "_")
+	if name == "" {
+		name = "site"
+	}
+
+	const maxSiteNameLen = 27
+	const hashSeparatorLen = 1
+	maxReadableLen := maxSiteNameLen - hashSeparatorLen - len(suffix)
+	if len(name) > maxReadableLen {
+		name = strings.TrimRight(name[:maxReadableLen], "_")
+		if name == "" {
+			name = "site"
+		}
+	}
+
+	return name + "_" + suffix
 }
 
 func fileExists(path string) bool {
