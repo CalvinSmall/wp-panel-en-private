@@ -204,6 +204,7 @@ func SetupRouter(cfg *config.Config, tmplFS embed.FS, staticFS embed.FS, version
 	protected.GET("/api/settings/wp-package", settingsHandler.GetWPPackage)
 	protected.POST("/api/settings/wp-package/upload", settingsHandler.UploadWPPackage)
 	protected.POST("/api/settings/wp-package/download", settingsHandler.DownloadWPPackage)
+	protected.DELETE("/api/settings/wp-package", settingsHandler.DeleteWPPackage)
 	protected.GET("/api/settings/remote-backup", handlers.GetRemoteBackup)
 	protected.PUT("/api/settings/remote-backup", handlers.SaveRemoteBackup)
 	protected.POST("/api/settings/remote-backup/test", handlers.TestRemoteBackup)

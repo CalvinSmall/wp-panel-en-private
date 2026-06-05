@@ -182,6 +182,7 @@
                         <span x-text="uploading ? '上传中...' : '上传安装包'"></span>
                         <input type="file" accept=".zip" class="hidden" @change="uploadPkg($event)" :disabled="uploading">
                     </label>
+                    <button x-show="pkg.available" @click="deletePkg()" :disabled="deleting" class="text-sm py-1.5 px-3 rounded" style="background-color: #7f1d1d; color: #fca5a5;" x-text="deleting ? '删除中...' : '删除'"></button>
                     <button @click="fetchStatus()" class="text-xs py-1 px-2 rounded" style="background-color: #1e3a5f; color: #93c5fd;">刷新</button>
                 </div>
                 <p x-show="msg" class="text-xs mt-2" :class="msgOk ? 'text-green-400' : 'text-red-400'" x-text="msg"></p>
@@ -369,6 +370,7 @@ function wpPackage() {
         pkg: { available: false, size_text: '', updated_at: '' },
         downloading: false,
         uploading: false,
+        deleting: false,
         msg: '',
         msgOk: false,
         async fetchStatus() {
@@ -387,6 +389,18 @@ function wpPackage() {
                 if (r.success) this.fetchStatus();
             } catch(e) { this.msgOk = false; this.msg = e.message; }
             this.downloading = false;
+        },
+        async deletePkg() {
+            if (!await confirmModal('确认删除本地 WordPress 安装包？删除后建站时将自动在线下载。')) return;
+            this.deleting = true;
+            this.msg = '';
+            try {
+                const r = await api('/settings/wp-package', { method: 'DELETE' });
+                this.msgOk = r.success;
+                this.msg = r.data?.message || '已删除';
+                if (r.success) this.fetchStatus();
+            } catch(e) { this.msgOk = false; this.msg = e.message; }
+            this.deleting = false;
         },
         async uploadPkg(event) {
             const file = event.target.files[0];
