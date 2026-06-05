@@ -214,12 +214,12 @@ func executeCreateSite(task *Task) TaskResult {
 	if err != nil {
 		rollback()
 		log.Printf("渲染 PHP-FPM 配置失败: %v", err)
-		return TaskResult{Success: false, Message: "渲染 PHP-FPM 配置失败"}
+		return taskFailure("渲染 PHP-FPM 配置失败", err)
 	}
 	if err := engine.ApplyPHPFPMPool(phpConfig, phpPoolPath, logDir); err != nil {
 		rollback()
 		log.Printf("应用 PHP-FPM 配置失败: %v", err)
-		return TaskResult{Success: false, Message: "应用 PHP-FPM 配置失败"}
+		return taskFailure("应用 PHP-FPM 配置失败", err)
 	}
 	rollbacks = append(rollbacks, rollbackStep{"删除PHP-FPM配置 " + phpPoolPath, func() error {
 		os.Remove(phpPoolPath)
@@ -245,13 +245,13 @@ func executeCreateSite(task *Task) TaskResult {
 	if err != nil {
 		rollback()
 		log.Printf("渲染 Nginx 配置失败: %v", err)
-		return TaskResult{Success: false, Message: "渲染 Nginx 配置失败"}
+		return taskFailure("渲染 Nginx 配置失败", err)
 	}
 
 	if err := engine.ApplyNginxConfig(nginxConfig, nginxConfPath, nginxEnabledPath); err != nil {
 		rollback()
 		log.Printf("应用 Nginx 配置失败: %v", err)
-		return TaskResult{Success: false, Message: "应用 Nginx 配置失败"}
+		return taskFailure("应用 Nginx 配置失败", err)
 	}
 	rollbacks = append(rollbacks, rollbackStep{"删除Nginx配置 " + nginxConfPath, func() error {
 		os.Remove(nginxEnabledPath)
@@ -305,13 +305,13 @@ func executeCreateSite(task *Task) TaskResult {
 		if sslErr != nil {
 			rollback()
 			log.Printf("渲染 HTTPS 配置失败: %v", sslErr)
-			return TaskResult{Success: false, Message: "渲染 HTTPS 配置失败"}
+			return taskFailure("渲染 HTTPS 配置失败", sslErr)
 		}
 
 		if sslErr := engine.ApplyNginxConfig(httpsConfig, nginxConfPath, nginxEnabledPath); sslErr != nil {
 			rollback()
 			log.Printf("应用 HTTPS 配置失败: %v", sslErr)
-			return TaskResult{Success: false, Message: "应用 HTTPS 配置失败"}
+			return taskFailure("应用 HTTPS 配置失败", sslErr)
 		}
 
 		sslEnabled = 1
@@ -546,12 +546,12 @@ func executeUpdateDomains(task *Task) TaskResult {
 		if err != nil {
 			rollback()
 			log.Printf("渲染 PHP-FPM 配置失败: %v", err)
-			return TaskResult{Success: false, Message: "渲染 PHP-FPM 配置失败"}
+			return taskFailure("渲染 PHP-FPM 配置失败", err)
 		}
 		if err := engine.ApplyPHPFPMPool(phpConfig, newPHPPool, newLogDir); err != nil {
 			rollback()
 			log.Printf("应用 PHP-FPM 配置失败: %v", err)
-			return TaskResult{Success: false, Message: "应用 PHP-FPM 配置失败"}
+			return taskFailure("应用 PHP-FPM 配置失败", err)
 		}
 		phpRB := rollbackStep{"恢复PHP-FPM Pool " + oldPHPPool, func() error {
 			os.Remove(newPHPPool)
@@ -617,13 +617,13 @@ func executeUpdateDomains(task *Task) TaskResult {
 		if err != nil {
 			rollback()
 			log.Printf("渲染 Nginx 配置失败: %v", err)
-			return TaskResult{Success: false, Message: "渲染 Nginx 配置失败"}
+			return taskFailure("渲染 Nginx 配置失败", err)
 		}
 
 		if err := engine.ApplyNginxConfig(nginxConfig, newNginxConf, newEnabledLink); err != nil {
 			rollback()
 			log.Printf("应用 Nginx 配置失败: %v", err)
-			return TaskResult{Success: false, Message: "应用 Nginx 配置失败"}
+			return taskFailure("应用 Nginx 配置失败", err)
 		}
 
 		db := database.GetDB()
@@ -654,13 +654,13 @@ func executeUpdateDomains(task *Task) TaskResult {
 	nginxConfig, err := engine.RenderNginxConfig(nginxData)
 	if err != nil {
 		log.Printf("渲染 Nginx 配置失败: %v", err)
-		return TaskResult{Success: false, Message: "渲染 Nginx 配置失败"}
+		return taskFailure("渲染 Nginx 配置失败", err)
 	}
 
 	if err := engine.ApplyNginxConfig(nginxConfig, site.NginxConfPath,
 		nginxEnabledPath(cfg, site.NginxConfPath, newDomain)); err != nil {
 		log.Printf("应用 Nginx 配置失败: %v", err)
-		return TaskResult{Success: false, Message: "应用 Nginx 配置失败"}
+		return taskFailure("应用 Nginx 配置失败", err)
 	}
 
 	db := database.GetDB()

@@ -86,7 +86,7 @@ func executeEnableSSL(task *Task) TaskResult {
 	if applyErr = applySSLToSite(site, certPath, keyPath, expiry); applyErr != nil {
 		os.RemoveAll(certDir)
 		log.Printf("应用SSL配置失败: %v", applyErr)
-		return TaskResult{Success: false, Message: "应用SSL配置失败"}
+		return taskFailure("应用SSL配置失败", applyErr)
 	}
 
 	return TaskResult{
@@ -116,13 +116,13 @@ func executeRemoveSSL(task *Task) TaskResult {
 	nginxConfig, err := engine.RenderNginxConfig(nginxData)
 	if err != nil {
 		log.Printf("渲染 HTTP 配置失败: %v", err)
-		return TaskResult{Success: false, Message: "渲染 HTTP 配置失败"}
+		return taskFailure("渲染 HTTP 配置失败", err)
 	}
 
 	if err := engine.ApplyNginxConfig(nginxConfig, site.NginxConfPath,
-		filepath.Join(cfg.Paths.NginxSitesEnabled, site.Domain+".conf")); err != nil {
+		nginxEnabledPath(cfg, site.NginxConfPath, site.Domain)); err != nil {
 		log.Printf("应用 HTTP 配置失败: %v", err)
-		return TaskResult{Success: false, Message: "应用 HTTP 配置失败"}
+		return taskFailure("应用 HTTP 配置失败", err)
 	}
 
 	db := database.GetDB()

@@ -71,13 +71,13 @@ func executeSetAccessLogMode(task *Task) TaskResult {
 	nginxConfig, err := engine.RenderNginxConfig(nginxData)
 	if err != nil {
 		log.Printf("渲染 Nginx 配置失败: %v", err)
-		return TaskResult{Success: false, Message: "渲染 Nginx 配置失败"}
+		return taskFailure("渲染 Nginx 配置失败", err)
 	}
 
 	if err := engine.ApplyNginxConfig(nginxConfig, site.NginxConfPath,
-		filepath.Join(cfg.Paths.NginxSitesEnabled, site.Domain+".conf")); err != nil {
+		nginxEnabledPath(cfg, site.NginxConfPath, site.Domain)); err != nil {
 		log.Printf("应用 Nginx 配置失败: %v", err)
-		return TaskResult{Success: false, Message: "应用 Nginx 配置失败"}
+		return taskFailure("应用 Nginx 配置失败", err)
 	}
 
 	// Update database
