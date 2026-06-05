@@ -115,6 +115,10 @@ var upgrades = []Upgrade{
 			`INSERT OR IGNORE INTO security_settings (skey, svalue, description) VALUES ('github_proxy', '', 'GitHub 反代地址，留空直连')`,
 		},
 	},
+	{
+		Version:     "1.0.10",
+		Description: "Backfill WP_CACHE_KEY_SALT for existing WordPress sites",
+	},
 }
 
 // LatestVersion 返回 upgrades 列表中的最新版本号。

@@ -129,7 +129,7 @@ func executeCreateSite(task *Task) TaskResult {
 
 	// Step 6: Generate wp-config.php (wordpress only)
 	if payload.SiteType != "php" {
-		if err := generateWPConfig(webRoot, dbName, dbUser, dbPassword); err != nil {
+		if err := generateWPConfig(webRoot, domain, dbName, dbUser, dbPassword); err != nil {
 			rollback()
 			log.Printf("生成 wp-config.php 失败: %v", err)
 			return TaskResult{Success: false, Message: "生成 wp-config.php 失败"}
@@ -654,7 +654,7 @@ func ReinstallWordPress(packagePath, webRoot, dbName, dbUser, systemUser string,
 		return fmt.Errorf("重建数据库失败: %w", err)
 	}
 
-	if err := generateWPConfig(webRoot, dbName, dbUser, dbPassword); err != nil {
+	if err := generateWPConfig(webRoot, filepath.Base(webRoot), dbName, dbUser, dbPassword); err != nil {
 		return fmt.Errorf("生成 wp-config.php 失败: %w", err)
 	}
 

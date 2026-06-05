@@ -464,7 +464,7 @@ func (h *WebsiteHandler) FixWPConfig(c *gin.Context) {
 		return
 	}
 
-	if err := executor.FixWPConfigCredentials(site.WebRoot, site.DBName, site.DBUser); err != nil {
+	if err := executor.FixWPConfigCredentials(site.WebRoot, site.Domain, site.DBName, site.DBUser); err != nil {
 		c.JSON(http.StatusInternalServerError, models.ErrorResponse(err.Error()))
 		return
 	}

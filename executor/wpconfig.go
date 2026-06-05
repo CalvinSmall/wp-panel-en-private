@@ -14,7 +14,7 @@ func phpSingleQuoteEscape(s string) string {
 	return s
 }
 
-func FixWPConfigCredentials(webRoot, dbName, dbUser string) error {
+func FixWPConfigCredentials(webRoot, domain, dbName, dbUser string) error {
 	configPath := filepath.Join(webRoot, "wp-config.php")
 	content, err := os.ReadFile(configPath)
 	if err != nil {
@@ -34,17 +34,20 @@ func FixWPConfigCredentials(webRoot, dbName, dbUser string) error {
 		return fmt.Errorf("未找到 DB_USER 定义，wp-config.php 可能格式异常")
 	}
 
+	userUpdated, _ = ensureWPConfigCachePrefixes(userUpdated, wpCacheKeySalt(domain))
+
 	if err := os.WriteFile(configPath, []byte(userUpdated), 0600); err != nil {
 		return fmt.Errorf("写入 wp-config.php 失败: %w", err)
 	}
 	return nil
 }
 
-func generateWPConfig(webRoot, dbName, dbUser, dbPassword string) error {
+func generateWPConfig(webRoot, domain, dbName, dbUser, dbPassword string) error {
 	salts, err := generateWPSalts()
 	if err != nil {
 		salts = fallbackSalts()
 	}
+	cacheSalt := wpCacheKeySalt(domain)
 
 	config := fmt.Sprintf(`<?php
 /**
@@ -91,6 +94,8 @@ define('WP_DEBUG', false);
 
 /* Add any custom values between this line and the "stop editing" line. */
 
+define('WP_REDIS_PREFIX', '%s');
+define('WP_CACHE_KEY_SALT', '%s');
 
 
 /* That's all, stop editing! Happy publishing. */
@@ -102,10 +107,38 @@ if (!defined('ABSPATH')) {
 
 /** 加载 WordPress 设置和引入文件 */
 require_once ABSPATH . 'wp-settings.php';
-`, phpSingleQuoteEscape(dbName), phpSingleQuoteEscape(dbUser), phpSingleQuoteEscape(dbPassword), salts)
+`, phpSingleQuoteEscape(dbName), phpSingleQuoteEscape(dbUser), phpSingleQuoteEscape(dbPassword), salts, phpSingleQuoteEscape(cacheSalt), phpSingleQuoteEscape(cacheSalt))
 
 	configPath := filepath.Join(webRoot, "wp-config.php")
 	return os.WriteFile(configPath, []byte(config), 0600)
+}
+
+func wpCacheKeySalt(domain string) string {
+	domain = strings.ToLower(strings.TrimSpace(domain))
+	if domain == "" {
+		domain = "wp-panel-site"
+	}
+	return domain + ":"
+}
+
+func ensureWPConfigCachePrefixes(content, prefix string) (string, bool) {
+	updated := content
+	insertedAny := false
+	for _, name := range []string{"WP_REDIS_PREFIX", "WP_CACHE_KEY_SALT"} {
+		var inserted bool
+		updated, inserted = ensureWPConfigStringConstant(updated, name, prefix)
+		insertedAny = insertedAny || inserted
+	}
+	return updated, insertedAny
+}
+
+func ensureWPConfigStringConstant(content, name, value string) (string, bool) {
+	re := constPattern(name)
+	if re.MatchString(content) {
+		return content, false
+	}
+	stmt := fmt.Sprintf("define('%s', '%s');\n", name, phpSingleQuoteEscape(value))
+	return insertBeforeMarker(content, stmt), true
 }
 
 func generateWPSalts() (string, error) {
