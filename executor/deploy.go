@@ -99,13 +99,17 @@ func copyDir(src, dst string) error {
 }
 
 func downloadWP(localPath, destPath string) error {
-	if _, err := executeCommand("wget", "-q", "-T", "30", "-t", "3", "-O", destPath,
-		"https://wordpress.org/latest.zip"); err == nil {
-		return nil
+	// 优先使用本地安装包（更快、更可靠，适合国内网络环境）
+	if info, err := os.Stat(localPath); err == nil && info.Size() > 0 {
+		if _, err := executeCommand("cp", "-f", localPath, destPath); err == nil {
+			return nil
+		}
 	}
 
-	if _, err := executeCommand("cp", "-f", localPath, destPath); err != nil {
-		return fmt.Errorf("下载WordPress失败且本地备用包不可用: %w", err)
+	// 本地不可用，在线下载
+	if _, err := executeCommand("wget", "-q", "-T", "30", "-t", "3", "-O", destPath,
+		"https://wordpress.org/latest.zip"); err != nil {
+		return fmt.Errorf("本地安装包不可用且在线下载失败（国内服务器可在面板设置中上传安装包）")
 	}
 
 	return nil

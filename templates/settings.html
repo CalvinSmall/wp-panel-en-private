@@ -148,6 +148,58 @@
         </div>
     </div>
 
+    <div class="card mb-6" x-data="wpPackage()" x-init="fetchStatus()">
+        <h3 class="text-lg font-semibold text-white mb-4">WordPress 安装包</h3>
+        <p class="text-xs text-gray-500 mb-4">创建 WordPress 网站时优先使用本地安装包。国内服务器如果无法在线下载，可在此手动上传。</p>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+                <div class="p-3 rounded mb-4" style="background-color: #0f172a;">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs text-gray-400">本地安装包状态</span>
+                        <span class="text-xs font-medium" :class="pkg.available ? 'text-green-400' : 'text-yellow-400'" x-text="pkg.available ? '已就绪' : '未安装'"></span>
+                    </div>
+                    <template x-if="pkg.available">
+                        <div class="space-y-1">
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs text-gray-500">文件大小</span>
+                                <span class="text-xs text-white" x-text="pkg.size_text"></span>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs text-gray-500">更新时间</span>
+                                <span class="text-xs text-white" x-text="pkg.updated_at"></span>
+                            </div>
+                        </div>
+                    </template>
+                    <template x-if="!pkg.available">
+                        <p class="text-xs text-yellow-400">本地无安装包，建站时将尝试在线下载（可能因网络问题失败）</p>
+                    </template>
+                </div>
+
+                <div class="flex items-center space-x-3">
+                    <button @click="downloadPkg()" :disabled="downloading" class="btn-secondary text-sm" x-text="downloading ? '下载中...' : '在线下载'"></button>
+                    <label class="btn-primary text-sm cursor-pointer" :class="uploading ? 'opacity-50 cursor-not-allowed' : ''">
+                        <span x-text="uploading ? '上传中...' : '上传安装包'"></span>
+                        <input type="file" accept=".zip" class="hidden" @change="uploadPkg($event)" :disabled="uploading">
+                    </label>
+                    <button @click="fetchStatus()" class="text-xs py-1 px-2 rounded" style="background-color: #1e3a5f; color: #93c5fd;">刷新</button>
+                </div>
+                <p x-show="msg" class="text-xs mt-2" :class="msgOk ? 'text-green-400' : 'text-red-400'" x-text="msg"></p>
+            </div>
+
+            <div class="p-4 rounded" style="background-color: #0f172a; border: 1px solid #1e293b;">
+                <h4 class="text-sm font-medium text-gray-300 mb-3">使用说明</h4>
+                <ul class="text-xs text-gray-400 space-y-2">
+                    <li>· 创建 WordPress 网站时<strong class="text-white">优先使用本地安装包</strong>，本地没有才在线下载</li>
+                    <li>· 国内服务器访问 wordpress.org 可能失败，建议提前上传安装包</li>
+                    <li>· 上传文件仅支持 <code class="text-gray-500">.zip</code> 格式，与 <a href="https://wordpress.org/download/" target="_blank" class="text-blue-400 hover:text-blue-300">wordpress.org</a> 下载的一致即可</li>
+                    <li>· 安装包需保持原始结构（解压后包含 <code class="text-gray-500">wordpress/</code> 目录）</li>
+                    <li>· 上传后会自动校验 ZIP 完整性，校验失败将拒绝安装</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
     <div class="card mb-6" x-data="remoteBackup()" x-init="fetchRemote()">
         <div class="flex items-center justify-between mb-4"><h3 class="text-lg font-semibold text-white">远程备份</h3><button @click="showHelp = true" class="text-xs py-1 px-2 rounded" style="background-color: #1e3a5f; color: #93c5fd;">使用说明</button></div>
 
@@ -323,6 +375,64 @@
 </div>
 
 <script>
+function wpPackage() {
+    return {
+        pkg: { available: false, size_text: '', updated_at: '' },
+        downloading: false,
+        uploading: false,
+        msg: '',
+        msgOk: false,
+        async fetchStatus() {
+            try {
+                const r = await api('/settings/wp-package');
+                if (r.success) this.pkg = r.data;
+            } catch(e) {}
+        },
+        async downloadPkg() {
+            this.downloading = true;
+            this.msg = '';
+            try {
+                const r = await api('/settings/wp-package/download', { method: 'POST' });
+                this.msgOk = r.success;
+                this.msg = r.data?.message || '下载完成';
+                if (r.success) this.fetchStatus();
+            } catch(e) { this.msgOk = false; this.msg = e.message; }
+            this.downloading = false;
+        },
+        async uploadPkg(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            if (!file.name.toLowerCase().endsWith('.zip')) {
+                showToast('仅支持 .zip 格式', 'error');
+                event.target.value = '';
+                return;
+            }
+            this.uploading = true;
+            this.msg = '';
+            const prefix = document.body.dataset.panelPrefix || '';
+            const formData = new FormData();
+            formData.append('file', file);
+            try {
+                const resp = await fetch(prefix + '/api/settings/wp-package/upload', {
+                    method: 'POST',
+                    headers: { 'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.content || '' },
+                    body: formData,
+                });
+                const r = await resp.json();
+                if (r.success) {
+                    this.msgOk = true;
+                    this.msg = r.data?.message || '上传成功';
+                    this.fetchStatus();
+                } else {
+                    this.msgOk = false;
+                    this.msg = r.message || '上传失败';
+                }
+            } catch(e) { this.msgOk = false; this.msg = '上传失败: ' + e.message; }
+            this.uploading = false;
+            event.target.value = '';
+        }
+    }
+}
 function panelSettings() {
     return {
         panelTitle: 'WP Panel',

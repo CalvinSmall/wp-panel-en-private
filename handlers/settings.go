@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -309,6 +310,155 @@ func getTimezone() string {
 func getHostname() string {
 	out, _ := exec.Command("bash", "-c", "hostnamectl hostname 2>/dev/null || hostname").CombinedOutput()
 	return strings.TrimSpace(string(out))
+}
+
+// ============================================================
+// WordPress 安装包管理
+// ============================================================
+
+func (h *SettingsHandler) GetWPPackage(c *gin.Context) {
+	cfg := config.AppConfig
+	pkgPath := cfg.Paths.WordPressPackage
+
+	info, err := os.Stat(pkgPath)
+	if err != nil {
+		c.JSON(http.StatusOK, models.SuccessResponse(gin.H{
+			"available": false,
+			"path":      pkgPath,
+		}))
+		return
+	}
+
+	c.JSON(http.StatusOK, models.SuccessResponse(gin.H{
+		"available":  true,
+		"path":       pkgPath,
+		"size":       info.Size(),
+		"size_text":  formatFileSize(info.Size()),
+		"updated_at": info.ModTime().Format("2006-01-02 15:04:05"),
+	}))
+}
+
+func (h *SettingsHandler) UploadWPPackage(c *gin.Context) {
+	file, err := c.FormFile("file")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("请选择文件"))
+		return
+	}
+
+	// 校验文件扩展名
+	name := strings.ToLower(file.Filename)
+	if !strings.HasSuffix(name, ".zip") {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("仅支持 .zip 格式的安装包"))
+		return
+	}
+
+	// 限制文件大小（WordPress 安装包通常 25-30MB，上限 100MB）
+	if file.Size > 100*1024*1024 {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("文件过大，上限 100MB"))
+		return
+	}
+
+	cfg := config.AppConfig
+	pkgPath := cfg.Paths.WordPressPackage
+	pkgDir := filepath.Dir(pkgPath)
+
+	if err := os.MkdirAll(pkgDir, 0755); err != nil {
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse("创建目录失败"))
+		return
+	}
+
+	// 先写入临时文件，校验成功后再替换
+	tmpPath := pkgPath + ".upload_tmp"
+	if err := c.SaveUploadedFile(file, tmpPath); err != nil {
+		os.Remove(tmpPath)
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse("保存文件失败"))
+		return
+	}
+
+	// 基本校验：用 unzip -t 测试压缩包完整性
+	if out, err := exec.Command("unzip", "-t", tmpPath).CombinedOutput(); err != nil {
+		os.Remove(tmpPath)
+		log.Printf("上传的 ZIP 校验失败: %s, %v", string(out), err)
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("文件校验失败，不是有效的 ZIP 压缩包"))
+		return
+	}
+
+	// 替换旧文件
+	os.Remove(pkgPath)
+	if err := os.Rename(tmpPath, pkgPath); err != nil {
+		os.Remove(tmpPath)
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse("替换安装包失败"))
+		return
+	}
+
+	log.Printf("WordPress 安装包已通过上传更新: %s (%s)", pkgPath, formatFileSize(file.Size))
+	c.JSON(http.StatusOK, models.SuccessResponse(gin.H{
+		"message": "安装包上传成功",
+	}))
+}
+
+func (h *SettingsHandler) DownloadWPPackage(c *gin.Context) {
+	cfg := config.AppConfig
+	pkgPath := cfg.Paths.WordPressPackage
+	pkgDir := filepath.Dir(pkgPath)
+
+	if err := os.MkdirAll(pkgDir, 0755); err != nil {
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse("创建目录失败"))
+		return
+	}
+
+	tmpPath := pkgPath + ".download_tmp"
+	if out, err := exec.Command("wget", "-q", "-T", "30", "-t", "3", "-O", tmpPath,
+		"https://wordpress.org/latest.zip").CombinedOutput(); err != nil {
+		os.Remove(tmpPath)
+		log.Printf("在线下载 WordPress 安装包失败: %s, %v", string(out), err)
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse("下载失败，请检查服务器网络或手动上传安装包"))
+		return
+	}
+
+	// 校验下载的文件
+	if info, err := os.Stat(tmpPath); err != nil || info.Size() == 0 {
+		os.Remove(tmpPath)
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse("下载的文件无效"))
+		return
+	}
+
+	// 替换旧文件
+	os.Remove(pkgPath)
+	if err := os.Rename(tmpPath, pkgPath); err != nil {
+		os.Remove(tmpPath)
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse("替换安装包失败"))
+		return
+	}
+
+	info, _ := os.Stat(pkgPath)
+	sizeText := ""
+	if info != nil {
+		sizeText = formatFileSize(info.Size())
+	}
+
+	log.Printf("WordPress 安装包已通过在线下载更新: %s (%s)", pkgPath, sizeText)
+	c.JSON(http.StatusOK, models.SuccessResponse(gin.H{
+		"message": "安装包下载成功",
+	}))
+}
+
+func formatFileSize(size int64) string {
+	const (
+		KB = 1024
+		MB = KB * 1024
+		GB = MB * 1024
+	)
+	switch {
+	case size >= GB:
+		return fmt.Sprintf("%.1f GB", float64(size)/float64(GB))
+	case size >= MB:
+		return fmt.Sprintf("%.1f MB", float64(size)/float64(MB))
+	case size >= KB:
+		return fmt.Sprintf("%.1f KB", float64(size)/float64(KB))
+	default:
+		return fmt.Sprintf("%d B", size)
+	}
 }
 
 func updateConfigValue(section, key, value string) error {
