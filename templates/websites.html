@@ -102,6 +102,7 @@
                             <td class="table-cell">
                                 <div class="flex space-x-2">
                                     <a :href="'/{{$.RandomSuffix}}/websites/' + site.id" class="btn-secondary text-xs py-1 px-2">详情</a>
+                                    <a :href="'/{{$.RandomSuffix}}/files?site_id=' + site.id" class="text-xs py-1 px-2 rounded" style="background-color: #1e3a5f; color: #93c5fd;">文件</a>
                                     <button @click="toggleStatus(site)" class="text-xs py-1 px-2 rounded"
                                             :class="site.status === 'active' ? 'btn-warning bg-yellow-700 hover:bg-yellow-600 text-white' : 'btn-success text-xs'"
                                             x-text="site.status === 'active' ? '暂停' : '启用'"></button>
