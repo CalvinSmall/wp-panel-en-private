@@ -447,7 +447,7 @@ func checkBackup() (bool, string) {
 		AND NOT EXISTS (
 			SELECT 1 FROM db_backups b
 			WHERE b.site_id = bs.site_id AND b.auto = 1
-			AND b.created_at > datetime('now', '-1 day')
+			AND b.created_at > datetime('now', '-1 day', '-5 minutes')
 		)
 		ORDER BY w.domain`)
 	if err != nil {

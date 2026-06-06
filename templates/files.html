@@ -3,7 +3,7 @@
 <div x-data="fileManager()" x-init="initSites()">
     <h2 class="text-xl font-bold text-white mb-6">文件管理</h2>
 
-    <div x-show="selected.length > 0" class="flex items-center space-x-3 mb-3 p-3 bg-blue-900/30 rounded border border-blue-800">
+    <div x-show="selected.length > 0" class="flex flex-wrap items-center gap-2 mb-3 p-3 bg-blue-900/30 rounded border border-blue-800">
         <span class="text-sm text-gray-300" x-text="'已选 ' + selected.length + ' 项'"></span>
         <button @click="batchCompress()" class="btn-secondary text-sm py-1">批量压缩</button>
         <button @click="cutItems()" class="btn-secondary text-sm py-1">剪切</button>
@@ -13,7 +13,7 @@
     </div>
 
     <template x-if="clipboard">
-    <div class="flex items-center space-x-3 mb-3 p-3 bg-green-900/30 rounded border border-green-800">
+    <div class="flex flex-wrap items-center gap-2 mb-3 p-3 bg-green-900/30 rounded border border-green-800">
         <span class="text-sm text-gray-300" x-text="'剪贴板: ' + clipboard.names.length + ' 个项目 (' + (clipboard.action === 'cut' ? '剪切' : '复制') + ')'"></span>
         <button @click="pasteItems()" class="btn-primary text-sm py-1">粘贴</button>
         <button @click="clipboard = null" class="text-sm text-gray-400 hover:text-white py-1">清空</button>
@@ -31,7 +31,7 @@
             </select>
         </div>
 
-        <div class="flex items-center justify-between mb-4">
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-2 mb-4">
             <div class="flex items-center space-x-2 text-sm">
                 <template x-for="(seg, idx) in breadcrumbs()" :key="idx">
                     <span>
@@ -41,11 +41,11 @@
                     </span>
                 </template>
             </div>
-            <div class="flex items-center space-x-3">
+            <div class="flex flex-wrap items-center gap-2">
                 <button @click="showMkdir = true" :disabled="!selectedSite" class="btn-secondary text-sm">新建目录</button>
                 <button @click="fixPermissions()" :disabled="!selectedSite || selectedSite == '0' || fixingPerms" class="btn-secondary text-sm" x-text="fixingPerms ? '修复中...' : '修复权限'"></button>
-                <form @submit.prevent="uploadFile" class="flex items-center space-x-3">
-                    <input type="file" @change="fileSelected($event)" :disabled="uploading" class="input-field w-64 text-sm">
+                <form @submit.prevent="uploadFile" class="flex items-center gap-2">
+                    <input type="file" @change="fileSelected($event)" :disabled="uploading" class="input-field w-32 sm:w-48 md:w-64 text-sm">
                     <button type="submit" class="btn-primary text-sm" :disabled="!uploadTarget || uploading" x-text="uploading ? '上传中 ' + uploadProgress + '%' : '上传'"></button>
                 </form>
             </div>
@@ -96,7 +96,7 @@
                             <td class="table-cell font-mono text-xs" x-text="f.mode"></td>
                             <td class="table-cell text-xs" x-text="f.mod_time"></td>
                             <td class="table-cell">
-                                <div class="flex space-x-2">
+                                <div class="flex flex-wrap gap-1">
                                     <button x-show="!f.is_dir" @click="downloadFile(f.name)" class="btn-primary text-xs py-1 px-2">下载</button>
                                     <button @click="startRename(f.name)" class="btn-secondary text-xs py-1 px-2">重命名</button>
                                     <button @click="compressItems([f.name])" class="btn-secondary text-xs py-1 px-2" :title="f.is_dir ? '压缩目录' : '压缩文件'">压缩</button>
