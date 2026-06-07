@@ -33,3 +33,6 @@ docs/
 
 # Scratch
 scratch/
+
+# 本地发布记录
+RELEASE_NOTES.md
