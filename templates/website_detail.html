@@ -337,7 +337,7 @@
                 <textarea x-model="editAliasesStr" rows="4" class="w-full rounded p-2 text-sm font-mono" style="background-color: #0f172a; border: 1px solid #334155; color: #e2e8f0; resize: vertical;" placeholder="www.aaa.com&#10;blog.aaa.com"></textarea>
             </div>
             <div x-show="editDomain !== site.domain" class="mb-3 p-3 rounded text-sm" style="background-color: #422006; border: 1px solid #78350f; color: #fbbf24;">
-                主域名变更后将重命名网站目录、日志目录、Nginx配置、PHP-FPM Pool及SSL证书目录。系统用户（<span x-text="site.system_user" class="font-mono"></span>）和数据库名保持不变。<span x-show="site.site_type === 'wordpress'">WordPress 站点 URL 需自行在 WP 后台修改。</span>
+                主域名变更后将重命名网站目录、日志目录、Nginx配置、PHP-FPM Pool及SSL证书目录。系统用户（<span x-text="site.system_user" class="font-mono"></span>）和数据库名保持不变。<span x-show="site.site_type === 'wordpress'">WordPress 站点 URL 可在数据库卡片内修改</span>
             </div>
             <p x-show="site.ssl_enabled" class="text-yellow-400 text-xs mb-3">修改域名后需重新申请 SSL 证书以匹配新域名。</p>
             <div class="flex justify-end space-x-3">
@@ -421,6 +421,7 @@
                     <li>此操作仅修改 wp_options 中的 siteurl 和 home，不替换文章/媒体中的旧域名</li>
                     <li>文章内容中的旧域名需在 WP 后台使用 Better Search Replace 等插件替换</li>
                     <li>修改后如页面样式异常，请在 WP 后台「设置 → 固定链接」重新保存一次</li>
+                    <li>如果浏览器仍跳转到旧网站，可能是浏览器缓存影响，建议清理浏览器缓存后再访问</li>
                 </ul>
             </div>
             <div class="flex justify-end space-x-3">

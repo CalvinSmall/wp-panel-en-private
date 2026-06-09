@@ -19,6 +19,33 @@ type rollbackStep struct {
 	fn   func() error
 }
 
+func moveSiteLogDir(oldLogDir, newLogDir string) error {
+	if oldLogDir == newLogDir {
+		return nil
+	}
+	if _, err := os.Stat(oldLogDir); err != nil {
+		return fmt.Errorf("检查旧日志目录失败: %w", err)
+	}
+	if info, err := os.Stat(newLogDir); err == nil {
+		if !info.IsDir() {
+			return fmt.Errorf("目标日志路径已存在且不是目录: %s", newLogDir)
+		}
+		entries, err := os.ReadDir(newLogDir)
+		if err != nil {
+			return fmt.Errorf("读取目标日志目录失败: %w", err)
+		}
+		if len(entries) > 0 {
+			return fmt.Errorf("目标日志目录已存在且不为空: %s", newLogDir)
+		}
+		if err := os.Remove(newLogDir); err != nil {
+			return fmt.Errorf("清理空目标日志目录失败: %w", err)
+		}
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("检查目标日志目录失败: %w", err)
+	}
+	return os.Rename(oldLogDir, newLogDir)
+}
+
 func ensureCreateSiteResourcesAvailable(systemUser, webRoot, logDir, dbName, dbUser, phpPoolPath, nginxConfPath, nginxEnabledPath, phpSockPath string) error {
 	db := database.GetDB()
 	if db != nil {
@@ -548,6 +575,24 @@ func executeUpdateDomains(task *Task) TaskResult {
 			log.Printf("渲染 PHP-FPM 配置失败: %v", err)
 			return taskFailure("渲染 PHP-FPM 配置失败", err)
 		}
+		if err := os.Rename(oldWebRoot, newWebRoot); err != nil {
+			rollback()
+			log.Printf("重命名网站目录失败: %v", err)
+			return TaskResult{Success: false, Message: "重命名网站目录失败"}
+		}
+		rollbacks = append(rollbacks, rollbackStep{"恢复网站目录 " + oldWebRoot, func() error {
+			return os.Rename(newWebRoot, oldWebRoot)
+		}})
+
+		if err := moveSiteLogDir(oldLogDir, newLogDir); err != nil {
+			rollback()
+			log.Printf("重命名日志目录失败: %v", err)
+			return TaskResult{Success: false, Message: "重命名日志目录失败"}
+		}
+		rollbacks = append(rollbacks, rollbackStep{"恢复日志目录 " + oldLogDir, func() error {
+			return os.Rename(newLogDir, oldLogDir)
+		}})
+
 		if err := engine.ApplyPHPFPMPool(phpConfig, newPHPPool, newLogDir); err != nil {
 			rollback()
 			log.Printf("应用 PHP-FPM 配置失败: %v", err)
@@ -560,24 +605,6 @@ func executeUpdateDomains(task *Task) TaskResult {
 			return nil
 		}}
 		rollbacks = append(rollbacks, phpRB)
-
-		if err := os.Rename(oldWebRoot, newWebRoot); err != nil {
-			rollback()
-			log.Printf("重命名网站目录失败: %v", err)
-			return TaskResult{Success: false, Message: "重命名网站目录失败"}
-		}
-		rollbacks = append(rollbacks, rollbackStep{"恢复网站目录 " + oldWebRoot, func() error {
-			return os.Rename(newWebRoot, oldWebRoot)
-		}})
-
-		if err := os.Rename(oldLogDir, newLogDir); err != nil {
-			rollback()
-			log.Printf("重命名日志目录失败: %v", err)
-			return TaskResult{Success: false, Message: "重命名日志目录失败"}
-		}
-		rollbacks = append(rollbacks, rollbackStep{"恢复日志目录 " + oldLogDir, func() error {
-			return os.Rename(newLogDir, oldLogDir)
-		}})
 
 		if _, err := os.Stat(oldCertDir); err == nil {
 			if err := os.Rename(oldCertDir, newCertDir); err != nil {
