@@ -103,39 +103,42 @@
                 </label>
             </div>
 
-            <div class="overflow-x-auto">
-                <table class="w-full text-sm">
-                    <thead class="border-b border-gray-700 text-gray-400">
-                        <tr>
-                            <th class="py-2 text-left whitespace-nowrap">文件名</th>
-                            <th class="py-2 text-left whitespace-nowrap">大小</th>
-                            <th class="py-2 text-left whitespace-nowrap">时间</th>
-                            <th class="py-2 text-left whitespace-nowrap">类型</th>
-                            <th class="py-2 text-left w-36">操作</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <template x-for="b in backups" :key="b.id">
-                            <tr class="border-b border-gray-700/50">
-                                <td class="py-2 font-mono text-xs whitespace-nowrap" x-text="b.filename"></td>
-                                <td class="py-2 text-xs whitespace-nowrap" x-text="formatBytes(b.file_size)"></td>
-                                <td class="py-2 text-xs whitespace-nowrap" x-text="new Date(b.created_at).toLocaleString('zh-CN')"></td>
-                                <td class="py-2 whitespace-nowrap"><span :class="b.auto ? 'badge-info' : 'badge-success'" class="text-xs" x-text="b.auto ? '自动' : '手动'"></span></td>
-                                <td class="py-2">
-                                    <div class="flex flex-wrap gap-1">
-                                        <button @click="downloadBackup(b)" class="btn-primary text-xs py-1 px-2">下载</button>
-                                        <button @click="restoreBackup(b)" :disabled="restoringId" class="text-xs py-1 px-2 rounded" style="background-color: #7f1d1d; color: #fca5a5;" x-text="restoringId === b.id ? '恢复中...' : '恢复'"></button>
-                                        <button @click="deleteBackup(b)" :disabled="restoringId" class="btn-secondary text-xs py-1 px-2">删除</button>
-                                    </div>
-                                </td>
+            <details class="mb-2">
+                <summary class="cursor-pointer text-blue-400 hover:text-blue-300 text-xs" x-text="`备份列表（${backups.length} 份）`"></summary>
+                <div class="overflow-x-auto mt-2">
+                    <table class="w-full text-sm">
+                        <thead class="border-b border-gray-700 text-gray-400">
+                            <tr>
+                                <th class="py-2 text-left whitespace-nowrap">文件名</th>
+                                <th class="py-2 text-left whitespace-nowrap">大小</th>
+                                <th class="py-2 text-left whitespace-nowrap">时间</th>
+                                <th class="py-2 text-left whitespace-nowrap">类型</th>
+                                <th class="py-2 text-left w-36">操作</th>
                             </tr>
-                        </template>
-                        <tr x-show="backups.length === 0">
-                            <td colspan="5" class="py-4 text-center text-gray-500">暂无备份记录</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
+                        </thead>
+                        <tbody>
+                            <template x-for="b in backups" :key="b.id">
+                                <tr class="border-b border-gray-700/50">
+                                    <td class="py-2 font-mono text-xs whitespace-nowrap" x-text="b.filename"></td>
+                                    <td class="py-2 text-xs whitespace-nowrap" x-text="formatBytes(b.file_size)"></td>
+                                    <td class="py-2 text-xs whitespace-nowrap" x-text="new Date(b.created_at).toLocaleString('zh-CN')"></td>
+                                    <td class="py-2 whitespace-nowrap"><span :class="b.auto ? 'badge-info' : 'badge-success'" class="text-xs" x-text="b.auto ? '自动' : '手动'"></span></td>
+                                    <td class="py-2">
+                                        <div class="flex flex-wrap gap-1">
+                                            <button @click="downloadBackup(b)" class="btn-primary text-xs py-1 px-2">下载</button>
+                                            <button @click="restoreBackup(b)" :disabled="restoringId" class="text-xs py-1 px-2 rounded" style="background-color: #7f1d1d; color: #fca5a5;" x-text="restoringId === b.id ? '恢复中...' : '恢复'"></button>
+                                            <button @click="deleteBackup(b)" :disabled="restoringId" class="btn-secondary text-xs py-1 px-2">删除</button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </template>
+                            <tr x-show="backups.length === 0">
+                                <td colspan="5" class="py-4 text-center text-gray-500">暂无备份记录</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </details>
         </div>
     </div>
 
