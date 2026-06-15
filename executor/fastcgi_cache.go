@@ -322,26 +322,29 @@ func RegenerateAllSitesNginx() error {
 
 // RegenerateAllSitesFPM 重建全部网站的 PHP-FPM pool 配置，
 // 用于 open_basedir 等模板变更后批量刷新旧站点。
-func RegenerateAllSitesFPM() {
+func RegenerateAllSitesFPM() error {
 	db := database.GetDB()
 	rows, err := db.Query("SELECT id, domain, system_user, web_root, log_dir, php_pool_path FROM websites")
 	if err != nil {
 		log.Printf("[FPM重建] 查询网站列表失败: %v", err)
-		return
+		return err
 	}
 	defer rows.Close()
 
 	cfg := config.AppConfig
 	engine := NewTemplateEngine(cfg.Panel.BackupDir)
+	var failures []string
 
 	for rows.Next() {
 		var siteID int
 		var domain, systemUser, webRoot, logDir, phpPoolPath string
 		if err := rows.Scan(&siteID, &domain, &systemUser, &webRoot, &logDir, &phpPoolPath); err != nil {
+			failures = append(failures, err.Error())
 			continue
 		}
 		if err := ensureSitePrimaryGroup(systemUser); err != nil {
 			log.Printf("[FPM重建] %s: 站点用户组检查失败: %v", domain, err)
+			failures = append(failures, fmt.Sprintf("%s: %v", domain, err))
 			continue
 		}
 
@@ -357,13 +360,22 @@ func RegenerateAllSitesFPM() {
 		phpConfig, err := engine.RenderPHPFPMPool(phpData)
 		if err != nil {
 			log.Printf("[FPM重建] %s: 渲染配置失败: %v", domain, err)
+			failures = append(failures, fmt.Sprintf("%s: %v", domain, err))
 			continue
 		}
 
 		if err := engine.ApplyPHPFPMPool(phpConfig, phpPoolPath, logDir); err != nil {
 			log.Printf("[FPM重建] %s: 应用配置失败: %v", domain, err)
+			failures = append(failures, fmt.Sprintf("%s: %v", domain, err))
 			continue
 		}
 	}
 	log.Printf("[FPM重建] 全部网站 PHP-FPM pool 配置已更新")
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	if len(failures) > 0 {
+		return fmt.Errorf("部分站点 PHP-FPM Pool 重建失败: %s", strings.Join(failures, "; "))
+	}
+	return nil
 }

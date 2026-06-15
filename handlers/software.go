@@ -62,7 +62,7 @@ func (h *SoftwareHandler) List(c *gin.Context) {
 	items[0].Configs = append(items[0].Configs, softwareConfig{
 		Key:   "max_input_time",
 		Label: "max_input_time - 最大输入解析时间(秒)",
-		Hint:  "PHP 解析 POST/上传输入的最长时间。大文件上传或导入建议与 max_execution_time 保持一致",
+		Hint:  "PHP 解析 POST/上传输入的最长时间。面板默认 300 秒，大文件上传或导入建议与 max_execution_time 保持一致",
 	})
 	for i := range items {
 		populateConfigValues(&items[i])
@@ -215,6 +215,15 @@ func validateSoftwareConfigValue(name, key, value string) string {
 	return ""
 }
 
+func phpConfigRequiresPoolRebuild(key string) bool {
+	switch key {
+	case "memory_limit", "upload_max_filesize", "post_max_size", "max_execution_time", "max_input_time":
+		return true
+	default:
+		return false
+	}
+}
+
 func (h *SoftwareHandler) SaveConfig(c *gin.Context) {
 	var req struct {
 		Name  string `json:"name"`
@@ -276,6 +285,7 @@ func (h *SoftwareHandler) SaveConfig(c *gin.Context) {
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		if req.Name == "PHP" {
 			if _, err := executor.EnsurePHPRuntimeConfigFile(); err != nil {
+				log.Printf("创建 PHP 配置文件失败: %v", err)
 				c.JSON(http.StatusInternalServerError, models.ErrorResponse("创建 PHP 配置文件失败"))
 				return
 			}
@@ -341,9 +351,14 @@ func (h *SoftwareHandler) SaveConfig(c *gin.Context) {
 	}
 
 	// Reload
-	exec.Command("bash", "-c", reloadCmd).Run()
-	if req.Name == "PHP" {
-		executor.RegenerateAllSitesFPM()
+	if req.Name == "PHP" && phpConfigRequiresPoolRebuild(req.Key) {
+		if err := executor.RegenerateAllSitesFPM(); err != nil {
+			log.Printf("PHP 配置已写入，但部分站点 PHP-FPM Pool 重建失败: %v", err)
+			c.JSON(http.StatusInternalServerError, models.ErrorResponse("PHP 配置已写入，但部分站点 PHP-FPM Pool 重建失败: "+err.Error()))
+			return
+		}
+	} else {
+		exec.Command("bash", "-c", reloadCmd).Run()
 	}
 
 	c.JSON(http.StatusOK, models.SuccessResponse(gin.H{"message": "配置已更新，" + serviceName + " 已重载"}))
@@ -498,6 +513,9 @@ func replaceRedisValue(content, key, value string) string {
 func findPHPIniValue(content, key string) string {
 	for _, line := range strings.Split(content, "\n") {
 		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, ";") || strings.HasPrefix(trimmed, "#") {
+			continue
+		}
 		if strings.HasPrefix(trimmed, key+" =") || strings.HasPrefix(trimmed, key+"=") {
 			parts := strings.SplitN(trimmed, "=", 2)
 			if len(parts) == 2 {

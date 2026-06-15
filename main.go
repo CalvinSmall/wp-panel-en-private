@@ -165,18 +165,22 @@ func main() {
 		log.Printf("Cloudflare Real IP 白名单应用跳过: %v", err)
 	}
 	executor.EnsureFastCGICacheConfig()
+	// WordPress safety baseline (idempotent, only writes if not present)
+	executor.EnsureWordPressBaseline()
 	// 升级后重建全部 Nginx 和 PHP-FPM 配置，确保新模板规则对旧站生效
 	executor.GoSafe(func() {
 		if err := executor.RegenerateAllSitesNginx(); err != nil {
 			log.Printf("Nginx 批量重建部分失败: %v", err)
 		}
 	})
-	executor.GoSafe(func() { executor.RegenerateAllSitesFPM() })
+	executor.GoSafe(func() {
+		if err := executor.RegenerateAllSitesFPM(); err != nil {
+			log.Printf("PHP-FPM batch rebuild partially failed: %v", err)
+		}
+	})
 	log.Println("Nginx 日志 map 配置已就绪")
 	log.Println("FastCGI 缓存配置已就绪")
 	log.Println("Fail2ban 配置初始化完成")
-	// WordPress safety baseline (idempotent, only writes if not present)
-	executor.EnsureWordPressBaseline()
 	executor.EnsureWPCommand()
 	// 远程备份密码认证依赖 sshpass；启动路径只提示，不自动修改服务器软件状态。
 	if _, err := exec.LookPath("sshpass"); err != nil {

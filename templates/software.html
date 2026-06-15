@@ -214,7 +214,7 @@
                 </div>
 
                 <div class="flex space-x-2 mt-4">
-                    <button @click="saveConfig(sw)" :disabled="sw._saving" class="btn-primary text-sm" x-text="sw._saving ? '保存并重载中...' : '保存并重载'"></button>
+                    <button @click="saveConfig(sw)" :disabled="sw._saving" class="btn-primary text-sm" x-text="sw._saving ? (sw.name === 'PHP' ? '保存并重建站点 FPM 中...' : '保存并重载中...') : '保存并重载'"></button>
                     <button @click="viewLog(sw.name)" class="btn-secondary text-sm">查看日志</button>
                 </div>
             </div>
