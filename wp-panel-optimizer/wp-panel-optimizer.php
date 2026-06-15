@@ -343,10 +343,10 @@ class WP_Panel_Optimizer {
                         </td>
                     </tr>
                     <tr>
-                        <th><label for="wpp-memory-limit">PHP 内存限制</label></th>
+                        <th><label for="wpp-memory-limit">WordPress 内存限制</label></th>
                         <td>
                             <input id="wpp-memory-limit" name="memory_limit" type="text" class="regular-text" value="<?php echo esc_attr($memoryLimit); ?>" placeholder="默认 40M">
-                            <p class="description">设置 <code>WP_MEMORY_LIMIT</code>，如 <code>128M</code>、<code>256M</code>。留空使用 WordPress 默认值（40M）。<br>遇到"Allowed memory size exhausted"错误、后台白屏时可适当调高。注意不要超过服务器总内存。</p>
+                            <p class="description">设置 WordPress 的 <code>WP_MEMORY_LIMIT</code>，如 <code>128M</code>、<code>256M</code>。留空使用 WordPress 默认值（40M）。<br>这是 WordPress 应用层内存限制，不是 PHP-FPM 的 <code>memory_limit</code> 硬上限；实际值不应超过面板「软件管理」中的 PHP 内存限制。遇到"Allowed memory size exhausted"错误、后台白屏时可适当调高。</p>
                         </td>
                     </tr>
                     <?php $xmlrpcEnabled = get_option('wpp_optimizer_xmlrpc_enabled', '0') === '1'; ?>
