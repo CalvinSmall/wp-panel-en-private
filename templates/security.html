@@ -206,7 +206,7 @@
                 </div>
                 <div>
                     <label class="label text-xs">真实 IP Header</label>
-                    <input x-model="cdnGroupForm.header_name" class="input-field text-sm font-mono" placeholder="X-Real-IP">
+                    <input x-model="cdnGroupForm.header_name" class="input-field text-sm font-mono" placeholder="X-Forwarded-For">
                 </div>
             </div>
             <div class="mt-3">
@@ -249,7 +249,7 @@ function securitySettings() {
         showHelp: false,
         cdnGroups: [],
         cdnGroupSaving: false,
-        cdnGroupForm: { id: null, name: '', header_name: 'X-Real-IP', ip_ranges: '', enabled: true, description: '' },
+        cdnGroupForm: { id: null, name: '', header_name: 'X-Forwarded-For', ip_ranges: '', enabled: true, description: '' },
         async fetchSettings() {
             try {
                 const r = await api('/security/settings');
@@ -278,13 +278,13 @@ function securitySettings() {
             return '兼容模式：未填写可信回源 IP 段';
         },
         resetCDNGroupForm() {
-            this.cdnGroupForm = { id: null, name: '', header_name: 'X-Real-IP', ip_ranges: '', enabled: true, description: '' };
+            this.cdnGroupForm = { id: null, name: '', header_name: 'X-Forwarded-For', ip_ranges: '', enabled: true, description: '' };
         },
         editCDNGroup(group) {
             this.cdnGroupForm = {
                 id: group.id,
                 name: group.name || '',
-                header_name: group.header_name || 'X-Real-IP',
+                header_name: group.header_name || 'X-Forwarded-For',
                 ip_ranges: group.ip_ranges || '',
                 enabled: !!group.enabled,
                 description: group.description || ''
