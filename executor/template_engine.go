@@ -43,12 +43,17 @@ type NginxSiteData struct {
 }
 
 type PHPFPMPoolData struct {
-	Domain     string
-	PoolName   string
-	SystemUser string
-	WebRoot    string
-	SocketPath string
-	SocketName string
+	Domain            string
+	PoolName          string
+	SystemUser        string
+	WebRoot           string
+	SocketPath        string
+	SocketName        string
+	MemoryLimit       string
+	UploadMaxFilesize string
+	PostMaxSize       string
+	MaxExecutionTime  string
+	MaxInputTime      string
 }
 
 type TemplateEngine struct {
@@ -243,6 +248,22 @@ func (e *TemplateEngine) RenderPHPFPMPool(data *PHPFPMPoolData) (string, error) 
 	}
 	if data.SocketName == "" {
 		data.SocketName = data.PoolName
+	}
+	phpCfg := LoadPHPRuntimeConfig()
+	if data.MemoryLimit == "" {
+		data.MemoryLimit = phpCfg.MemoryLimit
+	}
+	if data.UploadMaxFilesize == "" {
+		data.UploadMaxFilesize = phpCfg.UploadMaxFilesize
+	}
+	if data.PostMaxSize == "" {
+		data.PostMaxSize = phpCfg.PostMaxSize
+	}
+	if data.MaxExecutionTime == "" {
+		data.MaxExecutionTime = phpCfg.MaxExecutionTime
+	}
+	if data.MaxInputTime == "" {
+		data.MaxInputTime = phpCfg.MaxInputTime
 	}
 	tmpl, err := template.New("php_fpm_pool").Parse(phpFPMPoolTemplate)
 	if err != nil {
@@ -797,11 +818,11 @@ pm.process_idle_timeout = 10s
 pm.max_requests = 500
 
 php_admin_value[open_basedir] = {{.WebRoot}}:/tmp:/usr/share/php:/var/wp-panel/site-secrets/{{.Domain}}
-php_admin_value[upload_max_filesize] = 64M
-php_admin_value[post_max_size] = 64M
-php_admin_value[max_execution_time] = 300
-php_admin_value[max_input_time] = 300
-php_admin_value[memory_limit] = 256M
+php_admin_value[upload_max_filesize] = {{.UploadMaxFilesize}}
+php_admin_value[post_max_size] = {{.PostMaxSize}}
+php_admin_value[max_execution_time] = {{.MaxExecutionTime}}
+php_admin_value[max_input_time] = {{.MaxInputTime}}
+php_admin_value[memory_limit] = {{.MemoryLimit}}
 php_admin_value[disable_functions] = exec,passthru,shell_exec,system,proc_open,popen,show_source
 php_admin_flag[allow_url_fopen] = On
 php_admin_flag[allow_url_include] = Off

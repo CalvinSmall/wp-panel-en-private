@@ -16,20 +16,10 @@ func EnsureWordPressBaseline() {
 }
 
 func ensurePHPBaseline() {
-	path := "/etc/php/8.3/fpm/conf.d/99-wppanel.ini"
-	if _, err := os.Stat(path); err == nil {
-		return
+	changed, err := EnsurePHPRuntimeConfigFile()
+	if err == nil && changed {
+		exec.Command("systemctl", "reload", "php8.3-fpm").Run()
 	}
-	content := `; WP Panel — WordPress 安全基线 (安装时自动生成)
-; 可在面板「软件管理」中修改这些值
-memory_limit = 256M
-upload_max_filesize = 64M
-post_max_size = 64M
-max_execution_time = 300
-max_input_vars = 2000
-`
-	os.WriteFile(path, []byte(content), 0644)
-	exec.Command("systemctl", "reload", "php8.3-fpm").Run()
 }
 
 func ensureNginxBaseline() {

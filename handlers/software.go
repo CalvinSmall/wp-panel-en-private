@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -58,6 +59,11 @@ func (h *SoftwareHandler) List(c *gin.Context) {
 		getMariaDBInfo(),
 		getRedisInfo(),
 	}
+	items[0].Configs = append(items[0].Configs, softwareConfig{
+		Key:   "max_input_time",
+		Label: "max_input_time - 最大输入解析时间(秒)",
+		Hint:  "PHP 解析 POST/上传输入的最长时间。大文件上传或导入建议与 max_execution_time 保持一致",
+	})
 	for i := range items {
 		populateConfigValues(&items[i])
 	}
@@ -65,11 +71,12 @@ func (h *SoftwareHandler) List(c *gin.Context) {
 }
 
 var configDefaults = map[string]string{
-	"memory_limit":            "128M",
-	"upload_max_filesize":     "2M",
-	"post_max_size":           "8M",
-	"max_execution_time":      "30",
-	"max_input_vars":          "1000",
+	"memory_limit":            "256M",
+	"upload_max_filesize":     "64M",
+	"post_max_size":           "64M",
+	"max_execution_time":      "300",
+	"max_input_time":          "300",
+	"max_input_vars":          "2000",
 	"client_max_body_size":    "1m",
 	"innodb_buffer_pool_size": "128M",
 	"maxmemory":               "0",
@@ -179,11 +186,33 @@ func (h *SoftwareHandler) GuardAction(c *gin.Context) {
 var softConfigAllowed = map[string]map[string]bool{
 	"PHP": {
 		"memory_limit": true, "upload_max_filesize": true, "post_max_size": true,
-		"max_execution_time": true, "max_input_vars": true,
+		"max_execution_time": true, "max_input_time": true, "max_input_vars": true,
 	},
 	"Nginx":   {"client_max_body_size": true},
 	"MariaDB": {"innodb_buffer_pool_size": true},
 	"Redis":   {"maxmemory": true},
+}
+
+var (
+	phpSizeValueRe = regexp.MustCompile(`^[0-9]+[KMGkmg]?$`)
+	phpIntValueRe  = regexp.MustCompile(`^[0-9]+$`)
+)
+
+func validateSoftwareConfigValue(name, key, value string) string {
+	if name != "PHP" {
+		return ""
+	}
+	switch key {
+	case "memory_limit", "upload_max_filesize", "post_max_size":
+		if !phpSizeValueRe.MatchString(value) {
+			return "PHP 容量配置仅支持数字，或数字加 K/M/G，例如 128M"
+		}
+	case "max_execution_time", "max_input_time", "max_input_vars":
+		if !phpIntValueRe.MatchString(value) {
+			return "PHP 时间和变量数量配置仅支持非负整数"
+		}
+	}
+	return ""
 }
 
 func (h *SoftwareHandler) SaveConfig(c *gin.Context) {
@@ -201,7 +230,7 @@ func (h *SoftwareHandler) SaveConfig(c *gin.Context) {
 
 	switch req.Name {
 	case "PHP":
-		configPath = "/etc/php/8.3/fpm/php.ini"
+		configPath = executor.PHPRuntimeConfigPath()
 		serviceName = "php8.3-fpm"
 		checkCmd = "php-fpm8.3 -t"
 		reloadCmd = "systemctl reload php8.3-fpm"
@@ -225,7 +254,7 @@ func (h *SoftwareHandler) SaveConfig(c *gin.Context) {
 
 	// Validate key against per-service allowlist
 	if allowed, ok := softConfigAllowed[req.Name]; !ok || !allowed[req.Key] {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("不支持的配置项: " + req.Key))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("不支持的配置项: "+req.Key))
 		return
 	}
 	// Reject value containing newlines or directive-terminating characters
@@ -238,9 +267,19 @@ func (h *SoftwareHandler) SaveConfig(c *gin.Context) {
 		return
 	}
 
+	if errMsg := validateSoftwareConfigValue(req.Name, req.Key, req.Value); errMsg != "" {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse(errMsg))
+		return
+	}
+
 	// Ensure config file exists (for conf.d files created by baseline)
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		if req.Name == "Nginx" {
+		if req.Name == "PHP" {
+			if _, err := executor.EnsurePHPRuntimeConfigFile(); err != nil {
+				c.JSON(http.StatusInternalServerError, models.ErrorResponse("创建 PHP 配置文件失败"))
+				return
+			}
+		} else if req.Name == "Nginx" {
 			os.WriteFile(configPath, []byte("# WP Panel\n"), 0644)
 		} else if req.Name == "MariaDB" {
 			os.WriteFile(configPath, []byte("# WP Panel\n[mysqld]\n"), 0644)
@@ -303,6 +342,9 @@ func (h *SoftwareHandler) SaveConfig(c *gin.Context) {
 
 	// Reload
 	exec.Command("bash", "-c", reloadCmd).Run()
+	if req.Name == "PHP" {
+		executor.RegenerateAllSitesFPM()
+	}
 
 	c.JSON(http.StatusOK, models.SuccessResponse(gin.H{"message": "配置已更新，" + serviceName + " 已重载"}))
 }
@@ -314,7 +356,7 @@ func getPHPInfo() softwareItem {
 		Name:       "PHP",
 		Version:    strings.TrimSpace(ver),
 		Status:     "已安装 " + strings.TrimSpace(extCount) + " 个扩展",
-		ConfigPath: "/etc/php/8.3/fpm/php.ini",
+		ConfigPath: executor.PHPRuntimeConfigPath(),
 		Configs: []softwareConfig{
 			{Key: "memory_limit", Label: "memory_limit — PHP 内存限制", Hint: "单个 PHP 进程最大内存。简单博客 128M，多插件站 256M，WooCommerce/Elementor 512M"},
 			{Key: "upload_max_filesize", Label: "upload_max_filesize — 上传大小上限", Hint: "主题/插件/媒体上传限制。需与 Nginx client_max_body_size 一致"},
