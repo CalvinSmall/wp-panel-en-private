@@ -18,6 +18,19 @@ type UpdateSecuritySettingsRequest struct {
 	WhitelistIPs     *string `json:"whitelist_ips"`
 }
 
+type CDNRealIPGroup struct {
+	ID          int       `json:"id"`
+	Name        string    `json:"name"`
+	Provider    string    `json:"provider"`
+	HeaderName  string    `json:"header_name"`
+	IPRanges    string    `json:"ip_ranges"`
+	Builtin     bool      `json:"builtin"`
+	Enabled     bool      `json:"enabled"`
+	Description string    `json:"description"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
 type OperationLog struct {
 	ID        int       `json:"id"`
 	Operation string    `json:"operation"`

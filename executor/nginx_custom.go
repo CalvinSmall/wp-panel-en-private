@@ -8,6 +8,7 @@ import (
 
 	"github.com/naibabiji/wp-panel/config"
 	"github.com/naibabiji/wp-panel/database"
+	"github.com/naibabiji/wp-panel/models"
 )
 
 const nginxCustomDir = "/www/server/panel/nginx-custom"
@@ -100,4 +101,73 @@ func executeSetAccessLogMode(task *Task) TaskResult {
 		msg = "访问日志模式已更新"
 	}
 	return TaskResult{Success: true, Message: msg}
+}
+
+func executeSetCDNRealIP(task *Task) TaskResult {
+	payload, ok := task.Payload.(*SetCDNRealIPPayload)
+	if !ok {
+		return TaskResult{Success: false, Message: "任务参数类型错误"}
+	}
+	site := payload.Site
+	if site == nil {
+		return TaskResult{Success: false, Message: "网站不存在"}
+	}
+
+	var groups []models.CDNRealIPGroup
+	var err error
+	if payload.Enabled {
+		groups, err = GetEnabledCDNRealIPGroupsByIDs(payload.GroupIDs)
+		if err != nil {
+			return TaskResult{Success: false, Message: err.Error()}
+		}
+		if len(groups) == 0 {
+			return TaskResult{Success: false, Message: "启用 CDN 真实 IP 时至少选择一个配置组"}
+		}
+	}
+
+	siteCopy := *site
+	siteCopy.CDNRealIPEnabled = payload.Enabled
+	siteCopy.CDNRealIPGroups = groups
+	if _, err := ResolveCDNRealIPRuntime(&siteCopy); err != nil {
+		return TaskResult{Success: false, Message: err.Error()}
+	}
+
+	cfg := config.AppConfig
+	engine := NewTemplateEngine(cfg.Panel.BackupDir)
+	nginxConfig, err := engine.RenderNginxConfig(nginxDataFromSite(&siteCopy))
+	if err != nil {
+		log.Printf("渲染 Nginx 配置失败: %v", err)
+		return taskFailure("渲染 Nginx 配置失败", err)
+	}
+	if err := engine.ApplyNginxConfig(nginxConfig, site.NginxConfPath,
+		nginxEnabledPath(cfg, site.NginxConfPath, site.Domain)); err != nil {
+		log.Printf("应用 Nginx 配置失败: %v", err)
+		return taskFailure("应用 Nginx 配置失败", err)
+	}
+
+	db := database.GetDB()
+	tx, err := db.Begin()
+	if err != nil {
+		return taskFailure("保存 CDN 真实 IP 设置失败", err)
+	}
+	if _, err := tx.Exec(`UPDATE websites SET cdn_realip_enabled = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, boolToDBInt(payload.Enabled), site.ID); err != nil {
+		_ = tx.Rollback()
+		return taskFailure("保存 CDN 真实 IP 设置失败", err)
+	}
+	if err := UpdateWebsiteCDNRealIPGroups(tx, site.ID, payload.GroupIDs); err != nil {
+		_ = tx.Rollback()
+		return taskFailure("保存 CDN 真实 IP 配置组失败", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return taskFailure("保存 CDN 真实 IP 设置失败", err)
+	}
+
+	return TaskResult{Success: true, Message: "CDN 真实 IP 设置已保存并生效"}
+}
+
+func boolToDBInt(v bool) int {
+	if v {
+		return 1
+	}
+	return 0
 }

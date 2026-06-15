@@ -205,6 +205,9 @@ func executeRefreshWhitelist(task *Task) TaskResult {
 	if cfIPs, err := fetchCloudflareIPs(); err == nil {
 		allIPs = append(allIPs, cfIPs...)
 		details = append(details, fmt.Sprintf("Cloudflare: %d 条", len(cfIPs)))
+		db := database.GetDB()
+		db.Exec(`UPDATE security_settings SET svalue = ?, updated_at = CURRENT_TIMESTAMP WHERE skey = 'cloudflare_realip_ips'`,
+			strings.Join(cfIPs, "\n"))
 		if err := DeployCloudflareRealIPConfig(cfIPs); err != nil {
 			details = append(details, "Cloudflare Real IP: 配置失败")
 		} else {
@@ -244,10 +247,11 @@ func executeRefreshWhitelist(task *Task) TaskResult {
 func ApplyFail2banSettings() error {
 	db := database.GetDB()
 
-	var officialIPs, customIPs string
+	var officialIPs, customIPs, cdnRealIPIPs string
 	var maxRetry, findTime, banTime string
 	db.QueryRow(`SELECT svalue FROM security_settings WHERE skey = 'official_whitelist_ips'`).Scan(&officialIPs)
 	db.QueryRow(`SELECT svalue FROM security_settings WHERE skey = 'whitelist_ips'`).Scan(&customIPs)
+	cdnRealIPIPs = CombinedCDNRealIPRangesForFail2ban()
 	db.QueryRow(`SELECT svalue FROM security_settings WHERE skey = 'fail2ban_maxretry'`).Scan(&maxRetry)
 	db.QueryRow(`SELECT svalue FROM security_settings WHERE skey = 'fail2ban_findtime'`).Scan(&findTime)
 	db.QueryRow(`SELECT svalue FROM security_settings WHERE skey = 'fail2ban_bantime'`).Scan(&banTime)
@@ -258,6 +262,12 @@ func ApplyFail2banSettings() error {
 			mergedIPs += "\n"
 		}
 		mergedIPs += customIPs
+	}
+	if cdnRealIPIPs != "" {
+		if mergedIPs != "" {
+			mergedIPs += "\n"
+		}
+		mergedIPs += cdnRealIPIPs
 	}
 
 	mr := parseIntOr(maxRetry, 5)

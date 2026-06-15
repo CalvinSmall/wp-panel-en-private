@@ -94,6 +94,8 @@ func (q *TaskQueue) worker() {
 			result = executeSaveNginxCustom(task)
 		case TaskSetAccessLogMode:
 			result = executeSetAccessLogMode(task)
+		case TaskSetCDNRealIP:
+			result = executeSetCDNRealIP(task)
 		case TaskRenewSSL:
 			result = executeRenewSSL(task)
 		case TaskRenderCron:
@@ -174,6 +176,10 @@ func logOp(task *Task, result TaskResult) {
 		}
 	case TaskSetAccessLogMode:
 		if p, ok := task.Payload.(*SetAccessLogModePayload); ok && p.Site != nil {
+			target = p.Site.Domain
+		}
+	case TaskSetCDNRealIP:
+		if p, ok := task.Payload.(*SetCDNRealIPPayload); ok && p.Site != nil {
 			target = p.Site.Domain
 		}
 	case TaskRenewSSL:

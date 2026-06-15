@@ -22,6 +22,7 @@ const (
 	TaskUpdateDomains    TaskType = "update_domains"
 	TaskSaveNginxCustom  TaskType = "save_nginx_custom"
 	TaskSetAccessLogMode TaskType = "set_access_log_mode"
+	TaskSetCDNRealIP     TaskType = "set_cdn_realip"
 	TaskRenewSSL         TaskType = "renew_ssl"
 	TaskRenderCron       TaskType = "render_cron"
 	TaskRunCron          TaskType = "run_cron"
@@ -55,16 +56,16 @@ type TaskResult struct {
 }
 
 type CreateSitePayload struct {
-	Domain              string
-	Aliases             []string
-	SSLEnabled          bool
-	DBPassword          string
-	ExpiresAt           string
-	SiteType            string
-	CleanDefaults       bool     `json:"clean_defaults"`
-	RemoveUnusedThemes  bool     `json:"remove_unused_themes"`
-	InstallThemes       []string `json:"install_themes"`
-	InstallPlugins      []string `json:"install_plugins"`
+	Domain             string
+	Aliases            []string
+	SSLEnabled         bool
+	DBPassword         string
+	ExpiresAt          string
+	SiteType           string
+	CleanDefaults      bool     `json:"clean_defaults"`
+	RemoveUnusedThemes bool     `json:"remove_unused_themes"`
+	InstallThemes      []string `json:"install_themes"`
+	InstallPlugins     []string `json:"install_plugins"`
 }
 
 type DeleteSitePayload struct {
@@ -110,6 +111,12 @@ type SaveNginxCustomPayload struct {
 type SetAccessLogModePayload struct {
 	Site *models.Website `json:"-"`
 	Mode string          `json:"mode"`
+}
+
+type SetCDNRealIPPayload struct {
+	Site     *models.Website `json:"-"`
+	Enabled  bool            `json:"enabled"`
+	GroupIDs []int           `json:"group_ids"`
 }
 
 type RunCronPayload struct {

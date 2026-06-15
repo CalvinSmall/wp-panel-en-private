@@ -234,6 +234,80 @@ func TestWPSecurityReportCacheReturnsClone(t *testing.T) {
 	}
 }
 
+func TestNginxTemplateIncludesCDNRealIPTrustedRanges(t *testing.T) {
+	engine := NewTemplateEngine(t.TempDir())
+	config, err := engine.RenderNginxConfig(&NginxSiteData{
+		Domain:           "example.com",
+		ServerNames:      "example.com",
+		WebRoot:          "/www/wwwroot/example.com",
+		PHPProxy:         "unix:/run/php/example.sock",
+		TemplateVer:      "v1.0",
+		AccessLogMode:    "error_only",
+		SiteType:         "wordpress",
+		CDNRealIPEnabled: true,
+		CDNRealIPHeader:  "X-Forwarded-For",
+		CDNRealIPRanges:  []string{"203.0.113.0/24", "2001:db8::/32"},
+		CDNRealIPCompat:  false,
+	})
+	if err != nil {
+		t.Fatalf("render nginx config: %v", err)
+	}
+	for _, want := range []string{
+		"set_real_ip_from 203.0.113.0/24;",
+		"set_real_ip_from 2001:db8::/32;",
+		"real_ip_header X-Forwarded-For;",
+		"real_ip_recursive on;",
+	} {
+		if !strings.Contains(config, want) {
+			t.Fatalf("missing %q in config:\n%s", want, config)
+		}
+	}
+}
+
+func TestNginxTemplateIncludesCDNRealIPCompatibleMode(t *testing.T) {
+	engine := NewTemplateEngine(t.TempDir())
+	config, err := engine.RenderNginxConfig(&NginxSiteData{
+		Domain:           "example.com",
+		ServerNames:      "example.com",
+		WebRoot:          "/www/wwwroot/example.com",
+		PHPProxy:         "unix:/run/php/example.sock",
+		TemplateVer:      "v1.0",
+		AccessLogMode:    "error_only",
+		SiteType:         "php",
+		CDNRealIPEnabled: true,
+		CDNRealIPHeader:  "X-Real-IP",
+		CDNRealIPCompat:  true,
+	})
+	if err != nil {
+		t.Fatalf("render nginx config: %v", err)
+	}
+	for _, want := range []string{
+		"set_real_ip_from 0.0.0.0/0;",
+		"set_real_ip_from ::/0;",
+		"real_ip_header X-Real-IP;",
+	} {
+		if !strings.Contains(config, want) {
+			t.Fatalf("missing %q in config:\n%s", want, config)
+		}
+	}
+}
+
+func TestNormalizeCDNRealIPHeaderAndRanges(t *testing.T) {
+	if _, err := NormalizeCDNRealIPHeader("X_Real_IP"); err == nil {
+		t.Fatal("expected underscore header to be rejected")
+	}
+	if got, err := NormalizeCDNRealIPHeader("X-Real-IP"); err != nil || got != "X-Real-IP" {
+		t.Fatalf("NormalizeCDNRealIPHeader = %q, %v", got, err)
+	}
+	ranges, err := NormalizeCDNRealIPRanges("203.0.113.0/24\n203.0.113.5\n203.0.113.5")
+	if err != nil {
+		t.Fatalf("NormalizeCDNRealIPRanges: %v", err)
+	}
+	if got := strings.Join(ranges, ","); got != "203.0.113.0/24,203.0.113.5" {
+		t.Fatalf("unexpected ranges: %s", got)
+	}
+}
+
 func openTestDB(t *testing.T) {
 	t.Helper()
 

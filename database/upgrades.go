@@ -126,6 +126,39 @@ var upgrades = []Upgrade{
 			`INSERT OR IGNORE INTO security_settings (skey, svalue, description) VALUES ('wp_security_log_whitelist', '', 'WordPress安全日志路径白名单')`,
 		},
 	},
+	{
+		Version:     "1.0.12",
+		Description: "新增网站级 CDN 真实 IP 配置组",
+		SQL: []string{
+			`ALTER TABLE websites ADD COLUMN cdn_realip_enabled INTEGER NOT NULL DEFAULT 0`,
+			`CREATE TABLE IF NOT EXISTS cdn_realip_groups (
+				id          INTEGER PRIMARY KEY AUTOINCREMENT,
+				name        TEXT    NOT NULL UNIQUE,
+				provider    TEXT    NOT NULL DEFAULT 'custom',
+				header_name TEXT    NOT NULL,
+				ip_ranges   TEXT    NOT NULL DEFAULT '',
+				builtin     INTEGER NOT NULL DEFAULT 0,
+				enabled     INTEGER NOT NULL DEFAULT 1,
+				description TEXT    DEFAULT '',
+				created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+				updated_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+			)`,
+			`CREATE INDEX IF NOT EXISTS idx_cdn_realip_groups_enabled ON cdn_realip_groups(enabled)`,
+			`CREATE TABLE IF NOT EXISTS website_cdn_realip_groups (
+				website_id INTEGER NOT NULL,
+				group_id   INTEGER NOT NULL,
+				created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+				PRIMARY KEY (website_id, group_id),
+				FOREIGN KEY (website_id) REFERENCES websites(id) ON DELETE CASCADE,
+				FOREIGN KEY (group_id) REFERENCES cdn_realip_groups(id) ON DELETE CASCADE
+			)`,
+			`CREATE INDEX IF NOT EXISTS idx_website_cdn_realip_groups_group ON website_cdn_realip_groups(group_id)`,
+			`INSERT OR IGNORE INTO security_settings (skey, svalue, description) VALUES ('cloudflare_realip_ips', '', 'Cloudflare Real IP 专用官方IP段')`,
+			`INSERT OR IGNORE INTO cdn_realip_groups (name, provider, header_name, ip_ranges, builtin, enabled, description) VALUES
+				('Cloudflare', 'cloudflare', 'CF-Connecting-IP', '', 1, 1, 'Cloudflare 官方 IP 段由面板自动拉取'),
+				('通用 CDN（兼容模式）', 'compatible', 'X-Forwarded-For', '', 1, 1, '不校验来源 IP，直接信任 X-Forwarded-For')`,
+		},
+	},
 }
 
 // LatestVersion 返回 upgrades 列表中的最新版本号。

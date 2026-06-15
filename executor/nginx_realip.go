@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/naibabiji/wp-panel/database"
 )
 
 const nginxRealIPPath = "/etc/nginx/conf.d/wppanel-realip.conf"
@@ -17,6 +19,9 @@ func EnsureCloudflareRealIPConfig() error {
 	cfIPs, err := fetchCloudflareIPs()
 	if err != nil {
 		return err
+	}
+	if database.GetDB() != nil {
+		database.GetDB().Exec(`UPDATE security_settings SET svalue = ?, updated_at = CURRENT_TIMESTAMP WHERE skey = 'cloudflare_realip_ips'`, strings.Join(cfIPs, "\n"))
 	}
 	return DeployCloudflareRealIPConfig(cfIPs)
 }

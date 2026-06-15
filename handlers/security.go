@@ -124,8 +124,144 @@ func (h *SecurityHandler) RefreshWhitelist(c *gin.Context) {
 	c.JSON(http.StatusOK, models.SuccessResponse(gin.H{"message": "白名单刷新任务已提交"}))
 }
 
+func (h *SecurityHandler) ListCDNRealIPGroups(c *gin.Context) {
+	groups, err := executor.ListCDNRealIPGroups()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse("查询 CDN 配置组失败"))
+		return
+	}
+	c.JSON(http.StatusOK, models.SuccessResponse(groups))
+}
+
+func (h *SecurityHandler) CreateCDNRealIPGroup(c *gin.Context) {
+	var req struct {
+		Name        string `json:"name"`
+		HeaderName  string `json:"header_name"`
+		IPRanges    string `json:"ip_ranges"`
+		Enabled     *bool  `json:"enabled"`
+		Description string `json:"description"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("参数错误"))
+		return
+	}
+
+	name, header, ranges, enabled, desc, err := normalizeCDNRealIPGroupPayload(req.Name, req.HeaderName, req.IPRanges, req.Enabled, req.Description)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse(err.Error()))
+		return
+	}
+	if _, err := database.GetDB().Exec(`INSERT INTO cdn_realip_groups (name, provider, header_name, ip_ranges, builtin, enabled, description)
+		VALUES (?, 'custom', ?, ?, 0, ?, ?)`, name, header, ranges, boolToInt(enabled), desc); err != nil {
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse("创建 CDN 配置组失败"))
+		return
+	}
+	if err := executor.ApplyFail2banSettings(); err != nil {
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse("CDN 配置组已保存，但 Fail2ban 白名单应用失败: "+err.Error()))
+		return
+	}
+	c.JSON(http.StatusOK, models.SuccessResponse(gin.H{"message": "CDN 配置组已创建"}))
+}
+
+func (h *SecurityHandler) UpdateCDNRealIPGroup(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("无效的配置组ID"))
+		return
+	}
+	group, err := executor.GetCDNRealIPGroup(id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, models.ErrorResponse("CDN 配置组不存在"))
+		return
+	}
+	if group.Builtin {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("内置 CDN 配置组不可修改"))
+		return
+	}
+
+	var req struct {
+		Name        string `json:"name"`
+		HeaderName  string `json:"header_name"`
+		IPRanges    string `json:"ip_ranges"`
+		Enabled     *bool  `json:"enabled"`
+		Description string `json:"description"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("参数错误"))
+		return
+	}
+	name, header, ranges, enabled, desc, err := normalizeCDNRealIPGroupPayload(req.Name, req.HeaderName, req.IPRanges, req.Enabled, req.Description)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse(err.Error()))
+		return
+	}
+	if _, err := database.GetDB().Exec(`UPDATE cdn_realip_groups
+		SET name = ?, header_name = ?, ip_ranges = ?, enabled = ?, description = ?, updated_at = CURRENT_TIMESTAMP
+		WHERE id = ?`, name, header, ranges, boolToInt(enabled), desc, id); err != nil {
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse("保存 CDN 配置组失败"))
+		return
+	}
+	if err := executor.ApplyFail2banSettings(); err != nil {
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse("CDN 配置组已保存，但 Fail2ban 白名单应用失败: "+err.Error()))
+		return
+	}
+	executor.GoSafe(func() { executor.RegenerateAllSitesNginx() })
+	c.JSON(http.StatusOK, models.SuccessResponse(gin.H{"message": "CDN 配置组已保存"}))
+}
+
+func (h *SecurityHandler) DeleteCDNRealIPGroup(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("无效的配置组ID"))
+		return
+	}
+	group, err := executor.GetCDNRealIPGroup(id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, models.ErrorResponse("CDN 配置组不存在"))
+		return
+	}
+	if group.Builtin {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("内置 CDN 配置组不可删除"))
+		return
+	}
+	if _, err := database.GetDB().Exec(`DELETE FROM cdn_realip_groups WHERE id = ?`, id); err != nil {
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse("删除 CDN 配置组失败"))
+		return
+	}
+	if err := executor.ApplyFail2banSettings(); err != nil {
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse("CDN 配置组已删除，但 Fail2ban 白名单应用失败: "+err.Error()))
+		return
+	}
+	executor.GoSafe(func() { executor.RegenerateAllSitesNginx() })
+	c.JSON(http.StatusOK, models.SuccessResponse(gin.H{"message": "CDN 配置组已删除"}))
+}
+
 func refreshOfficialWhitelist() {
 	executor.GlobalQueue.Enqueue(executor.TaskRefreshWhitelist, nil)
+}
+
+func normalizeCDNRealIPGroupPayload(name, headerName, rawRanges string, enabled *bool, description string) (string, string, string, bool, string, error) {
+	name = strings.TrimSpace(name)
+	if name == "" || len(name) > 50 || strings.ContainsAny(name, "\r\n\t") {
+		return "", "", "", false, "", fmt.Errorf("CDN 配置组名称格式不正确")
+	}
+	header, err := executor.NormalizeCDNRealIPHeader(headerName)
+	if err != nil {
+		return "", "", "", false, "", err
+	}
+	ranges, err := executor.NormalizeCDNRealIPRanges(rawRanges)
+	if err != nil {
+		return "", "", "", false, "", err
+	}
+	isEnabled := true
+	if enabled != nil {
+		isEnabled = *enabled
+	}
+	description = strings.TrimSpace(description)
+	if len(description) > 200 {
+		return "", "", "", false, "", fmt.Errorf("备注过长")
+	}
+	return name, header, executor.JoinCDNRealIPRanges(ranges), isEnabled, description, nil
 }
 
 func applyRateLimit() error {
@@ -212,6 +348,13 @@ func normalizeBool(val interface{}) (string, error) {
 		}
 	}
 	return "", fmt.Errorf("开关值不正确")
+}
+
+func boolToInt(v bool) int {
+	if v {
+		return 1
+	}
+	return 0
 }
 
 func validateWhitelistIPs(raw string) error {

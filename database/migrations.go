@@ -48,6 +48,7 @@ var migrations = []string{
 		wp_post_revisions     INTEGER NOT NULL DEFAULT -1,
 		wp_memory_limit       TEXT    NOT NULL DEFAULT '',
 		log_retention_days    INTEGER NOT NULL DEFAULT 7,
+		cdn_realip_enabled    INTEGER NOT NULL DEFAULT 0,
 		expires_at            DATETIME,
 		created_at            DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 		updated_at            DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -182,6 +183,32 @@ var migrations = []string{
 	`CREATE INDEX IF NOT EXISTS idx_template_active ON template_versions(template_type, is_active)`,
 
 	// ============================================================
+	// cdn_realip_groups
+	// ============================================================
+	`CREATE TABLE IF NOT EXISTS cdn_realip_groups (
+		id          INTEGER PRIMARY KEY AUTOINCREMENT,
+		name        TEXT    NOT NULL UNIQUE,
+		provider    TEXT    NOT NULL DEFAULT 'custom',
+		header_name TEXT    NOT NULL,
+		ip_ranges   TEXT    NOT NULL DEFAULT '',
+		builtin     INTEGER NOT NULL DEFAULT 0,
+		enabled     INTEGER NOT NULL DEFAULT 1,
+		description TEXT    DEFAULT '',
+		created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		updated_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+	)`,
+	`CREATE INDEX IF NOT EXISTS idx_cdn_realip_groups_enabled ON cdn_realip_groups(enabled)`,
+	`CREATE TABLE IF NOT EXISTS website_cdn_realip_groups (
+		website_id INTEGER NOT NULL,
+		group_id   INTEGER NOT NULL,
+		created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		PRIMARY KEY (website_id, group_id),
+		FOREIGN KEY (website_id) REFERENCES websites(id) ON DELETE CASCADE,
+		FOREIGN KEY (group_id) REFERENCES cdn_realip_groups(id) ON DELETE CASCADE
+	)`,
+	`CREATE INDEX IF NOT EXISTS idx_website_cdn_realip_groups_group ON website_cdn_realip_groups(group_id)`,
+
+	// ============================================================
 	// seed: security_settings
 	// ============================================================
 	`INSERT OR IGNORE INTO security_settings (skey, svalue, description) VALUES
@@ -192,6 +219,7 @@ var migrations = []string{
 		('fail2ban_bantime',         '600',      'Fail2ban初犯封禁时间(秒)'),
 		('auto_whitelist_enabled',   'true',     '是否每周自动更新官方白名单'),
 		('official_whitelist_ips',   '',         '官方自动拉取的白名单IP/段'),
+		('cloudflare_realip_ips',    '',         'Cloudflare Real IP 专用官方IP段'),
 		('last_whitelist_update',    '',         '上次白名单更新时间'),
 		('rate_limit_enabled',       'true',     '是否开启全局限速'),
 		('rate_limit_rpm',           '60',       '每IP每分钟最大请求数'),
@@ -226,6 +254,13 @@ var migrations = []string{
 		('nginx_http',   'v1.0', 'HTTP默认模板',             1),
 		('nginx_https',  'v1.0', 'HTTPS(含SSL)模板',         1),
 		('php_fpm_pool', 'v1.0', 'PHP-FPM Pool隔离模板',     1)`,
+
+	// ============================================================
+	// seed: cdn_realip_groups
+	// ============================================================
+	`INSERT OR IGNORE INTO cdn_realip_groups (name, provider, header_name, ip_ranges, builtin, enabled, description) VALUES
+		('Cloudflare', 'cloudflare', 'CF-Connecting-IP', '', 1, 1, 'Cloudflare 官方 IP 段由面板自动拉取'),
+		('通用 CDN（兼容模式）', 'compatible', 'X-Forwarded-For', '', 1, 1, '不校验来源 IP，直接信任 X-Forwarded-For')`,
 
 	// ============================================================
 	// db_backups

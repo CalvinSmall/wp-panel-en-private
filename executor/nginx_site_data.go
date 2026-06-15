@@ -43,6 +43,12 @@ func nginxDataFromSite(site *models.Website) *NginxSiteData {
 		FCacheKey:     site.FCacheKey,
 		XMLRPCEnabled: site.XMLRPCEnabled,
 	}
+	if runtime, err := ResolveCDNRealIPRuntime(site); err == nil && runtime.Enabled {
+		data.CDNRealIPEnabled = true
+		data.CDNRealIPHeader = runtime.HeaderName
+		data.CDNRealIPRanges = runtime.IPRanges
+		data.CDNRealIPCompat = runtime.Compatible
+	}
 	if data.UseSSL {
 		if data.SSLCertPath == "" {
 			data.SSLCertPath = filepath.Join(cfg.Paths.Certificates, site.Domain, "fullchain.pem")

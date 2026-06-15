@@ -26,6 +26,26 @@
                 </div>
                 <div><dt class="text-sm text-gray-400">状态</dt><dd><span :class="site.status === 'active' ? 'badge-success' : 'badge-warning'" x-text="site.status === 'active' ? '运行中' : '已暂停'"></span></dd></div>
                 <div><dt class="text-sm text-gray-400">类型</dt><dd class="text-white" x-text="site.site_type === 'php' ? '通用 PHP 网站' : 'WordPress'"></dd></div>
+                <div class="pt-2 border-t border-gray-700/50">
+                    <dt class="text-sm text-gray-400 mb-2">CDN 真实 IP</dt>
+                    <label class="flex items-center space-x-2 text-sm text-gray-300 mb-2">
+                        <input type="checkbox" x-model="cdnRealIPEnabled">
+                        <span>启用 CDN 真实 IP</span>
+                    </label>
+                    <div x-show="cdnRealIPEnabled" class="space-y-2">
+                        <template x-for="g in cdnGroups" :key="g.id">
+                            <label class="flex items-start space-x-2 text-sm text-gray-300">
+                                <input type="checkbox" class="mt-1" :value="g.id" x-model="cdnRealIPGroupIDs" :disabled="!g.enabled">
+                                <span>
+                                    <span class="text-white" x-text="g.name"></span>
+                                    <span class="text-xs text-gray-500" x-text="' · ' + g.header_name"></span>
+                                </span>
+                            </label>
+                        </template>
+                        <p class="text-xs text-gray-500" x-text="cdnRealIPModeText()"></p>
+                    </div>
+                    <button @click="saveCDNRealIP()" :disabled="cdnRealIPSaving" class="btn-primary text-sm mt-2" x-text="cdnRealIPSaving ? '保存中...' : '保存 CDN 真实 IP'"></button>
+                </div>
                 <div><dt class="text-sm text-gray-400">系统用户</dt><dd class="text-white font-mono" x-text="site.system_user"></dd></div>
                 <div><dt class="text-sm text-gray-400">网站根目录</dt><dd class="text-white font-mono text-sm" x-text="site.web_root"></dd></div>
                 <div><dt class="text-sm text-gray-400">日志目录</dt><dd class="text-white font-mono text-sm" x-text="site.log_dir"></dd></div>
@@ -503,6 +523,10 @@ function websiteDetail() {
         monitoringEnabled: false,
         monitoringInterval: 5,
         monitoringSaving: false,
+        cdnGroups: [],
+        cdnRealIPEnabled: false,
+        cdnRealIPGroupIDs: [],
+        cdnRealIPSaving: false,
         accessLogMode: 'off',
         expiresAtInput: '',
         editingExpiry: false,
@@ -536,6 +560,8 @@ function websiteDetail() {
                     this.logRetentionDays = r.data.log_retention_days || 7;
                     this.monitoringEnabled = r.data.monitoring_enabled || false;
                     this.monitoringInterval = r.data.monitoring_interval || 5;
+                    this.cdnRealIPEnabled = r.data.cdn_realip_enabled || false;
+                    this.cdnRealIPGroupIDs = (r.data.cdn_realip_groups || []).map(g => g.id);
                     this.editTablePrefix = r.data.table_prefix || '';
                 }
             } catch(e) { showToast('加载失败: ' + e.message, 'error'); }
@@ -545,6 +571,36 @@ function websiteDetail() {
             this.fetchLogs();
             this.fetchBackups();
             this.fetchBackupSettings();
+            this.fetchCDNGroups();
+        },
+        async fetchCDNGroups() {
+            try {
+                const r = await api('/security/cdn-realip-groups');
+                if (r.success) this.cdnGroups = r.data || [];
+            } catch(e) {}
+        },
+        cdnRealIPModeText() {
+            if (!this.cdnRealIPEnabled) return '';
+            const selected = this.cdnGroups.filter(g => this.cdnRealIPGroupIDs.includes(g.id));
+            if (selected.length === 0) return '请选择至少一个 CDN 配置组。';
+            const headers = [...new Set(selected.map(g => (g.header_name || '').toLowerCase()))];
+            if (headers.length > 1) return '所选配置组 Header 不一致，保存时会被拒绝。';
+            if (selected.some(g => g.provider !== 'cloudflare' && !(g.ip_ranges || '').trim())) {
+                return '兼容模式：未填写可信回源 IP 段，将信任所有来源的真实 IP Header。';
+            }
+            return '可信 CDN 模式：仅信任所选配置组的回源 IP 段。';
+        },
+        async saveCDNRealIP() {
+            this.cdnRealIPSaving = true;
+            try {
+                const r = await api('/websites/' + this.site.id + '/cdn-realip', {
+                    method: 'PUT',
+                    body: { enabled: this.cdnRealIPEnabled, group_ids: this.cdnRealIPGroupIDs.map(id => parseInt(id)) }
+                });
+                showToast(r.data?.message || 'CDN 真实 IP 已保存', 'success');
+                await this.fetchDetail();
+            } catch(e) { showToast(e.message, 'error'); }
+            finally { this.cdnRealIPSaving = false; }
         },
         async enableSSL() {
             if (this.sslMode === 'manual' && (!this.sslCert || !this.sslKey)) {

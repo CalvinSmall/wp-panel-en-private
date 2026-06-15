@@ -38,7 +38,7 @@ func TestFreshInstallRunsMigrationsAndRecordsLatestVersion(t *testing.T) {
 		t.Fatalf("version = %q, want %q", version, LatestVersion())
 	}
 
-	for _, col := range []string{"php_pool_path", "nginx_conf_path", "wp_memory_limit"} {
+	for _, col := range []string{"php_pool_path", "nginx_conf_path", "wp_memory_limit", "cdn_realip_enabled"} {
 		var exists int
 		if err := DB.QueryRow("SELECT COUNT(*) FROM pragma_table_info('websites') WHERE name = ?", col).Scan(&exists); err != nil {
 			t.Fatalf("query websites column %s: %v", col, err)
@@ -46,6 +46,21 @@ func TestFreshInstallRunsMigrationsAndRecordsLatestVersion(t *testing.T) {
 		if exists != 1 {
 			t.Fatalf("websites.%s exists = %d, want 1", col, exists)
 		}
+	}
+
+	var groupCount int
+	if err := DB.QueryRow("SELECT COUNT(*) FROM cdn_realip_groups WHERE builtin = 1").Scan(&groupCount); err != nil {
+		t.Fatalf("query cdn_realip_groups: %v", err)
+	}
+	if groupCount < 2 {
+		t.Fatalf("builtin cdn realip groups = %d, want at least 2", groupCount)
+	}
+	var cfSettingCount int
+	if err := DB.QueryRow("SELECT COUNT(*) FROM security_settings WHERE skey = 'cloudflare_realip_ips'").Scan(&cfSettingCount); err != nil {
+		t.Fatalf("query cloudflare_realip_ips setting: %v", err)
+	}
+	if cfSettingCount != 1 {
+		t.Fatalf("cloudflare_realip_ips setting exists = %d, want 1", cfSettingCount)
 	}
 }
 

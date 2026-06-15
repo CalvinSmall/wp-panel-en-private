@@ -29,7 +29,7 @@ const websiteCols = `id, name, domain, aliases, status, system_user, web_root, l
 	fastcgi_cache_enabled, fastcgi_cache_ttl, fastcgi_cache_key,
 	monitoring_enabled, monitoring_interval, disable_wp_updates, disable_file_editing,
 		xmlrpc_enabled, wp_debug_enabled, wp_post_revisions, wp_memory_limit,
-		log_retention_days, expires_at, created_at, updated_at`
+		log_retention_days, cdn_realip_enabled, expires_at, created_at, updated_at`
 
 // scanWebsite scans the canonical columns into a Website model.
 // scanner is either row.Scan (for QueryRow) or rows.Scan (for Rows).
@@ -43,6 +43,7 @@ func scanWebsite(scanner func(dest ...interface{}) error) (*models.Website, erro
 	var wpPostRevisions int
 	var wpMemoryLimit string
 	var logRetentionDays int
+	var cdnRealIPEnabled int
 
 	err := scanner(
 		&w.ID, &w.Name, &w.Domain, &aliases, &status, &w.SystemUser,
@@ -52,7 +53,7 @@ func scanWebsite(scanner func(dest ...interface{}) error) (*models.Website, erro
 		&fCacheEnabled, &w.FCacheTTL, &w.FCacheKey,
 		&monitoringEnabled, &monitoringInterval, &disableWPUpdates, &disableFileEditing,
 		&xmlrpcEnabled, &wpDebugEnabled, &wpPostRevisions, &wpMemoryLimit,
-		&logRetentionDays, &w.ExpiresAt,
+		&logRetentionDays, &cdnRealIPEnabled, &w.ExpiresAt,
 		&w.CreatedAt, &w.UpdatedAt,
 	)
 	if err != nil {
@@ -72,6 +73,7 @@ func scanWebsite(scanner func(dest ...interface{}) error) (*models.Website, erro
 	w.WPPostRevisions = wpPostRevisions
 	w.WPMemoryLimit = wpMemoryLimit
 	w.LogRetentionDays = logRetentionDays
+	w.CDNRealIPEnabled = cdnRealIPEnabled == 1
 	return &w, nil
 }
 
@@ -157,6 +159,7 @@ func (h *WebsiteHandler) Get(c *gin.Context) {
 			w.TablePrefix = prefix
 		}
 	}
+	executor.LoadWebsiteCDNRealIPGroups(w)
 
 	c.JSON(http.StatusOK, models.SuccessResponse(w))
 }
@@ -891,6 +894,42 @@ func (h *WebsiteHandler) SetAccessLogMode(c *gin.Context) {
 	}
 }
 
+func (h *WebsiteHandler) SetCDNRealIP(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("无效的网站ID"))
+		return
+	}
+	site := getWebsiteByID(id)
+	if site == nil {
+		c.JSON(http.StatusNotFound, models.ErrorResponse("网站不存在"))
+		return
+	}
+
+	var req struct {
+		Enabled  bool  `json:"enabled"`
+		GroupIDs []int `json:"group_ids"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("参数错误"))
+		return
+	}
+	if req.Enabled && len(req.GroupIDs) == 0 {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("启用 CDN 真实 IP 时至少选择一个配置组"))
+		return
+	}
+
+	task := executor.GlobalQueue.Enqueue(executor.TaskSetCDNRealIP, &executor.SetCDNRealIPPayload{
+		Site: site, Enabled: req.Enabled, GroupIDs: req.GroupIDs,
+	})
+	result := <-task.ResultCh
+	if result.Success {
+		c.JSON(http.StatusOK, models.SuccessResponse(gin.H{"message": result.Message}))
+	} else {
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse(result.Message))
+	}
+}
+
 func getWebsiteByID(id int) *models.Website {
 	w, err := scanWebsite(database.GetDB().QueryRow(
 		"SELECT "+websiteCols+" FROM websites WHERE id = ?", id,
@@ -898,6 +937,7 @@ func getWebsiteByID(id int) *models.Website {
 	if err != nil {
 		return nil
 	}
+	executor.LoadWebsiteCDNRealIPGroups(w)
 	return w
 }
 

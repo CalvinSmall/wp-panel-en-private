@@ -1,6 +1,6 @@
 {{template "base" .}}
 {{define "security_content"}}
-<div x-data="securitySettings()" x-init="fetchSettings()">
+<div x-data="securitySettings()" x-init="fetchSettings(); fetchCDNGroups()">
     <div class="flex items-center justify-between mb-6">
         <h2 class="text-xl font-bold text-white">安全设置</h2>
         <button @click="showHelp = true" class="btn-secondary text-sm">帮助说明</button>
@@ -156,6 +156,65 @@
         </div>
         <button @click="saveWhitelist" class="btn-primary">保存自定义白名单</button>
         <div class="mt-6 pt-4 border-t border-gray-700/50">
+            <div class="flex items-center justify-between mb-2">
+                <label class="label">CDN 真实 IP 配置组</label>
+                <span class="text-xs text-gray-500">自定义组会同时加入防火墙白名单</span>
+            </div>
+            <div class="space-y-2 mb-4">
+                <template x-for="g in cdnGroups" :key="g.id">
+                    <div class="rounded border border-gray-700 p-3 text-sm">
+                        <div class="flex items-start justify-between gap-3">
+                            <div>
+                                <div class="text-white font-medium">
+                                    <span x-text="g.name"></span>
+                                    <span x-show="g.builtin" class="badge-info ml-2">内置</span>
+                                    <span x-show="!g.enabled" class="badge-warning ml-2">已禁用</span>
+                                </div>
+                                <div class="text-xs text-gray-400 mt-1">
+                                    <span x-text="'Header: ' + g.header_name"></span>
+                                    <span class="mx-2">|</span>
+                                    <span x-text="(g.ip_ranges || '').trim() ? '可信 IP 段已填写' : (g.provider === 'cloudflare' ? '自动拉取 Cloudflare IP' : '兼容模式')"></span>
+                                </div>
+                            </div>
+                            <div x-show="!g.builtin" class="flex items-center space-x-2">
+                                <button @click="editCDNGroup(g)" class="btn-secondary text-xs py-1 px-2">编辑</button>
+                                <button @click="deleteCDNGroup(g)" class="btn-danger text-xs py-1 px-2">删除</button>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+            </div>
+            <div class="rounded border border-gray-700 p-3">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                        <label class="label text-xs">名称</label>
+                        <input x-model="cdnGroupForm.name" class="input-field text-sm" placeholder="阿里云 ESA">
+                    </div>
+                    <div>
+                        <label class="label text-xs">真实 IP Header</label>
+                        <input x-model="cdnGroupForm.header_name" class="input-field text-sm font-mono" placeholder="X-Real-IP">
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <label class="label text-xs">可信 CDN 回源 IP/CIDR</label>
+                    <textarea x-model="cdnGroupForm.ip_ranges" class="input-field font-mono text-sm" rows="4" placeholder="一行一个，可留空进入兼容模式"></textarea>
+                </div>
+                <div class="mt-3">
+                    <label class="label text-xs">备注</label>
+                    <input x-model="cdnGroupForm.description" class="input-field text-sm" placeholder="用于说明 CDN 厂商或用途">
+                </div>
+                <label class="flex items-center space-x-2 text-sm text-gray-300 mt-3">
+                    <input type="checkbox" x-model="cdnGroupForm.enabled">
+                    <span>启用配置组</span>
+                </label>
+                <div class="mt-3 flex items-center space-x-2">
+                    <button @click="saveCDNGroup()" :disabled="cdnGroupSaving" class="btn-primary text-sm" x-text="cdnGroupForm.id ? '保存配置组' : '新增配置组'"></button>
+                    <button x-show="cdnGroupForm.id" @click="resetCDNGroupForm()" class="btn-secondary text-sm">取消编辑</button>
+                </div>
+                <p class="text-xs text-gray-500 mt-2">Header 名只允许英文字母、数字和短横线；IP 段留空时，绑定该组的网站会信任所有来源的该 Header。</p>
+            </div>
+        </div>
+        <div class="mt-6 pt-4 border-t border-gray-700/50">
             <label class="label">WordPress 安全日志路径白名单</label>
             <textarea x-model="settings.wp_security_log_whitelist" class="input-field font-mono text-sm" rows="5" placeholder="/google*.html&#10;/BingSiteAuth.xml&#10;/custom-verify-*.txt"></textarea>
             <p class="text-xs text-gray-500 mt-1">一行一个路径，可使用 * 通配符；必须以 / 开头。不支持正则，不允许空格、分号、引号或 ..。</p>
@@ -180,6 +239,9 @@ function securitySettings() {
     return {
         settings: {},
         showHelp: false,
+        cdnGroups: [],
+        cdnGroupSaving: false,
+        cdnGroupForm: { id: null, name: '', header_name: 'X-Real-IP', ip_ranges: '', enabled: true, description: '' },
         async fetchSettings() {
             try {
                 const r = await api('/security/settings');
@@ -194,6 +256,52 @@ function securitySettings() {
                     this.settings = map;
                 }
             } catch(e) {}
+        },
+        async fetchCDNGroups() {
+            try {
+                const r = await api('/security/cdn-realip-groups');
+                if (r.success) this.cdnGroups = r.data || [];
+            } catch(e) { showToast('读取 CDN 配置组失败: ' + e.message, 'error'); }
+        },
+        resetCDNGroupForm() {
+            this.cdnGroupForm = { id: null, name: '', header_name: 'X-Real-IP', ip_ranges: '', enabled: true, description: '' };
+        },
+        editCDNGroup(group) {
+            this.cdnGroupForm = {
+                id: group.id,
+                name: group.name || '',
+                header_name: group.header_name || 'X-Real-IP',
+                ip_ranges: group.ip_ranges || '',
+                enabled: !!group.enabled,
+                description: group.description || ''
+            };
+        },
+        async saveCDNGroup() {
+            this.cdnGroupSaving = true;
+            try {
+                const body = {
+                    name: this.cdnGroupForm.name || '',
+                    header_name: this.cdnGroupForm.header_name || '',
+                    ip_ranges: this.cdnGroupForm.ip_ranges || '',
+                    enabled: !!this.cdnGroupForm.enabled,
+                    description: this.cdnGroupForm.description || ''
+                };
+                const url = this.cdnGroupForm.id ? '/security/cdn-realip-groups/' + this.cdnGroupForm.id : '/security/cdn-realip-groups';
+                const method = this.cdnGroupForm.id ? 'PUT' : 'POST';
+                const r = await api(url, { method, body });
+                showToast(r.data?.message || 'CDN 配置组已保存', 'success');
+                this.resetCDNGroupForm();
+                await this.fetchCDNGroups();
+            } catch(e) { showToast(e.message, 'error'); }
+            finally { this.cdnGroupSaving = false; }
+        },
+        async deleteCDNGroup(group) {
+            if (!await confirmModal('确认删除 CDN 配置组「' + group.name + '」？已绑定的网站将不再使用该组。')) return;
+            try {
+                const r = await api('/security/cdn-realip-groups/' + group.id, { method: 'DELETE' });
+                showToast(r.data?.message || 'CDN 配置组已删除', 'success');
+                await this.fetchCDNGroups();
+            } catch(e) { showToast(e.message, 'error'); }
         },
         async save() {
             try {

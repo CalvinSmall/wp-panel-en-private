@@ -36,6 +36,10 @@ type NginxSiteData struct {
 	RateLimitEnabled bool
 	RateLimitBurst   int
 	XMLRPCEnabled    bool
+	CDNRealIPEnabled bool
+	CDNRealIPHeader  string
+	CDNRealIPRanges  []string
+	CDNRealIPCompat  bool
 }
 
 type PHPFPMPoolData struct {
@@ -458,6 +462,17 @@ server {
 
     server_name {{.ServerNames}};
 
+    {{if .CDNRealIPEnabled}}
+    {{if .CDNRealIPCompat}}
+    set_real_ip_from 0.0.0.0/0;
+    set_real_ip_from ::/0;
+    {{else}}
+    {{range .CDNRealIPRanges}}set_real_ip_from {{.}};
+    {{end}}{{end}}
+    real_ip_header {{.CDNRealIPHeader}};
+    real_ip_recursive on;
+    {{end}}
+
     if ($wppanel_banned_ip) { return 444; }
 
     {{if .RateLimitEnabled}}
@@ -586,6 +601,17 @@ server {
     listen [::]:80;
     server_name {{.ServerNames}};
 
+    {{if .CDNRealIPEnabled}}
+    {{if .CDNRealIPCompat}}
+    set_real_ip_from 0.0.0.0/0;
+    set_real_ip_from ::/0;
+    {{else}}
+    {{range .CDNRealIPRanges}}set_real_ip_from {{.}};
+    {{end}}{{end}}
+    real_ip_header {{.CDNRealIPHeader}};
+    real_ip_recursive on;
+    {{end}}
+
     if ($wppanel_banned_ip) { return 444; }
 
     {{if .RateLimitEnabled}}
@@ -604,6 +630,17 @@ server {
     http2 on;
 
     server_name {{.ServerNames}};
+
+    {{if .CDNRealIPEnabled}}
+    {{if .CDNRealIPCompat}}
+    set_real_ip_from 0.0.0.0/0;
+    set_real_ip_from ::/0;
+    {{else}}
+    {{range .CDNRealIPRanges}}set_real_ip_from {{.}};
+    {{end}}{{end}}
+    real_ip_header {{.CDNRealIPHeader}};
+    real_ip_recursive on;
+    {{end}}
 
     if ($wppanel_banned_ip) { return 444; }
 

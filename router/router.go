@@ -133,6 +133,7 @@ func SetupRouter(cfg *config.Config, tmplFS embed.FS, staticFS embed.FS, version
 	protected.GET("/api/websites/:id/nginx-custom", websiteHandler.GetNginxCustom)
 	protected.PUT("/api/websites/:id/nginx-custom", websiteHandler.SaveNginxCustom)
 	protected.PUT("/api/websites/:id/access-log", websiteHandler.SetAccessLogMode)
+	protected.PUT("/api/websites/:id/cdn-realip", websiteHandler.SetCDNRealIP)
 	protected.PUT("/api/websites/:id/log-retention", websiteHandler.SetLogRetention)
 	protected.PUT("/api/websites/:id/expiry", websiteHandler.UpdateExpiry)
 	backupHandler := &handlers.BackupHandler{}
@@ -163,6 +164,10 @@ func SetupRouter(cfg *config.Config, tmplFS embed.FS, staticFS embed.FS, version
 	protected.GET("/api/security/settings", securityHandler.GetSettings)
 	protected.PUT("/api/security/settings", securityHandler.UpdateSettings)
 	protected.POST("/api/security/whitelist/refresh", securityHandler.RefreshWhitelist)
+	protected.GET("/api/security/cdn-realip-groups", securityHandler.ListCDNRealIPGroups)
+	protected.POST("/api/security/cdn-realip-groups", securityHandler.CreateCDNRealIPGroup)
+	protected.PUT("/api/security/cdn-realip-groups/:id", securityHandler.UpdateCDNRealIPGroup)
+	protected.DELETE("/api/security/cdn-realip-groups/:id", securityHandler.DeleteCDNRealIPGroup)
 
 	alertHandler := &handlers.AlertHandler{}
 	protected.GET("/api/alert/settings", alertHandler.GetSettings)
