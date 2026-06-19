@@ -38,36 +38,54 @@ func (h *SettingsHandler) GetSettings(c *gin.Context) {
 
 	var githubProxy string
 	db.QueryRow("SELECT svalue FROM security_settings WHERE skey = 'github_proxy'").Scan(&githubProxy)
+	autoUpdate := map[string]string{}
+	for _, key := range []string{
+		"panel_auto_update_enabled", "panel_auto_update_mode", "panel_auto_update_window",
+		"panel_auto_update_release_delay_minutes", "panel_auto_update_signature_timeout_minutes",
+		"panel_auto_update_last_target_version", "panel_auto_update_last_attempt_at",
+		"panel_auto_update_last_status", "panel_auto_update_last_stage", "panel_auto_update_last_error",
+		"panel_auto_update_last_success_at", "panel_auto_update_last_success_version",
+	} {
+		var v string
+		db.QueryRow("SELECT svalue FROM security_settings WHERE skey = ?", key).Scan(&v)
+		autoUpdate[key] = v
+	}
 
 	timezone := getTimezone()
 	hostname := getHostname()
 	ntpSynced, ntpServer := getNTPSyncStatus()
 
 	c.JSON(http.StatusOK, models.SuccessResponse(gin.H{
-		"username":        username,
-		"basic_auth_user": basicAuthUser,
-		"panel_title":     panelTitle,
-		"github_proxy":    githubProxy,
-		"timezone":        timezone,
-		"hostname":        hostname,
-		"ntp_synced":      ntpSynced,
-		"ntp_server":      ntpServer,
-		"server_time":     time.Now().UnixMilli(),
+		"username":          username,
+		"basic_auth_user":   basicAuthUser,
+		"panel_title":       panelTitle,
+		"github_proxy":      githubProxy,
+		"timezone":          timezone,
+		"hostname":          hostname,
+		"ntp_synced":        ntpSynced,
+		"ntp_server":        ntpServer,
+		"server_time":       time.Now().UnixMilli(),
+		"panel_auto_update": autoUpdate,
 	}))
 }
 
 func (h *SettingsHandler) UpdateSettings(c *gin.Context) {
 	var req struct {
-		PanelTitle    *string `json:"panel_title"`
-		Username      *string `json:"username"`
-		BasicAuthUser *string `json:"basic_auth_user"`
-		OldPassword   *string `json:"old_password"`
-		NewPassword   *string `json:"new_password"`
-		BasicAuthPw   *string `json:"basic_auth_password"`
-		Timezone      *string `json:"timezone"`
-		Hostname      *string `json:"hostname"`
-		NtpSync       *bool   `json:"ntp_sync"`
-		GithubProxy   *string `json:"github_proxy"`
+		PanelTitle                *string `json:"panel_title"`
+		Username                  *string `json:"username"`
+		BasicAuthUser             *string `json:"basic_auth_user"`
+		OldPassword               *string `json:"old_password"`
+		NewPassword               *string `json:"new_password"`
+		BasicAuthPw               *string `json:"basic_auth_password"`
+		Timezone                  *string `json:"timezone"`
+		Hostname                  *string `json:"hostname"`
+		NtpSync                   *bool   `json:"ntp_sync"`
+		GithubProxy               *string `json:"github_proxy"`
+		PanelAutoUpdateEnabled    *string `json:"panel_auto_update_enabled"`
+		PanelAutoUpdateMode       *string `json:"panel_auto_update_mode"`
+		PanelAutoUpdateWindow     *string `json:"panel_auto_update_window"`
+		PanelAutoUpdateDelay      *string `json:"panel_auto_update_release_delay_minutes"`
+		PanelAutoUpdateSigTimeout *string `json:"panel_auto_update_signature_timeout_minutes"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, models.ErrorResponse("参数错误"))
@@ -187,7 +205,58 @@ func (h *SettingsHandler) UpdateSettings(c *gin.Context) {
 		}
 	}
 
+	if req.PanelAutoUpdateEnabled != nil {
+		v := strings.TrimSpace(*req.PanelAutoUpdateEnabled)
+		if v != "true" && v != "false" {
+			c.JSON(http.StatusBadRequest, models.ErrorResponse("自动更新开关参数错误"))
+			return
+		}
+		saveSecuritySetting("panel_auto_update_enabled", v)
+	}
+	if req.PanelAutoUpdateMode != nil {
+		v := strings.TrimSpace(*req.PanelAutoUpdateMode)
+		if v != "patch_only" && v != "all_stable" {
+			c.JSON(http.StatusBadRequest, models.ErrorResponse("自动更新模式参数错误"))
+			return
+		}
+		saveSecuritySetting("panel_auto_update_mode", v)
+	}
+	if req.PanelAutoUpdateWindow != nil {
+		v := strings.TrimSpace(*req.PanelAutoUpdateWindow)
+		if !regexp.MustCompile(`^\d{2}:\d{2}-\d{2}:\d{2}$`).MatchString(v) {
+			c.JSON(http.StatusBadRequest, models.ErrorResponse("自动更新时间窗口格式应为 HH:MM-HH:MM"))
+			return
+		}
+		saveSecuritySetting("panel_auto_update_window", v)
+	}
+	if req.PanelAutoUpdateDelay != nil {
+		if !saveMinuteSetting(c, "panel_auto_update_release_delay_minutes", *req.PanelAutoUpdateDelay, 1, 1440) {
+			return
+		}
+	}
+	if req.PanelAutoUpdateSigTimeout != nil {
+		if !saveMinuteSetting(c, "panel_auto_update_signature_timeout_minutes", *req.PanelAutoUpdateSigTimeout, 5, 1440) {
+			return
+		}
+	}
+
 	c.JSON(http.StatusOK, models.SuccessResponse(gin.H{"message": "设置已更新"}))
+}
+
+func saveSecuritySetting(key, value string) {
+	db := database.GetDB()
+	_, _ = db.Exec(`INSERT INTO security_settings (skey, svalue, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)
+		ON CONFLICT(skey) DO UPDATE SET svalue = excluded.svalue, updated_at = excluded.updated_at`, key, value)
+}
+
+func saveMinuteSetting(c *gin.Context, key, raw string, min, max int) bool {
+	v, err := strconv.Atoi(strings.TrimSpace(raw))
+	if err != nil || v < min || v > max {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse(fmt.Sprintf("分钟数必须在 %d-%d 之间", min, max)))
+		return false
+	}
+	saveSecuritySetting(key, strconv.Itoa(v))
+	return true
 }
 
 func (h *SettingsHandler) TestProxy(c *gin.Context) {
@@ -209,8 +278,8 @@ func (h *SettingsHandler) TestProxy(c *gin.Context) {
 
 	if err != nil {
 		c.JSON(http.StatusOK, models.SuccessResponse(gin.H{
-			"ok":     false,
-			"error":  fmt.Sprintf("连接失败: %v", err),
+			"ok":      false,
+			"error":   fmt.Sprintf("连接失败: %v", err),
 			"latency": elapsed,
 		}))
 		return
@@ -219,13 +288,13 @@ func (h *SettingsHandler) TestProxy(c *gin.Context) {
 
 	if resp.StatusCode == 200 {
 		c.JSON(http.StatusOK, models.SuccessResponse(gin.H{
-			"ok":     true,
+			"ok":      true,
 			"latency": elapsed,
 		}))
 	} else {
 		c.JSON(http.StatusOK, models.SuccessResponse(gin.H{
-			"ok":     false,
-			"error":  fmt.Sprintf("HTTP %d", resp.StatusCode),
+			"ok":      false,
+			"error":   fmt.Sprintf("HTTP %d", resp.StatusCode),
 			"latency": elapsed,
 		}))
 	}

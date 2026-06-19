@@ -4,6 +4,7 @@ import (
 	"embed"
 	"html/template"
 	"io/fs"
+	"net"
 	"net/http"
 
 	"github.com/naibabiji/wp-panel/config"
@@ -16,7 +17,7 @@ import (
 
 var panelVersion string
 
-func SetupRouter(cfg *config.Config, tmplFS embed.FS, staticFS embed.FS, version string) *gin.Engine {
+func SetupRouter(cfg *config.Config, tmplFS embed.FS, staticFS embed.FS, version string, configPath string) *gin.Engine {
 	panelVersion = version
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
@@ -49,6 +50,31 @@ func SetupRouter(cfg *config.Config, tmplFS embed.FS, staticFS embed.FS, version
 	})
 	r.GET("/favicon.ico", func(c *gin.Context) {
 		c.Status(http.StatusNoContent)
+	})
+	r.GET("/healthz", func(c *gin.Context) {
+		ip := net.ParseIP(c.ClientIP())
+		if ip == nil || !ip.IsLoopback() {
+			c.Status(http.StatusNotFound)
+			return
+		}
+		db := database.GetDB()
+		if db == nil {
+			c.Status(http.StatusServiceUnavailable)
+			return
+		}
+		var version string
+		if err := db.QueryRow("SELECT version FROM schema_version ORDER BY updated_at DESC, rowid DESC LIMIT 1").Scan(&version); err != nil || version == "" {
+			c.Status(http.StatusServiceUnavailable)
+			return
+		}
+		for _, table := range []string{"admin_users", "websites", "security_settings"} {
+			var count int
+			if err := db.QueryRow("SELECT COUNT(*) FROM " + table + " LIMIT 1").Scan(&count); err != nil {
+				c.Status(http.StatusServiceUnavailable)
+				return
+			}
+		}
+		c.JSON(http.StatusOK, gin.H{"ok": true})
 	})
 
 	suffix := cfg.Panel.RandomSuffix
@@ -274,7 +300,7 @@ func SetupRouter(cfg *config.Config, tmplFS embed.FS, staticFS embed.FS, version
 	protected.PUT("/api/software/config", softwareHandler.SaveConfig)
 	protected.GET("/api/software/log", softwareHandler.ViewLog)
 	protected.DELETE("/api/software/log", softwareHandler.ClearLog)
-	updateHandler := &handlers.UpdateHandler{CurrentVersion: version}
+	updateHandler := &handlers.UpdateHandler{CurrentVersion: version, ConfigPath: configPath, Config: cfg}
 	protected.GET("/api/update/check", updateHandler.Check)
 	protected.GET("/api/update/status", updateHandler.Status)
 	protected.POST("/api/update/do", updateHandler.Update)

@@ -43,6 +43,7 @@ func main() {
 	fileBackup := flag.String("file-backup", "", "执行文件备份: siteID:mode")
 	runAutoBackup := flag.Bool("run-auto-backup", false, "手动触发自动备份（测试用）")
 	showInfo := flag.Bool("info", false, "查看面板信息")
+	updateWatchdog := flag.String("update-watchdog", "", "内部使用：面板更新健康检查守护")
 	flag.Parse()
 
 	if *banIPNginx != "" || *unbanIPNginx != "" || *recordFail2banIP != "" {
@@ -84,6 +85,11 @@ func main() {
 	}
 	defer database.Close()
 
+	if *updateWatchdog != "" {
+		executor.RunUpdateWatchdog(cfg, *updateWatchdog)
+		return
+	}
+
 	if err := database.RunMigrations(); err != nil {
 		log.Fatalf("数据库迁移失败: %v", err)
 	}
@@ -93,6 +99,7 @@ func main() {
 	if err := database.RunUpgrades(); err != nil {
 		log.Fatalf("数据库升级失败: %v", err)
 	}
+	executor.FinalizePendingPanelUpdate(cfg, Version)
 
 	if *resetAdmin {
 		resetAllAdmin(cfg, *configPath)
@@ -192,6 +199,7 @@ func main() {
 	executor.StartProcessGuard()
 	executor.StartAlertMonitor(Version)
 	executor.StartTelemetry(Version)
+	executor.StartPanelAutoUpdateScheduler(Version, *configPath, cfg)
 	log.Println("WordPress config baseline ensured")
 	log.Println("进程守护已启动")
 	log.Println("告警监控已启动")
@@ -208,7 +216,7 @@ func main() {
 		}
 	}()
 
-	r := router.SetupRouter(cfg, TemplatesFS, StaticFS, Version)
+	r := router.SetupRouter(cfg, TemplatesFS, StaticFS, Version, *configPath)
 
 	if cfg.Panel.TLSPort > 0 && cfg.Panel.TLSCertPath != "" && cfg.Panel.TLSKeyPath != "" {
 		go func() {

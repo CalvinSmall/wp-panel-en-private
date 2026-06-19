@@ -1,6 +1,13 @@
 package executor
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
+	"testing"
+	"time"
+)
 
 func TestCompareVersions(t *testing.T) {
 	tests := []struct {
@@ -21,4 +28,130 @@ func TestCompareVersions(t *testing.T) {
 			t.Fatalf("CompareVersions(%q, %q) = %d, want sign %d", tt.a, tt.b, got, tt.want)
 		}
 	}
+}
+
+func TestIsPatchBump(t *testing.T) {
+	tests := []struct {
+		current string
+		target  string
+		want    bool
+	}{
+		{"v1.2.3", "v1.2.4", true},
+		{"1.2.3", "1.2.5", true},
+		{"v1.2.3", "v1.3.0", false},
+		{"v1.2.3", "v2.0.0", false},
+		{"v1.2.3", "v1.2.3", false},
+		{"v1.2.3", "v1.2.4-rc1", false},
+	}
+	for _, tt := range tests {
+		if got := IsPatchBump(tt.current, tt.target); got != tt.want {
+			t.Fatalf("IsPatchBump(%q, %q) = %v, want %v", tt.current, tt.target, got, tt.want)
+		}
+	}
+}
+
+func TestIsStableVersion(t *testing.T) {
+	if !IsStableVersion("v1.2.3") {
+		t.Fatal("stable version rejected")
+	}
+	if IsStableVersion("v1.2.3-rc1") {
+		t.Fatal("prerelease accepted as stable")
+	}
+}
+
+func TestWithinAutoUpdateWindow(t *testing.T) {
+	base := time.Date(2026, 6, 19, 3, 30, 0, 0, time.Local)
+	if !withinAutoUpdateWindow("03:00-05:00", base) {
+		t.Fatal("time inside same-day window was rejected")
+	}
+	if withinAutoUpdateWindow("04:00-05:00", base) {
+		t.Fatal("time before same-day window was accepted")
+	}
+	late := time.Date(2026, 6, 19, 23, 30, 0, 0, time.Local)
+	if !withinAutoUpdateWindow("23:00-02:00", late) {
+		t.Fatal("time inside cross-day late window was rejected")
+	}
+	early := time.Date(2026, 6, 19, 1, 30, 0, 0, time.Local)
+	if !withinAutoUpdateWindow("23:00-02:00", early) {
+		t.Fatal("time inside cross-day early window was rejected")
+	}
+}
+
+func TestSanitizeBackupPart(t *testing.T) {
+	got := sanitizeBackupPart("v1.2.3; rm -rf /_ok")
+	want := "v1.2.3rm-rf_ok"
+	if got != want {
+		t.Fatalf("sanitizeBackupPart() = %q, want %q", got, want)
+	}
+}
+
+func TestVersionedBackupPath(t *testing.T) {
+	got := versionedBackupPath("v1.2.3; bad")
+	if !strings.HasPrefix(got, panelInstallPath+".bak.v1.2.3bad.") {
+		t.Fatalf("versionedBackupPath() = %q", got)
+	}
+	if strings.ContainsAny(strings.TrimPrefix(got, panelInstallPath+".bak."), " ;/\\") {
+		t.Fatalf("versionedBackupPath contains unsafe characters: %q", got)
+	}
+}
+
+func TestCopyFileCopiesContentAndMode(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "src")
+	dst := filepath.Join(dir, "dst")
+	if err := os.WriteFile(src, []byte("hello"), 0644); err != nil {
+		t.Fatalf("write src: %v", err)
+	}
+	if err := copyPanelFile(src, dst, 0750); err != nil {
+		t.Fatalf("copyFile: %v", err)
+	}
+	data, err := os.ReadFile(dst)
+	if err != nil {
+		t.Fatalf("read dst: %v", err)
+	}
+	if string(data) != "hello" {
+		t.Fatalf("dst content = %q, want hello", string(data))
+	}
+	info, err := os.Stat(dst)
+	if err != nil {
+		t.Fatalf("stat dst: %v", err)
+	}
+	if runtime.GOOS != "windows" && info.Mode().Perm() != 0750 {
+		t.Fatalf("dst mode = %o, want 0750", info.Mode().Perm())
+	}
+}
+
+func TestSnapshotPanelUpdateStatusExpiresTerminalState(t *testing.T) {
+	restore := preservePanelUpdateStatus(t)
+	panelUpdateStatusMu.Lock()
+	currentPanelUpdateStatus = PanelUpdateStatus{
+		Completed: true,
+		Stage:     "completed",
+		Message:   "更新完成",
+		Percent:   100,
+		UpdatedAt: time.Now().Add(-updateTerminalStatusTTL - time.Second),
+	}
+	panelUpdateStatusMu.Unlock()
+	got := SnapshotPanelUpdateStatus()
+	if got.Stage != "idle" || got.Completed || got.Running || got.Percent != 0 {
+		t.Fatalf("expired status = %+v, want idle", got)
+	}
+	restore()
+}
+
+func preservePanelUpdateStatus(t *testing.T) func() {
+	t.Helper()
+	prev := SnapshotPanelUpdateStatus()
+	restored := false
+	restore := func() {
+		if restored {
+			return
+		}
+		panelUpdateStatusMu.Lock()
+		currentPanelUpdateStatus = prev
+		panelUpdateStatusMu.Unlock()
+		restored = true
+	}
+	t.Cleanup(restore)
+	return restore
 }

@@ -251,7 +251,21 @@ var migrations = []string{
 		('alert_panel_update',       'true',     '面板新版本告警'),
 		('telemetry_enabled',        'true',     '匿名安装统计（仅上报机器标识和版本号）'),
 		('telemetry_url',            '',         '自定义统计上报地址（留空使用默认）'),
-		('github_proxy',             '',          'GitHub 反代地址，留空直连')`,
+		('github_proxy',             '',          'GitHub 反代地址，留空直连'),
+		('panel_auto_update_enabled','false',     '是否启用面板自动更新'),
+		('panel_auto_update_mode',   'patch_only','面板自动更新模式：patch_only/all_stable'),
+		('panel_auto_update_window', '03:00-05:00','面板自动更新时间窗口'),
+		('panel_auto_update_release_delay_minutes','15','面板自动更新发布延迟分钟数'),
+		('panel_auto_update_signature_timeout_minutes','120','面板自动更新等待签名超时分钟数'),
+		('panel_auto_update_last_target_version','','面板自动更新最近目标版本'),
+		('panel_auto_update_last_attempt_at','','面板自动更新最近尝试时间'),
+		('panel_auto_update_last_status','','面板自动更新最近状态'),
+		('panel_auto_update_last_stage','','面板自动更新最近阶段'),
+		('panel_auto_update_last_error','','面板自动更新最近错误'),
+		('panel_auto_update_last_success_at','','面板自动更新最近成功时间'),
+		('panel_auto_update_last_success_version','','面板自动更新最近成功版本'),
+		('panel_auto_update_signature_wait_version','','面板自动更新等待签名版本'),
+		('panel_auto_update_signature_wait_at','','面板自动更新等待签名开始时间')`,
 
 	// ============================================================
 	// seed: template_versions

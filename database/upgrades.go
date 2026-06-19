@@ -175,6 +175,26 @@ var upgrades = []Upgrade{
 		Description: "记录站点最近一次 SSL 申请失败原因",
 		Func:        ensureSSLLastErrorColumn,
 	},
+	{
+		Version:     "1.0.15",
+		Description: "新增面板自动更新设置",
+		SQL: []string{
+			`INSERT OR IGNORE INTO security_settings (skey, svalue, description) VALUES ('panel_auto_update_enabled', 'false', '是否启用面板自动更新')`,
+			`INSERT OR IGNORE INTO security_settings (skey, svalue, description) VALUES ('panel_auto_update_mode', 'patch_only', '面板自动更新模式：patch_only/all_stable')`,
+			`INSERT OR IGNORE INTO security_settings (skey, svalue, description) VALUES ('panel_auto_update_window', '03:00-05:00', '面板自动更新时间窗口')`,
+			`INSERT OR IGNORE INTO security_settings (skey, svalue, description) VALUES ('panel_auto_update_release_delay_minutes', '15', '面板自动更新发布延迟分钟数')`,
+			`INSERT OR IGNORE INTO security_settings (skey, svalue, description) VALUES ('panel_auto_update_signature_timeout_minutes', '120', '面板自动更新等待签名超时分钟数')`,
+			`INSERT OR IGNORE INTO security_settings (skey, svalue, description) VALUES ('panel_auto_update_last_target_version', '', '面板自动更新最近目标版本')`,
+			`INSERT OR IGNORE INTO security_settings (skey, svalue, description) VALUES ('panel_auto_update_last_attempt_at', '', '面板自动更新最近尝试时间')`,
+			`INSERT OR IGNORE INTO security_settings (skey, svalue, description) VALUES ('panel_auto_update_last_status', '', '面板自动更新最近状态')`,
+			`INSERT OR IGNORE INTO security_settings (skey, svalue, description) VALUES ('panel_auto_update_last_stage', '', '面板自动更新最近阶段')`,
+			`INSERT OR IGNORE INTO security_settings (skey, svalue, description) VALUES ('panel_auto_update_last_error', '', '面板自动更新最近错误')`,
+			`INSERT OR IGNORE INTO security_settings (skey, svalue, description) VALUES ('panel_auto_update_last_success_at', '', '面板自动更新最近成功时间')`,
+			`INSERT OR IGNORE INTO security_settings (skey, svalue, description) VALUES ('panel_auto_update_last_success_version', '', '面板自动更新最近成功版本')`,
+			`INSERT OR IGNORE INTO security_settings (skey, svalue, description) VALUES ('panel_auto_update_signature_wait_version', '', '面板自动更新等待签名版本')`,
+			`INSERT OR IGNORE INTO security_settings (skey, svalue, description) VALUES ('panel_auto_update_signature_wait_at', '', '面板自动更新等待签名开始时间')`,
+		},
+	},
 }
 
 func ensureSSLLastErrorColumn() error {

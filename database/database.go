@@ -61,7 +61,9 @@ func GetDB() *sql.DB {
 
 func Close() error {
 	if DB != nil {
-		return DB.Close()
+		err := DB.Close()
+		DB = nil
+		return err
 	}
 	return nil
 }
