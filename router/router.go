@@ -26,31 +26,7 @@ func SetupRouter(cfg *config.Config, tmplFS embed.FS, staticFS embed.FS, version
 	r.Use(middleware.CustomRecovery())
 	r.Use(middleware.SecurityHeaders())
 
-	db := database.GetDB()
-	r.Use(middleware.ScanDefense(db, cfg.Panel.RandomSuffix))
-
-	attemptTracker := middleware.NewLoginAttemptTracker(
-		db,
-		cfg.Security.MaxLoginAttempts,
-		cfg.Security.AttemptWindowMinutes,
-		cfg.Security.BanDurationHours,
-	)
-
-	basicAuthChecker := &middleware.BasicAuthChecker{
-		RecordAttempt: attemptTracker.RecordAttempt,
-		IsBanned:      attemptTracker.IsBanned,
-	}
-
-	staticPrefix := "/" + cfg.Panel.RandomSuffix + "/assets"
-	staticFileSystem, _ := fs.Sub(staticFS, "static")
-	r.StaticFS(staticPrefix, http.FS(staticFileSystem))
-
-	r.GET("/", func(c *gin.Context) {
-		c.String(http.StatusNotFound, "Not Found")
-	})
-	r.GET("/favicon.ico", func(c *gin.Context) {
-		c.Status(http.StatusNoContent)
-	})
+	// /healthz 必须在 ScanDefense 之前注册，否则本机健康检查会被扫描防御误封
 	r.GET("/healthz", func(c *gin.Context) {
 		ip := net.ParseIP(c.ClientIP())
 		if ip == nil || !ip.IsLoopback() {
@@ -75,6 +51,32 @@ func SetupRouter(cfg *config.Config, tmplFS embed.FS, staticFS embed.FS, version
 			}
 		}
 		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
+
+	db := database.GetDB()
+	r.Use(middleware.ScanDefense(db, cfg.Panel.RandomSuffix))
+
+	attemptTracker := middleware.NewLoginAttemptTracker(
+		db,
+		cfg.Security.MaxLoginAttempts,
+		cfg.Security.AttemptWindowMinutes,
+		cfg.Security.BanDurationHours,
+	)
+
+	basicAuthChecker := &middleware.BasicAuthChecker{
+		RecordAttempt: attemptTracker.RecordAttempt,
+		IsBanned:      attemptTracker.IsBanned,
+	}
+
+	staticPrefix := "/" + cfg.Panel.RandomSuffix + "/assets"
+	staticFileSystem, _ := fs.Sub(staticFS, "static")
+	r.StaticFS(staticPrefix, http.FS(staticFileSystem))
+
+	r.GET("/", func(c *gin.Context) {
+		c.String(http.StatusNotFound, "Not Found")
+	})
+	r.GET("/favicon.ico", func(c *gin.Context) {
+		c.Status(http.StatusNoContent)
 	})
 
 	suffix := cfg.Panel.RandomSuffix

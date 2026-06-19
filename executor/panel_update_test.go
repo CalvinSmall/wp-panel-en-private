@@ -77,6 +77,43 @@ func TestWithinAutoUpdateWindow(t *testing.T) {
 	}
 }
 
+func TestShouldFetchForAutoUpdate(t *testing.T) {
+	now := time.Date(2026, 6, 19, 3, 30, 0, 0, time.UTC)
+	base := autoUpdateSettings{
+		LastCheckAt:      now.Add(-time.Hour),
+		SignatureTimeout: 120 * time.Minute,
+		ReleaseDelay:     15 * time.Minute,
+	}
+	if shouldFetchForAutoUpdate(base, now) {
+		t.Fatal("normal check should respect 24 hour fetch interval")
+	}
+	base.LastCheckAt = now.Add(-25 * time.Hour)
+	if !shouldFetchForAutoUpdate(base, now) {
+		t.Fatal("normal check should run after 24 hour fetch interval")
+	}
+	waitingSig := autoUpdateSettings{
+		LastCheckAt:              now.Add(-time.Hour),
+		LastStatus:               "waiting",
+		LastSignatureWaitVersion: "v1.2.4",
+		LastSignatureWaitAt:      now.Add(-30 * time.Minute),
+		SignatureTimeout:         120 * time.Minute,
+	}
+	if !shouldFetchForAutoUpdate(waitingSig, now) {
+		t.Fatal("signature waiting should bypass 24 hour fetch interval")
+	}
+	releaseReady := autoUpdateSettings{
+		LastCheckAt:       now.Add(-time.Hour),
+		LastStatus:        "waiting",
+		LastStage:         "waiting_release_delay",
+		LastTargetVersion: "v1.2.4",
+		LastAttemptAt:     now.Add(-20 * time.Minute),
+		ReleaseDelay:      15 * time.Minute,
+	}
+	if !shouldFetchForAutoUpdate(releaseReady, now) {
+		t.Fatal("release delay completion should bypass 24 hour fetch interval")
+	}
+}
+
 func TestSanitizeBackupPart(t *testing.T) {
 	got := sanitizeBackupPart("v1.2.3; rm -rf /_ok")
 	want := "v1.2.3rm-rf_ok"

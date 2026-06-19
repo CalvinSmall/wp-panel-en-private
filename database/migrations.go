@@ -258,6 +258,7 @@ var migrations = []string{
 		('panel_auto_update_release_delay_minutes','15','面板自动更新发布延迟分钟数'),
 		('panel_auto_update_signature_timeout_minutes','120','面板自动更新等待签名超时分钟数'),
 		('panel_auto_update_last_target_version','','面板自动更新最近目标版本'),
+		('panel_auto_update_last_check_at','','面板自动更新最近检查时间'),
 		('panel_auto_update_last_attempt_at','','面板自动更新最近尝试时间'),
 		('panel_auto_update_last_status','','面板自动更新最近状态'),
 		('panel_auto_update_last_stage','','面板自动更新最近阶段'),

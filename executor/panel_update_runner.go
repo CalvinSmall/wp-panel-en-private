@@ -16,6 +16,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -32,7 +33,10 @@ const (
 	releasePubKeyHex          = "ee8ec641204d785c6469b003c710666126a3156d902b78665bb73e859b6f9546"
 	updateTerminalStatusTTL   = 5 * time.Minute
 	autoUpdateCheckInterval   = 10 * time.Minute
+	autoUpdateFetchInterval   = 24 * time.Hour
 	autoUpdateFailureCooldown = 24 * time.Hour
+	panelBinaryBackupKeep     = 5
+	panelDBBackupKeep         = 7
 )
 
 type PanelUpdateStatus struct {
@@ -78,7 +82,9 @@ type autoUpdateSettings struct {
 	SignatureTimeout         time.Duration
 	LastTargetVersion        string
 	LastAttemptAt            time.Time
+	LastCheckAt              time.Time
 	LastStatus               string
+	LastStage                string
 	LastSignatureWaitVersion string
 	LastSignatureWaitAt      time.Time
 }
@@ -331,6 +337,7 @@ func RunUpdateWatchdog(cfg *config.Config, planPath string) {
 			setSecuritySetting("panel_auto_update_last_success_at", time.Now().Format(time.RFC3339))
 			setSecuritySetting("panel_auto_update_last_success_version", plan.TargetVersion)
 			clearPanelUpdateCache()
+			cleanupPanelUpdateBackups(plan)
 			_ = os.Remove(planPath)
 			return
 		} else {
@@ -706,6 +713,10 @@ func runPanelAutoUpdateCheck(currentVersion, configPath string, cfg *config.Conf
 	if settings.LastStatus == "failed" && settings.LastAttemptAt.After(time.Now().Add(-autoUpdateFailureCooldown)) {
 		return
 	}
+	if !shouldFetchForAutoUpdate(settings, time.Now()) {
+		return
+	}
+	setSecuritySetting("panel_auto_update_last_check_at", time.Now().Format(time.RFC3339))
 	latest, err := FetchLatestPanelRelease(readSecuritySetting("github_proxy"))
 	if err != nil || latest == nil || latest.TagName == "" || CompareVersions(latest.TagName, currentVersion) <= 0 {
 		return
@@ -757,11 +768,38 @@ func readAutoUpdateSettings() autoUpdateSettings {
 		ReleaseDelay:             delay,
 		SignatureTimeout:         signatureTimeout,
 		LastTargetVersion:        readSecuritySetting("panel_auto_update_last_target_version"),
+		LastCheckAt:              parseSettingTime("panel_auto_update_last_check_at"),
 		LastAttemptAt:            parseSettingTime("panel_auto_update_last_attempt_at"),
 		LastStatus:               readSecuritySetting("panel_auto_update_last_status"),
+		LastStage:                readSecuritySetting("panel_auto_update_last_stage"),
 		LastSignatureWaitVersion: readSecuritySetting("panel_auto_update_signature_wait_version"),
 		LastSignatureWaitAt:      parseSettingTime("panel_auto_update_signature_wait_at"),
 	}
+}
+
+func shouldFetchForAutoUpdate(settings autoUpdateSettings, now time.Time) bool {
+	if isWaitingForSignature(settings, now) {
+		return true
+	}
+	if isReleaseDelayReady(settings, now) {
+		return true
+	}
+	return settings.LastCheckAt.IsZero() || now.Sub(settings.LastCheckAt) >= autoUpdateFetchInterval
+}
+
+func isWaitingForSignature(settings autoUpdateSettings, now time.Time) bool {
+	return settings.LastStatus == "waiting" &&
+		settings.LastSignatureWaitVersion != "" &&
+		!settings.LastSignatureWaitAt.IsZero() &&
+		now.Sub(settings.LastSignatureWaitAt) <= settings.SignatureTimeout
+}
+
+func isReleaseDelayReady(settings autoUpdateSettings, now time.Time) bool {
+	return settings.LastStatus == "waiting" &&
+		settings.LastStage == "waiting_release_delay" &&
+		settings.LastTargetVersion != "" &&
+		!settings.LastAttemptAt.IsZero() &&
+		now.Sub(settings.LastAttemptAt) >= settings.ReleaseDelay
 }
 
 func parseSettingMinutes(key string, fallback int) time.Duration {
@@ -1035,6 +1073,43 @@ func clearPanelUpdateCache() {
 	panelUpdateCache.latest = ""
 	panelUpdateCache.message = ""
 	panelUpdateCache.mu.Unlock()
+}
+
+func cleanupPanelUpdateBackups(plan rollbackPlan) {
+	if plan.BackupDB != "" {
+		backupDir := filepath.Dir(plan.BackupDB)
+		if removed := database.CleanupOldDBBackups(backupDir, panelDBBackupKeep); removed > 0 {
+			recordOperationLog("panel_"+plan.Trigger+"_update", plan.TargetVersion, "success", fmt.Sprintf("cleanup_database_backups: 已清理 %d 份旧数据库备份", removed))
+		}
+	}
+	if removed := cleanupPanelBinaryBackups(panelBinaryBackupKeep); removed > 0 {
+		recordOperationLog("panel_"+plan.Trigger+"_update", plan.TargetVersion, "success", fmt.Sprintf("cleanup_binary_backups: 已清理 %d 份旧二进制备份", removed))
+	}
+}
+
+func cleanupPanelBinaryBackups(keep int) int {
+	if keep <= 0 {
+		keep = panelBinaryBackupKeep
+	}
+	matches, err := filepath.Glob(panelInstallPath + ".bak.*")
+	if err != nil || len(matches) <= keep {
+		return 0
+	}
+	sort.Slice(matches, func(i, j int) bool {
+		ii, ierr := os.Stat(matches[i])
+		ji, jerr := os.Stat(matches[j])
+		if ierr == nil && jerr == nil && !ii.ModTime().Equal(ji.ModTime()) {
+			return ii.ModTime().After(ji.ModTime())
+		}
+		return matches[i] > matches[j]
+	})
+	removed := 0
+	for _, path := range matches[keep:] {
+		if os.Remove(path) == nil {
+			removed++
+		}
+	}
+	return removed
 }
 
 func LocalOnly(c net.Addr) bool {
