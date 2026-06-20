@@ -196,6 +196,11 @@ var upgrades = []Upgrade{
 			`INSERT OR IGNORE INTO security_settings (skey, svalue, description) VALUES ('panel_auto_update_signature_wait_at', '', '面板自动更新等待签名开始时间')`,
 		},
 	},
+	{
+		Version:     "1.0.16",
+		Description: "新增站点级 SSL 证书导出开关",
+		Func:        ensureSSLExportEnabledColumn,
+	},
 }
 
 func ensureSSLLastErrorColumn() error {
@@ -226,6 +231,25 @@ func ensureCDNRealIPEnabledColumn() error {
 		return nil
 	}
 	_, err := DB.Exec(`ALTER TABLE websites ADD COLUMN cdn_realip_enabled INTEGER NOT NULL DEFAULT 0`)
+	return err
+}
+
+func ensureSSLExportEnabledColumn() error {
+	var tableExists int
+	if err := DB.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'websites'`).Scan(&tableExists); err != nil {
+		return err
+	}
+	if tableExists == 0 {
+		return nil
+	}
+	var exists int
+	if err := DB.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('websites') WHERE name = 'ssl_export_enabled'`).Scan(&exists); err != nil {
+		return err
+	}
+	if exists == 1 {
+		return nil
+	}
+	_, err := DB.Exec(`ALTER TABLE websites ADD COLUMN ssl_export_enabled INTEGER NOT NULL DEFAULT 0`)
 	return err
 }
 

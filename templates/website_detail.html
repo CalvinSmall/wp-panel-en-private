@@ -184,11 +184,16 @@
                     <div><dt class="text-sm text-gray-400">私钥路径</dt><dd class="text-white font-mono text-sm break-all" x-text="site.ssl_key_path"></dd></div>
                     <div><dt class="text-sm text-gray-400">到期时间</dt><dd class="text-white" x-text="site.ssl_expires_at ? new Date(site.ssl_expires_at).toLocaleDateString('zh-CN') : '未知'"></dd></div>
                 </dl>
-                <div class="flex space-x-3">
+                <div class="flex flex-wrap gap-3">
+                    <button @click="downloadSSLPackage()" class="text-sm py-1.5 px-3 rounded" style="background-color: #374151; color: #e5e7eb;">下载证书包</button>
                     <button @click="sslMode='auto'; sslModalOpen=true" class="text-sm py-1.5 px-3 rounded" style="background-color: #166534; color: #bbf7d0;">重新申请</button>
                     <button @click="sslMode='manual'; sslCert=''; sslKey=''; sslModalOpen=true" class="text-sm py-1.5 px-3 rounded" style="background-color: #1e3a5f; color: #93c5fd;">替换证书</button>
                     <button @click="removeSSL()" class="text-sm py-1.5 px-3 rounded" style="background-color: #7f1d1d; color: #fca5a5;">删除证书</button>
                 </div>
+                <label class="mt-4 flex items-start space-x-2 cursor-pointer text-sm text-gray-300">
+                    <input type="checkbox" x-model="sslExportEnabled" @change="saveSSLExport()" :disabled="sslExportSaving" class="mt-0.5 w-4 h-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500">
+                    <span>允许配套插件读取 SSL 证书</span>
+                </label>
             </div>
             <div x-show="!site.ssl_enabled">
                 <p class="text-gray-400 mb-4">该网站尚未启用 SSL 证书</p>
@@ -502,6 +507,8 @@ function websiteDetail() {
         sslCert: '',
         sslKey: '',
         sslSubmitting: false,
+        sslExportEnabled: false,
+        sslExportSaving: false,
         dbPasswordModal: false,
         newDBPassword: '',
         dbSubmitting: false,
@@ -578,6 +585,7 @@ function websiteDetail() {
                     this.cdnRealIPEnabled = r.data.cdn_realip_enabled || false;
                     this.cdnRealIPGroupIDs = (r.data.cdn_realip_groups || []).map(g => g.id);
                     this.editTablePrefix = r.data.table_prefix || '';
+                    this.sslExportEnabled = r.data.ssl_export_enabled || false;
                 }
             } catch(e) { showToast('加载失败: ' + e.message, 'error'); }
             this.loading = false;
@@ -660,6 +668,28 @@ function websiteDetail() {
                 }
             } catch(e) { showToast('操作失败: ' + e.message, 'error'); }
             this.sslSubmitting = false;
+        },
+        downloadSSLPackage() {
+            if (!this.site || !this.site.ssl_enabled) return;
+            const prefix = '/' + document.body.dataset.panelPrefix.replace('/', '');
+            window.open(prefix + '/api/websites/' + this.site.id + '/ssl/download');
+        },
+        async saveSSLExport() {
+            if (!this.site) return;
+            this.sslExportSaving = true;
+            try {
+                const r = await api('/websites/' + this.site.id + '/ssl/export', {
+                    method: 'PUT',
+                    body: { enabled: this.sslExportEnabled }
+                });
+                showToast(r.data?.message || 'SSL 证书导出权限已保存', 'success');
+                await this.fetchDetail();
+            } catch(e) {
+                this.sslExportEnabled = !this.sslExportEnabled;
+                showToast(e.message, 'error');
+            } finally {
+                this.sslExportSaving = false;
+            }
         },
         async updateDomains() {
             this.domainSubmitting = true;

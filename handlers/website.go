@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"archive/zip"
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -26,7 +28,7 @@ import (
 // canonical column list shared by all website queries.
 const websiteCols = `id, name, domain, aliases, status, system_user, web_root, log_dir,
 	db_name, db_user, php_pool_path, nginx_conf_path, site_type, ssl_enabled,
-	ssl_cert_path, ssl_key_path, ssl_expires_at, ssl_last_error, template_version, access_log_mode,
+	ssl_cert_path, ssl_key_path, ssl_expires_at, ssl_last_error, ssl_export_enabled, template_version, access_log_mode,
 	fastcgi_cache_enabled, fastcgi_cache_ttl, fastcgi_cache_key,
 	monitoring_enabled, monitoring_interval, disable_wp_updates, disable_file_editing,
 		xmlrpc_enabled, wp_debug_enabled, wp_post_revisions, wp_memory_limit,
@@ -37,7 +39,7 @@ const websiteCols = `id, name, domain, aliases, status, system_user, web_root, l
 func scanWebsite(scanner func(dest ...interface{}) error) (*models.Website, error) {
 	var w models.Website
 	var aliases, status string
-	var sslEnabled, fCacheEnabled, monitoringEnabled int
+	var sslEnabled, sslExportEnabled, fCacheEnabled, monitoringEnabled int
 	var monitoringInterval int
 	var disableWPUpdates, disableFileEditing, xmlrpcEnabled int
 	var wpDebugEnabled int
@@ -50,7 +52,7 @@ func scanWebsite(scanner func(dest ...interface{}) error) (*models.Website, erro
 		&w.ID, &w.Name, &w.Domain, &aliases, &status, &w.SystemUser,
 		&w.WebRoot, &w.LogDir, &w.DBName, &w.DBUser, &w.PHPPoolPath,
 		&w.NginxConfPath, &w.SiteType, &sslEnabled, &w.SSLCertPath, &w.SSLKeyPath,
-		&w.SSLExpiresAt, &w.SSLLastError, &w.TemplateVersion, &w.AccessLogMode,
+		&w.SSLExpiresAt, &w.SSLLastError, &sslExportEnabled, &w.TemplateVersion, &w.AccessLogMode,
 		&fCacheEnabled, &w.FCacheTTL, &w.FCacheKey,
 		&monitoringEnabled, &monitoringInterval, &disableWPUpdates, &disableFileEditing,
 		&xmlrpcEnabled, &wpDebugEnabled, &wpPostRevisions, &wpMemoryLimit,
@@ -64,6 +66,7 @@ func scanWebsite(scanner func(dest ...interface{}) error) (*models.Website, erro
 	w.Aliases = aliases
 	w.Status = models.WebsiteStatus(status)
 	w.SSLEnabled = sslEnabled == 1
+	w.SSLExportEnabled = sslExportEnabled == 1
 	w.FCacheEnabled = fCacheEnabled == 1
 	w.MonitoringEnabled = monitoringEnabled == 1
 	w.MonitoringInterval = monitoringInterval
@@ -522,6 +525,259 @@ func (h *WebsiteHandler) RemoveSSL(c *gin.Context) {
 	} else {
 		c.JSON(http.StatusInternalServerError, models.ErrorResponse(result.Message))
 	}
+}
+
+func (h *WebsiteHandler) DownloadSSLPackage(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("无效的网站ID"))
+		return
+	}
+
+	site := getWebsiteByID(id)
+	if site == nil {
+		c.JSON(http.StatusNotFound, models.ErrorResponse("网站不存在"))
+		return
+	}
+	if !site.SSLEnabled {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("该网站未启用SSL"))
+		return
+	}
+
+	zipData, filename, err := buildSSLCertificatePackage(site)
+	if err != nil {
+		c.JSON(sslDownloadStatus(err), models.ErrorResponse(err.Error()))
+		return
+	}
+
+	c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
+	c.Header("Cache-Control", "no-store")
+	c.Header("Pragma", "no-cache")
+	c.Data(http.StatusOK, "application/zip", zipData)
+}
+
+func (h *WebsiteHandler) SetSSLExport(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("无效的网站ID"))
+		return
+	}
+
+	site := getWebsiteByID(id)
+	if site == nil {
+		c.JSON(http.StatusNotFound, models.ErrorResponse("网站不存在"))
+		return
+	}
+
+	var req struct {
+		Enabled bool `json:"enabled"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("参数错误"))
+		return
+	}
+
+	enabled := 0
+	if req.Enabled {
+		enabled = 1
+	}
+	if _, err := database.GetDB().Exec(
+		`UPDATE websites SET ssl_export_enabled = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+		enabled, site.ID,
+	); err != nil {
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse("保存 SSL 证书导出权限失败"))
+		return
+	}
+
+	c.JSON(http.StatusOK, models.SuccessResponse(gin.H{"message": "SSL 证书导出权限已保存"}))
+}
+
+type sslDownloadError struct {
+	status  int
+	message string
+}
+
+func (e sslDownloadError) Error() string {
+	return e.message
+}
+
+func sslDownloadStatus(err error) int {
+	if e, ok := err.(sslDownloadError); ok {
+		return e.status
+	}
+	return http.StatusInternalServerError
+}
+
+func newSSLDownloadError(status int, message string) error {
+	return sslDownloadError{status: status, message: message}
+}
+
+func buildSSLCertificatePackage(site *models.Website) ([]byte, string, error) {
+	if site == nil {
+		return nil, "", newSSLDownloadError(http.StatusNotFound, "网站不存在")
+	}
+	if config.AppConfig == nil || strings.TrimSpace(config.AppConfig.Paths.Certificates) == "" {
+		return nil, "", fmt.Errorf("证书目录未配置")
+	}
+	if !executor.IsValidDomain(site.Domain) {
+		return nil, "", newSSLDownloadError(http.StatusBadRequest, "网站域名格式不合法")
+	}
+
+	certDir := filepath.Join(config.AppConfig.Paths.Certificates, site.Domain)
+	certPath := filepath.Join(certDir, "fullchain.pem")
+	keyPath := filepath.Join(certDir, "privkey.pem")
+	if !sslPathWithin(config.AppConfig.Paths.Certificates, certPath) ||
+		!sslPathWithin(config.AppConfig.Paths.Certificates, keyPath) {
+		return nil, "", newSSLDownloadError(http.StatusForbidden, "证书路径无效")
+	}
+
+	certData, err := readSSLDownloadFile(certPath)
+	if err != nil {
+		return nil, "", err
+	}
+	keyData, err := readSSLDownloadFile(keyPath)
+	if err != nil {
+		return nil, "", err
+	}
+
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	if err := addZipFile(zw, "fullchain.pem", certData); err != nil {
+		zw.Close()
+		return nil, "", err
+	}
+	if err := addZipFile(zw, "privkey.pem", keyData); err != nil {
+		zw.Close()
+		return nil, "", err
+	}
+	if err := addZipFile(zw, "README.txt", []byte(sslCertificatePackageReadme(site))); err != nil {
+		zw.Close()
+		return nil, "", err
+	}
+	if err := zw.Close(); err != nil {
+		return nil, "", err
+	}
+
+	filename := fmt.Sprintf("%s-ssl-cert-%s.zip", site.Domain, time.Now().Format("20060102"))
+	return buf.Bytes(), filename, nil
+}
+
+func readSSLDownloadFile(path string) ([]byte, error) {
+	info, err := os.Stat(path)
+	if err != nil || info.IsDir() || !info.Mode().IsRegular() {
+		return nil, newSSLDownloadError(http.StatusNotFound, "证书文件不存在，请重新申请证书")
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, newSSLDownloadError(http.StatusNotFound, "证书文件不存在，请重新申请证书")
+	}
+	return data, nil
+}
+
+func sslPathWithin(basePath, targetPath string) bool {
+	baseAbs, err := filepath.Abs(filepath.Clean(basePath))
+	if err != nil {
+		return false
+	}
+	targetAbs, err := filepath.Abs(filepath.Clean(targetPath))
+	if err != nil {
+		return false
+	}
+	rel, err := filepath.Rel(baseAbs, targetAbs)
+	if err != nil {
+		return false
+	}
+	return rel != "." && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
+func addZipFile(zw *zip.Writer, name string, data []byte) error {
+	header := &zip.FileHeader{Name: name, Method: zip.Deflate}
+	header.SetMode(0600)
+	w, err := zw.CreateHeader(header)
+	if err != nil {
+		return err
+	}
+	_, err = w.Write(data)
+	return err
+}
+
+func sslCertificatePackageReadme(site *models.Website) string {
+	aliases := strings.TrimSpace(site.Aliases)
+	if aliases == "" {
+		aliases = "无"
+	}
+	expiresAt := "未知"
+	if site.SSLExpiresAt != nil {
+		expiresAt = site.SSLExpiresAt.Format("2006-01-02")
+	}
+
+	return fmt.Sprintf(`WP Panel SSL 证书包
+
+站点域名：%s
+附加域名：
+%s
+证书到期：%s
+
+文件说明：
+- fullchain.pem：完整证书链。上传到 CDN 后台的“证书”或“公钥”字段。
+- privkey.pem：私钥。上传到 CDN 后台的“私钥”字段。
+
+阿里云 CDN 自定义上传时，通常选择“自定义上传（证书+私钥）”：
+- 证书（公钥）：填写 fullchain.pem 内容。
+- 私钥：填写 privkey.pem 内容。
+
+注意事项：
+- 私钥是敏感信息，请勿发送给无关人员，也不要上传到不可信位置。
+- CDN 侧不会自动同步源站证书。面板续期后，需要重新下载证书包并上传到 CDN。
+- 如果同一站点有多个 CDN 加速域名，例如主域名和 www 域名，需要在 CDN 后台分别更新。
+`, site.Domain, aliases, expiresAt)
+}
+
+func sslCertificateExportPayload(site *models.Website) (gin.H, error) {
+	if site == nil {
+		return nil, newSSLDownloadError(http.StatusNotFound, "网站不存在")
+	}
+	if !site.SSLEnabled {
+		return nil, newSSLDownloadError(http.StatusBadRequest, "该网站未启用SSL")
+	}
+	if config.AppConfig == nil || strings.TrimSpace(config.AppConfig.Paths.Certificates) == "" {
+		return nil, fmt.Errorf("证书目录未配置")
+	}
+	if !executor.IsValidDomain(site.Domain) {
+		return nil, newSSLDownloadError(http.StatusBadRequest, "网站域名格式不合法")
+	}
+
+	certDir := filepath.Join(config.AppConfig.Paths.Certificates, site.Domain)
+	certPath := filepath.Join(certDir, "fullchain.pem")
+	keyPath := filepath.Join(certDir, "privkey.pem")
+	if !sslPathWithin(config.AppConfig.Paths.Certificates, certPath) ||
+		!sslPathWithin(config.AppConfig.Paths.Certificates, keyPath) {
+		return nil, newSSLDownloadError(http.StatusForbidden, "证书路径无效")
+	}
+	certData, err := readSSLDownloadFile(certPath)
+	if err != nil {
+		return nil, err
+	}
+	keyData, err := readSSLDownloadFile(keyPath)
+	if err != nil {
+		return nil, err
+	}
+
+	aliases := []string{}
+	for _, raw := range strings.Split(site.Aliases, "\n") {
+		alias := strings.TrimSpace(raw)
+		if alias != "" {
+			aliases = append(aliases, alias)
+		}
+	}
+
+	return gin.H{
+		"domain":      site.Domain,
+		"aliases":     aliases,
+		"expires_at":  site.SSLExpiresAt,
+		"certificate": string(certData),
+		"private_key": string(keyData),
+	}, nil
 }
 
 func (h *WebsiteHandler) UpdateDomains(c *gin.Context) {
@@ -1444,12 +1700,16 @@ func escapeLike(s string) string {
 
 type CacheHelperHandler struct{}
 
-func (h *CacheHelperHandler) checkAPIKey(domain string, c *gin.Context) bool {
+func pluginRequestHostAllowed(c *gin.Context) bool {
 	host, _, err := net.SplitHostPort(c.Request.RemoteAddr)
 	if err != nil {
 		return false
 	}
-	if host != "127.0.0.1" && host != "::1" {
+	return host == "127.0.0.1" || host == "::1"
+}
+
+func (h *CacheHelperHandler) checkAPIKey(domain string, c *gin.Context) bool {
+	if !pluginRequestHostAllowed(c) {
 		return false
 	}
 	key := c.GetHeader("X-WP-Panel-Key")
@@ -1457,7 +1717,7 @@ func (h *CacheHelperHandler) checkAPIKey(domain string, c *gin.Context) bool {
 		return false
 	}
 	var storedKey string
-	err = database.GetDB().QueryRow(
+	err := database.GetDB().QueryRow(
 		"SELECT plugin_api_key FROM websites WHERE domain = ? OR (char(10) || aliases || char(10)) LIKE ('%' || char(10) || ? || char(10) || '%') ESCAPE '\\'",
 		domain, escapeLike(domain),
 	).Scan(&storedKey)
@@ -1465,6 +1725,39 @@ func (h *CacheHelperHandler) checkAPIKey(domain string, c *gin.Context) bool {
 		return false
 	}
 	return storedKey != "" && key == storedKey
+}
+
+func (h *CacheHelperHandler) pluginSiteByDomain(domain string, c *gin.Context) (*models.Website, bool) {
+	if !pluginRequestHostAllowed(c) {
+		return nil, false
+	}
+	key := c.GetHeader("X-WP-Panel-Key")
+	if key == "" {
+		return nil, false
+	}
+
+	var siteID int
+	var storedKey string
+	err := database.GetDB().QueryRow(
+		"SELECT id, plugin_api_key FROM websites WHERE domain = ? OR (char(10) || aliases || char(10)) LIKE ('%' || char(10) || ? || char(10) || '%') ESCAPE '\\'",
+		domain, escapeLike(domain),
+	).Scan(&siteID, &storedKey)
+	if err != nil || storedKey == "" || key != storedKey {
+		return nil, false
+	}
+
+	site := getWebsiteByID(siteID)
+	return site, site != nil
+}
+
+func recordHandlerOperationLog(operation, target, status, message string) {
+	if database.GetDB() == nil {
+		return
+	}
+	_, _ = database.GetDB().Exec(
+		"INSERT INTO operation_logs (operation, target, status, message) VALUES (?, ?, ?, ?)",
+		operation, target, status, message,
+	)
 }
 
 func (h *CacheHelperHandler) UpdateCacheSettings(c *gin.Context) {
@@ -1568,6 +1861,37 @@ func (h *CacheHelperHandler) FindByDomain(c *gin.Context) {
 		"wp_post_revisions":     wpPostRevisions,
 		"wp_memory_limit":       wpMemoryLimit,
 	}))
+}
+
+func (h *CacheHelperHandler) ExportSSLCertificate(c *gin.Context) {
+	domain := strings.ToLower(strings.TrimSpace(c.Query("domain")))
+	if domain == "" || !executor.IsValidDomain(domain) {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("参数错误"))
+		return
+	}
+
+	site, ok := h.pluginSiteByDomain(domain, c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, models.ErrorResponse("API Key 无效"))
+		return
+	}
+	if !site.SSLExportEnabled {
+		recordHandlerOperationLog("ssl_certificate_export", site.Domain, "failed", "插件证书导出权限未开启")
+		c.JSON(http.StatusForbidden, models.ErrorResponse("SSL 证书导出权限未开启"))
+		return
+	}
+
+	payload, err := sslCertificateExportPayload(site)
+	if err != nil {
+		recordHandlerOperationLog("ssl_certificate_export", site.Domain, "failed", err.Error())
+		c.JSON(sslDownloadStatus(err), models.ErrorResponse(err.Error()))
+		return
+	}
+
+	recordHandlerOperationLog("ssl_certificate_export", site.Domain, "success", "插件已读取 SSL 证书")
+	c.Header("Cache-Control", "no-store")
+	c.Header("Pragma", "no-cache")
+	c.JSON(http.StatusOK, models.SuccessResponse(payload))
 }
 
 func (h *CacheHelperHandler) UpdateOptimizerSettings(c *gin.Context) {
