@@ -1014,10 +1014,70 @@ else
     fi
 
     if ! $DOWNLOAD_OK; then
-        log_error "Unable to fetch release binary. Solutions:
-  1. Check whether your server can reach GitHub Releases or gh.wp-panel.org
-  2. Manually download the release artifact wp-panel, place it in the same directory as install.sh, and re-run
-  3. Or compile locally and upload: go build -o wp-panel ."
+        log_info "Binary download failed. Attempting to compile from source..."
+
+        GO_VERSION="1.26.4"
+        GO_TAR="go${GO_VERSION}.linux-amd64.tar.gz"
+        GOROOT="/usr/local/go"
+        GOPATH="/tmp/go-build"
+        SOURCE_TMP="/tmp/wp-panel-source.$$"
+
+        if [[ ! -x "${GOROOT}/bin/go" ]]; then
+            log_info "Installing Go ${GO_VERSION}..."
+            rm -f "/tmp/${GO_TAR}"
+            GO_DL_OK=false
+            if $PREFER_CN; then
+                download_file "https://go.tingcdn.cn/${GO_TAR}" "/tmp/${GO_TAR}" 120 && GO_DL_OK=true
+            fi
+            if ! $GO_DL_OK; then
+                download_file "https://go.dev/dl/${GO_TAR}" "/tmp/${GO_TAR}" 120 && GO_DL_OK=true
+            fi
+            if ! $GO_DL_OK; then
+                download_file "https://golang.org/dl/${GO_TAR}" "/tmp/${GO_TAR}" 120 && GO_DL_OK=true
+            fi
+            if ! $GO_DL_OK; then
+                log_error "Unable to download Go. Install Go manually (go.dev) and re-run, or manually download the panel binary and re-run."
+            fi
+            rm -rf "${GOROOT}"
+            tar -C /usr/local -xzf "/tmp/${GO_TAR}"
+            rm -f "/tmp/${GO_TAR}"
+            log_info "Go ${GO_VERSION} installed"
+        fi
+
+        export GOROOT="${GOROOT}"
+        export PATH="${GOROOT}/bin:${PATH}"
+        export GOPATH="${GOPATH}"
+
+        log_info "Downloading source code..."
+        SOURCE_DL_OK=false
+        SOURCE_URL="https://github.com/CalvinSmall/wp-panel-en-private/archive/refs/heads/main.tar.gz"
+        download_file "${SOURCE_URL}" "${SOURCE_TMP}.tar.gz" 120 && SOURCE_DL_OK=true
+        if ! $SOURCE_DL_OK; then
+            rm -rf "${GOPATH}" "${SOURCE_TMP}"*
+            log_error "Unable to download source code. Check network connectivity to GitHub."
+        fi
+
+        mkdir -p "${SOURCE_TMP}"
+        tar -xzf "${SOURCE_TMP}.tar.gz" -C "${SOURCE_TMP}" --strip-components=1
+        rm -f "${SOURCE_TMP}.tar.gz"
+
+        log_info "Compiling panel binary (this may take a minute)..."
+        cd "${SOURCE_TMP}"
+        BUILD_TIME=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+        CGO_ENABLED=0 go build -ldflags "-s -w -X main.Version=source-build -X main.BuildTime=${BUILD_TIME}" -o wp-panel . 2>&1
+        BUILD_EXIT=$?
+        cd /
+
+        if [[ $BUILD_EXIT -ne 0 || ! -s "${SOURCE_TMP}/wp-panel" ]]; then
+            rm -rf "${GOPATH}" "${SOURCE_TMP}"
+            log_error "Source compilation failed. Install Go manually, compile: go build -o wp-panel ., place the binary in the install directory, and re-run."
+        fi
+
+        cp "${SOURCE_TMP}/wp-panel" "${BIN_PATH}"
+        chmod +x "${BIN_PATH}"
+        rm -rf "${GOPATH}" "${SOURCE_TMP}"
+
+        log_info "Panel binary compiled and deployed from source"
     fi
 fi
 
