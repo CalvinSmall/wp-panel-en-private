@@ -2,150 +2,150 @@
 {{define "firewall_content"}}
 <div x-data="firewallManager()" x-init="fetchBans(); fetchWPSecurityReport()">
     <div class="flex items-center justify-between mb-6">
-        <h2 class="text-xl font-bold text-white">安全防御</h2>
-        <button @click="showRules = true" class="btn-secondary text-sm">防御规则说明</button>
+        <h2 class="text-xl font-bold text-white">Security Defense</h2>
+        <button @click="showRules = true" class="btn-secondary text-sm">Defense Rule Description</button>
     </div>
 
     <div x-show="showRules" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/60" @click.self="showRules = false">
         <div class="bg-gray-800 rounded-lg p-6 max-w-4xl w-full mx-4 shadow-xl max-h-[80vh] overflow-y-auto">
-            <h3 class="text-lg font-bold text-white mb-4">安全防御规则说明</h3>
+            <h3 class="text-lg font-bold text-white mb-4">Security DefenseRule Description</h3>
             <div class="text-sm text-gray-300 space-y-4">
                 <div>
-                    <p class="text-white font-semibold mb-1">检测范围</p>
-                    <p>自动封禁规则监控所有网站的 access.log 和 error.log；WordPress 可疑访问分析额外读取 wp-security.log，仅做本地统计和证据整理。</p>
+                    <p class="text-white font-semibold mb-1">Detection Scope</p>
+                    <p>Auto-ban rules monitor access.log and error.log of all sites; WordPress suspicious access analysis additionally reads wp-security.log for local statistics and evidence collection only.</p>
                 </div>
                 <div>
-                    <p class="text-white font-semibold mb-1">触发条件（命中以下任一规则计为 1 次违规）</p>
+                    <p class="text-white font-semibold mb-1">Trigger Conditions (hitting any rule below counts as 1 violation)</p>
                     <ul class="list-disc list-inside space-y-1 ml-2">
-                        <li><code class="text-gray-300">POST /wp-login.php</code> — WordPress 登录暴力破解</li>
-                        <li><code class="text-gray-300">POST /xmlrpc.php</code> 返回 <span class="text-gray-300">HTTP 403</span> — 禁用 XML-RPC 后仍被请求（含 <code class="text-gray-300">//xmlrpc.php</code> 变体）</li>
-                        <li>返回 <span class="text-gray-300">HTTP 429</span> — 超出请求频率限制</li>
-                        <li>敏感文件扫描返回 <span class="text-gray-300">404</span> — 如 <code class="text-gray-300">.env</code>、<code class="text-gray-300">.git</code>、<code class="text-gray-300">wp-config.php</code>、<code class="text-gray-300">.sql</code>、压缩包等</li>
-                        <li class="text-green-400">404 泛滥检测 — 任意路径返回 404 达 <span class="text-green-300">30 次/60 秒</span> 判定为目录扫描（独立规则，固定阈值）</li>
-                        <li>WordPress 异常路径访问 — 写入 <code class="text-gray-300">wp-security.log</code>，用于管理员分析，不自动封禁</li>
+                        <li><code class="text-gray-300">POST /wp-login.php</code> — WordPress login brute force</li>
+                        <li><code class="text-gray-300">POST /xmlrpc.php</code> returns <span class="text-gray-300">HTTP 403</span> — still requested after XML-RPC disabled (includes <code class="text-gray-300">//xmlrpc.php</code> variant)</li>
+                        <li>returns <span class="text-gray-300">HTTP 429</span> — rate limit exceeded</li>
+                        <li>Sensitive file scanreturns <span class="text-gray-300">404</span> — e.g. <code class="text-gray-300">.env</code>、<code class="text-gray-300">.git</code>、<code class="text-gray-300">wp-config.php</code>、<code class="text-gray-300">.sql</code>, archives, etc.</li>
+                        <li class="text-green-400">404 flood detection — any pathreturns 404 reaching <span class="text-green-300">30 hits/60 seconds</span> classified as directory scanning (independent rule, fixed threshold)</li>
+                        <li>WordPress anomalous path access — written to <code class="text-gray-300">wp-security.log</code>, for admin analysis, no auto-ban</li>
                     </ul>
                 </div>
                 <div>
-                    <p class="text-white font-semibold mb-1">封禁阈值</p>
-                    <p>前 4 项规则默认 <span class="text-blue-400">60 秒</span>内累计 <span class="text-blue-400">5 次</span>违规 → 自动封禁（可在「安全设置」页面自定义阈值、窗口和封禁时长）。</p>
-                    <p>404 泛滥规则固定为 <span class="text-blue-400">30 次/60 秒</span>，不开放自定义。</p>
+                    <p class="text-white font-semibold mb-1">Ban Threshold</p>
+                    <p>First 4 rules default to <span class="text-blue-400">60 seconds</span>within <span class="text-blue-400">5 hits</span>violations → auto-ban (thresholds, window, and ban duration can be customized in Security Settings).</p>
+                    <p>404 flood rule is fixed at <span class="text-blue-400">30 hits/60 seconds</span>, not configurable.</p>
                 </div>
                 <div>
-                    <p class="text-white font-semibold mb-1">多级渐进封禁</p>
+                    <p class="text-white font-semibold mb-1">Progressive Tiered Ban</p>
                     <ul class="space-y-1 ml-2">
-                        <li>首次违规 → Fail2ban 封禁 <span class="text-blue-400">10 分钟</span>，到期自动解除</li>
-                        <li>24 小时内再次违规 → 升级为 <span class="text-blue-400">24 小时</span> 封禁，同时写入 Nftables 持久规则</li>
-                        <li>累计 3 次 24 小时封禁 → 自动转为<span class="text-red-400">永久封禁</span>，仅通过 Nftables 持久规则封锁</li>
+                        <li>firsthitsviolations → Fail2ban Ban <span class="text-blue-400">10 minutes</span>, auto-released on expiry</li>
+                        <li>24 hourswithinhitsviolations → upgraded to <span class="text-blue-400">24 hours</span> ban, also added to Nftables persistent rules</li>
+                        <li>cumulative 3 hits 24 hoursBan → auto-converted to<span class="text-red-400">Permanent Ban</span>, enforced only via Nftables persistent rules</li>
                     </ul>
-                    <p class="text-gray-500 mt-1">封禁列表可通过「来源」列区分 Fail2ban 临时封禁 与 Nftables 持久封禁。</p>
+                    <p class="text-gray-500 mt-1">The ban list can distinguish Fail2ban temporary bans from Nftables persistent bans via the "Source" column.</p>
                 </div>
                 <div>
-                    <p class="text-white font-semibold mb-1">封禁机制</p>
+                    <p class="text-white font-semibold mb-1">Ban Mechanism</p>
                     <ul class="space-y-1 ml-2">
-                        <li><span class="text-blue-400">Fail2ban</span> — 管理网站防护封禁（jail: <code class="text-gray-300">wppanel</code>、<code class="text-gray-300">wppanel-404</code>）和 SSH 防护封禁（jail: <code class="text-gray-300">wppanel-sshd</code>），到期自动释放</li>
-                        <li><span class="text-purple-400">Nftables 持久</span> — 管理永久封禁、扫描防御封禁（来源: <code class="text-gray-300">panel_scan</code>）和面板认证封禁（来源: <code class="text-gray-300">panel</code>），独立于 Fail2ban，到期自动解除</li>
-                        <li><span class="text-green-400">Nginx 黑名单</span> — 与 Fail2ban 联动，Web 防护 jail 封禁时同步写入 Nginx geo 黑名单，被禁 IP 直接返回 <code class="text-gray-300">444</code>（关闭连接），确保 Cloudflare 代理场景下也能有效拦截</li>
+                        <li><span class="text-blue-400">Fail2ban</span> — manages site protection bans (jail: <code class="text-gray-300">wppanel</code>、<code class="text-gray-300">wppanel-404</code>) and SSH protection bans (jail: <code class="text-gray-300">wppanel-sshd</code>), auto-released on expiry</li>
+                        <li><span class="text-purple-400">Nftables Persistent</span> — managesPermanent Ban、Scan DefenseBan（Source: <code class="text-gray-300">panel_scan</code>) and panel auth bans (source: <code class="text-gray-300">panel</code>），independent of Fail2ban, auto-released on expiry</li>
+                        <li><span class="text-green-400">Nginx Blocklist</span>  — integrated with Fail2ban，Web protection jail Ban, synced to Nginx geo blocklist，banned IP directlyreturns <code class="text-gray-300">444</code> (close connection), ensuring effective blocking even behind Cloudflare proxy</li>
                     </ul>
-                    <p class="text-gray-500 mt-1">三条通道同时生效：Nftables 拦截直连源站的请求，Nginx 拦截经 Cloudflare 转发的请求，Fail2ban 到期自动释放。</p>
+                    <p class="text-gray-500 mt-1">All three channels work simultaneously: Nftables blocks direct requests to origin, Nginx blocks requests forwarded through Cloudflare, Fail2ban auto-releases on expiry.</p>
                 </div>
                 <div>
-                    <p class="text-white font-semibold mb-1">Cloudflare 场景说明</p>
+                    <p class="text-white font-semibold mb-1">Cloudflare Scenario Notes</p>
                     <ul class="space-y-1 ml-2">
-                        <li>面板自动部署 <code class="text-gray-300">/etc/nginx/conf.d/wppanel-realip.conf</code>，从 Cloudflare 的 <code class="text-gray-300">CF-Connecting-IP</code> 头部还原真实访客 IP</li>
-                        <li>白名单刷新时自动更新 Cloudflare 官方 IP 段，确保仅信任 Cloudflare 来源</li>
-                        <li>无需任何手动配置，检测到 Cloudflare 代理时自动生效</li>
+                        <li>Panel auto-deploys <code class="text-gray-300">/etc/nginx/conf.d/wppanel-realip.conf</code>, derives real visitor IP from Cloudflare's <code class="text-gray-300">CF-Connecting-IP</code> header</li>
+                        <li>Whitelist auto-updates official Cloudflare IP ranges on refresh, ensuring only Cloudflare sources are trusted</li>
+                        <li>No manual configuration needed; auto-enabled when Cloudflare proxy is detected</li>
                     </ul>
-                    <p class="text-gray-500 mt-1">如需关闭 Nginx 层封禁：删除 <code class="text-gray-300">/etc/fail2ban/action.d/wppanel-nginx.conf</code>，并从 <code class="text-gray-300">/etc/fail2ban/jail.d/wppanel.conf</code> 中移除 <code class="text-gray-300">wppanel-nginx</code> action，然后 <code class="text-gray-300">systemctl reload fail2ban && nginx -s reload</code>。</p>
+                    <p class="text-gray-500 mt-1">To disable Nginx-layer blocking: delete <code class="text-gray-300">/etc/fail2ban/action.d/wppanel-nginx.conf</code>, and from <code class="text-gray-300">/etc/fail2ban/jail.d/wppanel.conf</code> remove the <code class="text-gray-300">wppanel-nginx</code> action, then <code class="text-gray-300">systemctl reload fail2ban && nginx -s reload</code>。</p>
                 </div>
                 <div>
-                    <p class="text-white font-semibold mb-1">扫描防御</p>
+                    <p class="text-white font-semibold mb-1">Scan Defense</p>
                     <ul class="space-y-1 ml-2">
-                        <li>针对面板 <span class="text-blue-400">8443</span> 端口的扫描防护，不作用于网站端口（80/443）</li>
-                        <li>非浏览器特征请求（如 curl、脚本、扫描器）访问面板端口且未命中随机入口 → 封禁 <span class="text-red-400">30 天</span>；常见浏览器系统探测路径和带 BasicAuth 头的请求不会直接触发扫描封禁</li>
-                        <li>命中随机入口（<code class="text-gray-300">/{suffix}</code>）的请求正常放行，不受影响</li>
+                        <li>Targets panel port <span class="text-blue-400">8443</span> ; does not apply to site ports (80/443)</li>
+                        <li>Non-browser requests (e.g., curl, scripts, scanners) hitting panel port without matching random entry → banned <span class="text-red-400">30 days</span>; common browser system probing paths and requests with BasicAuth headers do not directly trigger scan ban</li>
+                        <li>Hitting random entry (<code class="text-gray-300">/{suffix}</code>) allows requests through normally</li>
                     </ul>
-                    <p class="text-gray-500 mt-1">触发后写入面板封禁列表，来源标注为「扫描防御」，等级为临时 30 天。</p>
+                    <p class="text-gray-500 mt-1">UpUpon trigger, written to panel ban list, source labeled as "Scan Defense"，Levelas temporary 30 days。</p>
                 </div>
                 <div>
-                    <p class="text-white font-semibold mb-1">白名单豁免</p>
-                    <p>127.0.0.1、Cloudflare / Googlebot / Bingbot 官方 IP 段、自定义白名单 IP 不会被封禁。白名单在「安全设置」页面管理。</p>
-                    <p class="text-gray-500 mt-1">WordPress 安全日志路径白名单只排除正常所有权验证文件等路径，不影响 IP 封禁白名单。</p>
+                    <p class="text-white font-semibold mb-1">Whitelist Exemption</p>
+                    <p>127.0.0.1, Cloudflare / Googlebot / Bingbot official IP ranges, and custom whitelist IPs will not be banned. Whitelist is managed in Security Settings.</p>
+                    <p class="text-gray-500 mt-1">WordPress security log path whitelist only excludes paths like ownership verification files; does not affect IP ban whitelist.</p>
                 </div>
                 <div>
-                    <p class="text-white font-semibold mb-1">请求频率限制原理</p>
-                    <p>采用令牌桶算法：每 IP 一个桶，容量 = 突发缓冲（默认 300），每秒补充 1 个令牌。请求到达消耗令牌，耗尽后返回 429。人类浏览有自然停顿，停顿期间桶自动回满；机器人持续请求则被压制在 1 次/秒。</p>
-                    <p class="text-red-400 mt-1">⚠ 多次 429 会被 Fail2ban 自动封禁。请确保突发缓冲足够日常使用。</p>
-                    <p class="text-green-400">✓ 提高突发缓冲不影响拦截机器人，不削弱安全防护。</p>
+                    <p class="text-white font-semibold mb-1">Rate Limiting Principle</p>
+                    <p>Token bucket algorithm: one bucket per IP, capacity = burst buffer (default 300), second refills 1 token. Requests consume tokens; once depleted, returns 429. Human browsing has natural pauses, during which the bucket auto-refills; bots are limited to 1 hit/second.</p>
+                    <p class="text-red-400 mt-1">⚠ multiplehits 429 will trigger a Fail2ban auto-ban.Please ensure the burst buffer is sufficient for normal usage.</p>
+                    <p class="text-green-400">✓ Increasing burst buffer does not affect bot blocking or weaken security.</p>
                 </div>
                 <div>
-                    <p class="text-white font-semibold mb-1">服务器验证命令</p>
-                    <p class="text-gray-500 mb-1">SSH 登录服务器执行以下命令查看当前封禁状态：</p>
+                    <p class="text-white font-semibold mb-1">Server Verification Commands</p>
+                    <p class="text-gray-500 mb-1">SSH into the server and run the following commands to check current ban status:</p>
                     <div class="bg-gray-900 rounded p-3 font-mono text-xs text-gray-300 space-y-2">
                         <div>
-                            <span class="text-gray-500"># 查看网站防护封禁</span>
+                            <span class="text-gray-500"># Check site protection bans</span>
                             <br><span class="text-green-400">fail2ban-client</span> status wppanel
                         </div>
                         <div>
-                            <span class="text-gray-500"># 查看 404 泛滥封禁</span>
+                            <span class="text-gray-500"># Check 404 flood bans</span>
                             <br><span class="text-green-400">fail2ban-client</span> status wppanel-404
                         </div>
                         <div>
-                            <span class="text-gray-500"># 查看 SSH 暴力破解封禁</span>
+                            <span class="text-gray-500"># Check SSH brute-force bans</span>
                             <br><span class="text-green-400">fail2ban-client</span> status wppanel-sshd
                         </div>
                         <div>
-                            <span class="text-gray-500"># 查看 Nftables 持久封禁（扫描防御 + 面板认证封禁）</span>
+                            <span class="text-gray-500"># View Nftables PersistentBan（Scan Defense + PanelAuthBan）</span>
                             <br><span class="text-green-400">nft</span> list set ip wppanel_persist banned_ips
                         </div>
                     </div>
                 </div>
             </div>
             <div class="mt-5 text-right">
-                <button @click="showRules = false" class="btn-primary text-sm">知道了</button>
+                <button @click="showRules = false" class="btn-primary text-sm">Got it</button>
             </div>
         </div>
     </div>
 
     <div class="card mb-6">
-        <h3 class="text-lg font-semibold text-white mb-4">手动封禁 IP</h3>
+        <h3 class="text-lg font-semibold text-white mb-4">Manual IP Ban</h3>
         <div class="flex items-end space-x-3">
             <div class="flex-1">
-                <label class="block text-sm text-gray-300 mb-1">IP 地址</label>
+                <label class="block text-sm text-gray-300 mb-1">IP Address</label>
                 <input type="text" x-model="banIP" class="input-field" placeholder="192.168.1.100">
             </div>
             <div>
-                <label class="block text-sm text-gray-300 mb-1">封禁时长</label>
+                <label class="block text-sm text-gray-300 mb-1">Ban Duration</label>
                 <select x-model="banDuration" class="input-field">
-                    <option value="600">10 分钟</option>
-                    <option value="3600">1 小时</option>
-                    <option value="86400">24 小时</option>
-                    <option value="0">永久</option>
+                    <option value="600">10 minutes</option>
+                    <option value="3600">1 hours</option>
+                    <option value="86400">24 hours</option>
+                    <option value="0">Permanent</option>
                 </select>
             </div>
-            <button @click="manualBan()" :disabled="banSubmitting" class="btn-danger" x-text="banSubmitting ? '封禁中...' : '封禁'"></button>
+            <button @click="manualBan()" :disabled="banSubmitting" class="btn-danger" x-text="banSubmitting ? 'Banning...' : 'Ban'"></button>
         </div>
     </div>
 
     <div class="card mb-6">
         <div class="flex items-center justify-between mb-4">
             <div>
-                <h3 class="text-lg font-semibold text-white">WordPress 可疑访问分析</h3>
-                <p class="text-xs text-gray-500 mt-1">基于本机 WordPress 安全日志和 Nginx 错误日志统计，仅提供证据整理，不自动封禁。</p>
-                <p class="text-xs text-gray-500 mt-1">分析结果缓存 30 秒；当 WordPress 站点超过 50 个或磁盘 I/O 较慢时，首次刷新可能稍慢。</p>
+                <h3 class="text-lg font-semibold text-white">WordPress Suspicious Access Analysis</h3>
+                <p class="text-xs text-gray-500 mt-1">Based on local WordPress security logs and Nginx error log statistics，evidence compilation only，not auto-ban。</p>
+                <p class="text-xs text-gray-500 mt-1">Results cached for 30 seconds；When WordPress sites exceed 50 or disk I/O is slower, the first refresh may be slower。</p>
             </div>
-            <button @click="fetchWPSecurityReport()" :disabled="securityReportLoading" class="btn-secondary text-xs py-1.5 px-3" x-text="securityReportLoading ? '分析中...' : '刷新分析'"></button>
+            <button @click="fetchWPSecurityReport()" :disabled="securityReportLoading" class="btn-secondary text-xs py-1.5 px-3" x-text="securityReportLoading ? 'Analyzing...' : 'Refresh Analysis'"></button>
         </div>
         <div class="overflow-x-auto">
             <table class="w-full">
                 <thead class="border-b border-gray-700">
                     <tr>
-                        <th class="table-header">IP 地址</th>
-                        <th class="table-header">站点</th>
-                        <th class="table-header">风险</th>
-                        <th class="table-header">次数</th>
-                        <th class="table-header">最近时间</th>
-                        <th class="table-header">路径样本</th>
-                        <th class="table-header">操作</th>
+                        <th class="table-header">IP Address</th>
+                        <th class="table-header">Site</th>
+                        <th class="table-header">Risk</th>
+                        <th class="table-header">hitsCount</th>
+                        <th class="table-header">Last Seen</th>
+                        <th class="table-header">Sample Paths</th>
+                        <th class="table-header">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -162,16 +162,16 @@
                                 </template>
                             </td>
                             <td class="table-cell whitespace-nowrap">
-                                <button @click="copySecurityReport(item)" class="btn-secondary text-xs py-1 px-2">复制报告</button>
-                                <button @click="banIP = item.ip_address; showToast('IP已填入手动封禁IP框，请手动选择封禁时长和点击封禁按钮', 'success')" class="btn-danger text-xs py-1 px-2 ml-1">填入封禁</button>
+                                <button @click="copySecurityReport(item)" class="btn-secondary text-xs py-1 px-2">Copy Report</button>
+                                <button @click="banIP = item.ip_address; showToast('IPhas been filled into the manual ban IP field, please manually selectBan Durationand click theBanbutton', 'success')" class="btn-danger text-xs py-1 px-2 ml-1">fill into theBan</button>
                             </td>
                         </tr>
                     </template>
                     <tr x-show="securityReportLoaded && securityReportItems.length === 0">
-                        <td colspan="7" class="table-cell text-center text-gray-500 py-6">暂无 WordPress 可疑访问统计</td>
+                        <td colspan="7" class="table-cell text-center text-gray-500 py-6">No WordPress suspicious access statistics</td>
                     </tr>
                     <tr x-show="!securityReportLoaded">
-                        <td colspan="7" class="table-cell text-center text-gray-500 py-6">正在读取本机日志...</td>
+                        <td colspan="7" class="table-cell text-center text-gray-500 py-6">Reading local logs...</td>
                     </tr>
                 </tbody>
             </table>
@@ -180,24 +180,24 @@
 
     <div class="card mb-6">
         <div class="flex items-center justify-between mb-4">
-            <h3 class="text-lg font-semibold text-white">当前封禁列表</h3>
+            <h3 class="text-lg font-semibold text-white">Current Ban List</h3>
             <div class="flex items-center space-x-2">
-                <input type="text" x-model="searchIP" @keydown.enter="page=1;fetchBans()" class="input-field text-sm py-1.5 w-48" placeholder="搜索 IP 地址...">
-                <button @click="page=1;fetchBans()" class="btn-secondary text-xs py-1.5 px-3">搜索</button>
+                <input type="text" x-model="searchIP" @keydown.enter="page=1;fetchBans()" class="input-field text-sm py-1.5 w-48" placeholder="Search IP Address...">
+                <button @click="page=1;fetchBans()" class="btn-secondary text-xs py-1.5 px-3">Search</button>
             </div>
         </div>
         <div class="overflow-x-auto">
             <table class="w-full">
                 <thead class="border-b border-gray-700">
                     <tr>
-                        <th class="table-header">IP 地址</th>
-                        <th class="table-header">等级</th>
-                        <th class="table-header">原因</th>
-                        <th class="table-header">来源</th>
-                        <th class="table-header">封禁时间</th>
-                        <th class="table-header">过期时间</th>
-                        <th class="table-header">累计次数</th>
-                        <th class="table-header">操作</th>
+                        <th class="table-header">IP Address</th>
+                        <th class="table-header">Level</th>
+                        <th class="table-header">Reason</th>
+                        <th class="table-header">Source</th>
+                        <th class="table-header">BanTime</th>
+                        <th class="table-header">Expiry</th>
+                        <th class="table-header">cumulativehitsCount</th>
+                        <th class="table-header">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -212,44 +212,44 @@
                                 <span :class="sourceClass(ban)" class="text-xs" x-text="sourceLabel(ban)"></span>
                             </td>
                             <td class="table-cell text-xs" x-text="formatTime(ban.banned_at)"></td>
-                            <td class="table-cell text-xs" x-text="ban.expires_at ? formatTime(ban.expires_at) : '永久'"></td>
+                            <td class="table-cell text-xs" x-text="ban.expires_at ? formatTime(ban.expires_at) : 'Permanent'"></td>
                             <td class="table-cell" x-text="ban.ban_count"></td>
                             <td class="table-cell">
-                                <button @click="unban(ban)" class="btn-success text-xs py-1 px-2">解封</button>
-                                <button x-show="ban.ban_level < 5" @click="permanentBan(ban)" class="btn-danger text-xs py-1 px-2 ml-1">永久封禁</button>
+                                <button @click="unban(ban)" class="btn-success text-xs py-1 px-2">Unban</button>
+                                <button x-show="ban.ban_level < 5" @click="permanentBan(ban)" class="btn-danger text-xs py-1 px-2 ml-1">Permanent Ban</button>
                             </td>
                         </tr>
                     </template>
                     <tr x-show="bans.length === 0">
-                        <td colspan="8" class="table-cell text-center text-gray-500 py-8">当前无封禁记录</td>
+                        <td colspan="8" class="table-cell text-center text-gray-500 py-8">No bans currently</td>
                     </tr>
                 </tbody>
             </table>
         </div>
         <div x-show="totalPages > 1" class="flex items-center justify-between mt-4 pt-3 border-t border-gray-700/50">
-            <span class="text-sm text-gray-400" x-text="`共 ${total} 条记录`"></span>
+            <span class="text-sm text-gray-400" x-text="`Total: ${total} records`"></span>
             <div class="flex items-center space-x-1">
-                <button @click="goPage(page-1)" :disabled="page <= 1" class="px-3 py-1 text-sm rounded bg-gray-700 hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed">上一页</button>
+                <button @click="goPage(page-1)" :disabled="page <= 1" class="px-3 py-1 text-sm rounded bg-gray-700 hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed">Previous</button>
                 <template x-for="p in pageNumbers" :key="p">
                     <button @click="goPage(p)" :class="p === page ? 'bg-blue-600 text-white' : 'bg-gray-700 hover:bg-gray-600'" class="px-3 py-1 text-sm rounded" x-text="p"></button>
                 </template>
-                <button @click="goPage(page+1)" :disabled="page >= totalPages" class="px-3 py-1 text-sm rounded bg-gray-700 hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed">下一页</button>
+                <button @click="goPage(page+1)" :disabled="page >= totalPages" class="px-3 py-1 text-sm rounded bg-gray-700 hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed">Next</button>
             </div>
         </div>
     </div>
 
     <div class="card" x-data="{history:[], loaded:false}" x-init="api('/firewall/bans?history=1').then(r => { if (r.success) history = r.data?.data || r.data || []; loaded = true }).catch(e => {})">
-        <h3 class="text-lg font-semibold text-white mb-4">历史封禁记录（最近30条）</h3>
+        <h3 class="text-lg font-semibold text-white mb-4">Historyban records（Last30）</h3>
         <div class="overflow-x-auto">
             <table class="w-full">
                 <thead class="border-b border-gray-700">
                     <tr>
-                        <th class="table-header">IP 地址</th>
-                        <th class="table-header">等级</th>
-                        <th class="table-header">原因</th>
-                        <th class="table-header">来源</th>
-                        <th class="table-header">封禁时间</th>
-                        <th class="table-header">解封时间</th>
+                        <th class="table-header">IP Address</th>
+                        <th class="table-header">Level</th>
+                        <th class="table-header">Reason</th>
+                        <th class="table-header">Source</th>
+                        <th class="table-header">BanTime</th>
+                        <th class="table-header">UnbanTime</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -257,18 +257,18 @@
                         <tr class="border-b border-gray-700/50">
                             <td class="table-cell font-mono text-sm" x-text="h.ip_address"></td>
                             <td class="table-cell">
-                                <span :class="['','badge-info','badge-warning','badge-danger','badge-danger','badge-danger'][h.ban_level]" x-text="['','限速','临时10分钟','临时24小时','临时30天','永久封禁'][h.ban_level]"></span>
+                                <span :class="['','badge-info','badge-warning','badge-danger','badge-danger','badge-danger'][h.ban_level]" x-text="['','Rate Limit','Temp10minutes','Temp24hours','Temp30days','Permanent Ban'][h.ban_level]"></span>
                             </td>
                             <td class="table-cell text-sm" x-text="h.reason || '--'"></td>
                             <td class="table-cell">
                                 <span :class="sourceClass(h)" class="text-xs" x-text="sourceLabel(h)"></span>
                             </td>
                             <td class="table-cell text-xs" x-text="formatTime(h.banned_at)"></td>
-                            <td class="table-cell text-xs" x-text="h.unbanned_at ? formatTime(h.unbanned_at) : (h.ban_level >= 5 ? '永久' : (h.expires_at ? formatTime(h.expires_at) : '--'))"></td>
+                            <td class="table-cell text-xs" x-text="h.unbanned_at ? formatTime(h.unbanned_at) : (h.ban_level >= 5 ? 'Permanent' : (h.expires_at ? formatTime(h.expires_at) : '--'))"></td>
                         </tr>
                     </template>
                     <tr x-show="history.length === 0">
-                        <td colspan="6" class="table-cell text-center text-gray-500 py-4">暂无历史记录</td>
+                        <td colspan="6" class="table-cell text-center text-gray-500 py-4">No history</td>
                     </tr>
                 </tbody>
             </table>
@@ -311,7 +311,7 @@ function firewallManager() {
                     this.securityReportItems = r.data?.items || [];
                     this.securityReportLoaded = true;
                 }
-            } catch(e) { showToast('读取 WordPress 可疑访问分析失败: ' + e.message, 'error'); }
+            } catch(e) { showToast('Read WordPress Suspicious Access Analysisfailed: ' + e.message, 'error'); }
             finally { this.securityReportLoading = false; }
         },
         goPage(p) {
@@ -329,21 +329,21 @@ function firewallManager() {
             for (let i = start; i <= end; i++) pages.push(i);
             return pages;
         },
-        banLevelText(l) { return ['','限速','临时10分钟','临时24小时','临时30天','永久封禁'][l] || '未知'; },
+        banLevelText(l) { return ['','Rate Limit','Temp10minutes','Temp24hours','Temp30days','Permanent Ban'][l] || 'Unknown'; },
         banLevelClass(l) { return ['','badge-info','badge-warning','badge-danger','badge-danger','badge-danger'][l] || 'badge-info'; },
         riskClass(level) {
-            if (level === '高') return 'badge-danger';
-            if (level === '中') return 'badge-warning';
+            if (level === 'High') return 'badge-danger';
+            if (level === 'Medium') return 'badge-warning';
             return 'badge-info';
         },
         sourceLabel(ban) {
-            if (ban.source_jail === 'wppanel') return 'Web防护';
-            if (ban.source_jail === 'wppanel-404') return '404防御';
-            if (ban.source_jail === 'wppanel-sshd') return 'SSH防护';
-            if (ban.source_jail === 'panel') return '面板';
-            if (ban.source_jail === 'panel_scan') return '扫描防御';
-            if (ban.source_jail === 'manual') return '手动封禁';
-            if (ban.ban_level >= 5) return 'Nftables 持久';
+            if (ban.source_jail === 'wppanel') return 'Web Protection';
+            if (ban.source_jail === 'wppanel-404') return '404 Defense';
+            if (ban.source_jail === 'wppanel-sshd') return 'SSH Protection';
+            if (ban.source_jail === 'panel') return 'Panel';
+            if (ban.source_jail === 'panel_scan') return 'Scan Defense';
+            if (ban.source_jail === 'manual') return 'ManualBan';
+            if (ban.ban_level >= 5) return 'Nftables Persistent';
             return ban.source_jail || '--';
         },
         sourceClass(ban) {
@@ -356,25 +356,25 @@ function firewallManager() {
         },
         formatTime(t) { return t ? new Date(t).toLocaleString('zh-CN') : '--'; },
         async unban(ban) {
-            if (!await confirmModal('确认解封 ' + ban.ip_address + '？')) return;
-            try { await api('/firewall/bans/' + ban.id, { method: 'DELETE' }); await this.fetchBans(); showToast('已解封', 'success'); } catch(e) { showToast(e.message, 'error'); }
+            if (!await confirmModal('ConfirmUnban ' + ban.ip_address + '？')) return;
+            try { await api('/firewall/bans/' + ban.id, { method: 'DELETE' }); await this.fetchBans(); showToast('has beenUnban', 'success'); } catch(e) { showToast(e.message, 'error'); }
         },
         async permanentBan(ban) {
-            if (!await confirmModal('确认将 ' + ban.ip_address + ' 永久封禁？')) return;
-            try { await api('/firewall/bans/' + ban.id + '/permanent', { method: 'POST' }); await this.fetchBans(); showToast('已加入黑名单', 'success'); } catch(e) { showToast(e.message, 'error'); }
+            if (!await confirmModal('Confirm making ' + ban.ip_address + ' Permanent Ban？')) return;
+            try { await api('/firewall/bans/' + ban.id + '/permanent', { method: 'POST' }); await this.fetchBans(); showToast('Added to blocklist', 'success'); } catch(e) { showToast(e.message, 'error'); }
         },
         async copySecurityReport(item) {
             try {
                 await navigator.clipboard.writeText(item.copy_text || '');
-                showToast('分析报告已复制', 'success');
-            } catch(e) { showToast('复制失败，请手动选择内容', 'error'); }
+                showToast('Analysis report copied', 'success');
+            } catch(e) { showToast('Copy failed, please select and copy manually', 'error'); }
         },
         async manualBan() {
-            if (!this.banIP.trim()) { showToast('请输入IP地址', 'error'); return; }
+            if (!this.banIP.trim()) { showToast('Please enter an IP address', 'error'); return; }
             this.banSubmitting = true;
             try {
                 const r = await api('/firewall/bans', { method: 'POST', body: { ip: this.banIP.trim(), duration: parseInt(this.banDuration) } });
-                showToast(r.data?.message || '封禁成功', 'success');
+                showToast(r.data?.message || 'Bansuccess', 'success');
                 this.banIP = '';
                 await this.fetchBans();
             } catch(e) { showToast(e.message, 'error'); }

@@ -1,64 +1,64 @@
 {{template "base" .}}
 {{define "alert_content"}}
 <div x-data="alertManager()" x-init="fetchAll()">
-    <h2 class="text-xl font-bold text-white mb-6">告警通知</h2>
+    <h2 class="text-xl font-bold text-white mb-6">Alert Notifications</h2>
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-6">
         <div class="space-y-8">
             <div class="card" x-data="smtpConfig()" x-init="fetch()">
-                <h3 class="text-lg font-semibold text-white mb-4">SMTP 邮件配置</h3>
+                <h3 class="text-lg font-semibold text-white mb-4">SMTP Email Configuration</h3>
                 <div class="mb-3">
-                    <label class="text-sm text-gray-300 mb-1 block">SMTP 服务器</label>
+                    <label class="text-sm text-gray-300 mb-1 block">SMTP Server</label>
                     <input type="text" x-model="cfg.smtp_host" class="input-field text-sm">
                 </div>
                 <div class="mb-3">
-                    <label class="text-sm text-gray-300 mb-1 block">端口</label>
+                    <label class="text-sm text-gray-300 mb-1 block">Port</label>
                     <input type="text" x-model="cfg.smtp_port" class="input-field text-sm">
                 </div>
                 <div class="mb-3">
-                    <label class="text-sm text-gray-300 mb-1 block">加密方式</label>
+                    <label class="text-sm text-gray-300 mb-1 block">Encryption</label>
                     <select x-model="cfg.smtp_encryption" class="input-field text-sm">
                         <option value="starttls">STARTTLS</option>
                         <option value="ssl">SSL</option>
-                        <option value="none">无</option>
+                        <option value="none">None</option>
                     </select>
                 </div>
                 <div class="mb-3">
-                    <label class="text-sm text-gray-300 mb-1 block">发件邮箱</label>
+                    <label class="text-sm text-gray-300 mb-1 block">Sender Email</label>
                     <input type="text" x-model="cfg.smtp_user" class="input-field text-sm">
                 </div>
                 <div class="mb-3">
-                    <label class="text-sm text-gray-300 mb-1 block">密码/授权码</label>
+                    <label class="text-sm text-gray-300 mb-1 block">Password / Auth Code</label>
                     <input type="password" x-model="cfg.smtp_pass" class="input-field text-sm">
                 </div>
                 <div class="mb-3">
-                    <label class="text-sm text-gray-300 mb-1 block">管理员通知邮箱</label>
+                    <label class="text-sm text-gray-300 mb-1 block">Admin Notification Email</label>
                     <input type="text" x-model="cfg.admin_email" class="input-field text-sm" placeholder="admin@example.com">
                 </div>
                 <div class="flex space-x-3">
-                    <button @click="save" :disabled="saving" class="btn-primary text-sm" x-text="saving ? '保存中...' : '保存'"></button>
-                    <button @click="test" :disabled="testing" class="btn-secondary text-sm" x-text="testing ? '发送中...' : '测试发送'"></button>
+                    <button @click="save" :disabled="saving" class="btn-primary text-sm" x-text="saving ? 'Saving...' : 'Save'"></button>
+                    <button @click="test" :disabled="testing" class="btn-secondary text-sm" x-text="testing ? 'Sending...' : 'Test Send'"></button>
                 </div>
             </div>
 
             <div class="card" x-data="webhookConfig()" x-init="fetch()">
-                <h3 class="text-lg font-semibold text-white mb-4">Webhook 推送</h3>
+                <h3 class="text-lg font-semibold text-white mb-4">Webhook Push</h3>
                 <div class="mb-3">
-                    <label class="text-sm text-gray-300 mb-1 block">启用</label>
+                    <label class="text-sm text-gray-300 mb-1 block">Enable</label>
                     <label class="flex items-center space-x-2 cursor-pointer">
                         <input type="checkbox" x-model="cfg.webhook_enabled">
-                        <span class="text-sm text-gray-400">开启 Webhook 推送通知</span>
+                        <span class="text-sm text-gray-400">Enable Webhook Push Notifications</span>
                     </label>
                 </div>
                 <div class="mb-3">
-                    <label class="text-sm text-gray-300 mb-1 block">推送渠道</label>
+                    <label class="text-sm text-gray-300 mb-1 block">Push Channel</label>
                     <select x-model="cfg.webhook_channel" class="input-field text-sm">
-                        <option value="wecom">企业微信</option>
-                        <option value="dingtalk">钉钉</option>
-                        <option value="feishu">飞书</option>
-                        <option value="serverchan">Server酱</option>
+                        <option value="wecom">WeCom</option>
+                        <option value="dingtalk">DingTalk</option>
+                        <option value="feishu">Feishu</option>
+                        <option value="serverchan">ServerChan</option>
                         <option value="bark">Bark</option>
-                        <option value="custom">自定义</option>
+                        <option value="custom">Custom</option>
                     </select>
                 </div>
                 <div class="mb-3">
@@ -66,78 +66,78 @@
                     <input type="text" x-model="cfg.webhook_url" class="input-field text-sm" placeholder="https://...">
                 </div>
                 <div class="flex space-x-3">
-                    <button @click="save" :disabled="saving" class="btn-primary text-sm" x-text="saving ? '保存中...' : '保存'"></button>
-                    <button @click="test" :disabled="testing" class="btn-secondary text-sm" x-text="testing ? '发送中...' : '测试发送'"></button>
+                    <button @click="save" :disabled="saving" class="btn-primary text-sm" x-text="saving ? 'Saving...' : 'Save'"></button>
+                    <button @click="test" :disabled="testing" class="btn-secondary text-sm" x-text="testing ? 'Sending...' : 'Test Send'"></button>
                 </div>
             </div>
         </div>
 
         <div class="card">
-            <h3 class="text-lg font-semibold text-white mb-4">告警规则</h3>
+            <h3 class="text-lg font-semibold text-white mb-4">Alert Rules</h3>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
                 <label class="flex items-center space-x-2 text-sm text-gray-300 cursor-pointer mb-3">
                     <input type="checkbox" x-model="rules.alert_cpu" @change="save">
-                    <span>CPU > 80% 持续 5 分钟</span>
+                    <span>CPU &gt; 80% sustained for 5 minutes</span>
                 </label>
                 <label class="flex items-center space-x-2 text-sm text-gray-300 cursor-pointer mb-3">
                     <input type="checkbox" x-model="rules.alert_memory" @change="save">
-                    <span>可用内存 < 10% 持续 5 分钟</span>
+                    <span>Available memory &lt; 10% sustained for 5 minutes</span>
                 </label>
                 <label class="flex items-center space-x-2 text-sm text-gray-300 cursor-pointer mb-3">
                     <input type="checkbox" x-model="rules.alert_disk" @change="save">
-                    <span>磁盘 > 90%</span>
+                    <span>Disk &gt; 90%</span>
                 </label>
             </div>
             <div>
                 <label class="flex items-center space-x-2 text-sm text-gray-300 cursor-pointer mb-3">
                     <input type="checkbox" x-model="rules.alert_service" @change="save">
-                    <span>服务进程异常重启</span>
+                    <span>Service process abnormal restart</span>
                 </label>
                 <label class="flex items-center space-x-2 text-sm text-gray-300 cursor-pointer mb-3">
                     <input type="checkbox" x-model="rules.alert_ssl" @change="save">
-                    <span>SSL 证书即将到期（14天内）</span>
+                    <span>SSL certificate expiring (within 14 days)</span>
                 </label>
                 <label class="flex items-center space-x-2 text-sm text-gray-300 cursor-pointer mb-3">
                     <input type="checkbox" x-model="rules.alert_backup" @change="save">
-                    <span>数据库备份失败</span>
+                    <span>Database backup failed</span>
                 </label>
                 <label class="flex items-center space-x-2 text-sm text-gray-300 cursor-pointer mb-3">
                     <input type="checkbox" x-model="rules.alert_remote_backup" @change="save">
-                    <span>远程备份失败（需先启用远程备份）</span>
+                    <span>Remote backup failed (requires remote backup enabled)</span>
                 </label>
                 <label class="flex items-center space-x-2 text-sm text-gray-300 cursor-pointer mb-3">
                     <input type="checkbox" x-model="rules.alert_cron_fail" @change="save">
-                    <span>计划任务执行失败</span>
+                    <span>Scheduled task execution failed</span>
                 </label>
                 <label class="flex items-center space-x-2 text-sm text-gray-300 cursor-pointer mb-3">
                     <input type="checkbox" x-model="rules.alert_website_expiry" @change="save">
-                    <span>网站即将到期（14天内）</span>
+                    <span>Site expiring (within 14 days)</span>
                 </label>
                 <label class="flex items-center space-x-2 text-sm text-gray-300 cursor-pointer mb-3">
                     <input type="checkbox" x-model="rules.alert_system_update" @change="save">
-                    <span>系统有可用更新</span>
+                    <span>System updates available</span>
                 </label>
                 <label class="flex items-center space-x-2 text-sm text-gray-300 cursor-pointer mb-3">
                     <input type="checkbox" x-model="rules.alert_panel_update" @change="save">
-                    <span>面板有新版本</span>
+                    <span>New panel version available</span>
                 </label>
             </div>
         </div>
-        <p class="text-xs text-gray-500 mt-2">报警每 30 分钟最多发送一次。异常恢复后将发送恢复通知。</p>
+        <p class="text-xs text-gray-500 mt-2">Alerts are sent at most once per 30 minutes. A recovery notification will be sent once the anomaly is resolved.</p>
     </div>
     </div>
 
     <div class="card">
-        <h3 class="text-lg font-semibold text-white mb-4">告警记录（最近30条）</h3>
+        <h3 class="text-lg font-semibold text-white mb-4">Alert History (Last 30)</h3>
         <div class="overflow-x-auto">
             <table class="w-full text-sm">
                 <thead class="border-b border-gray-700 text-gray-400">
                     <tr>
-                        <th class="py-2 text-left">时间</th>
-                        <th class="py-2 text-left">类型</th>
-                        <th class="py-2 text-left">级别</th>
-                        <th class="py-2 text-left">内容</th>
+                        <th class="py-2 text-left">Time</th>
+                        <th class="py-2 text-left">Type</th>
+                        <th class="py-2 text-left">Level</th>
+                        <th class="py-2 text-left">Content</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-800">
@@ -146,14 +146,14 @@
                             <td class="py-2 text-xs text-gray-400" x-text="fmtTime(l.created_at)"></td>
                             <td class="py-2 text-sm text-gray-300" x-text="typeLabel(l.alert_type)"></td>
                             <td class="py-2">
-                                <span x-show="l.level === 'critical'" class="text-red-400 text-xs">● 告警</span>
-                                <span x-show="l.level === 'info'" class="text-green-400 text-xs">● 恢复</span>
+                                <span x-show="l.level === 'critical'" class="text-red-400 text-xs">● Alert</span>
+                                <span x-show="l.level === 'info'" class="text-green-400 text-xs">● Recovered</span>
                             </td>
                             <td class="py-2 text-sm text-gray-400" x-text="l.message"></td>
                         </tr>
                     </template>
                     <tr x-show="logs.length === 0">
-                        <td colspan="4" class="py-6 text-center text-gray-500">暂无告警记录</td>
+                        <td colspan="4" class="py-6 text-center text-gray-500">No alert records</td>
                     </tr>
                 </tbody>
             </table>
@@ -195,7 +195,7 @@ function smtpConfig() {
                     admin_email: this.cfg.admin_email || ''
                 };
                 await api('/alert/settings', { method: 'PUT', body });
-                showToast('SMTP 配置已保存', 'success');
+                showToast('SMTP configuration saved', 'success');
             } catch(e) { showToast(e.message, 'error'); }
             this.saving = false;
         },
@@ -203,8 +203,8 @@ function smtpConfig() {
             this.testing = true;
             try {
                 const r = await api('/alert/test-smtp', { method: 'POST', body: { email: this.cfg.admin_email || '' } });
-                showToast(r.data?.message || '发送成功', 'success');
-            } catch(e) { showToast(e.message || '发送失败', 'error'); }
+                showToast(r.data?.message || 'Sent successfully', 'success');
+            } catch(e) { showToast(e.message || 'Send failed', 'error'); }
             this.testing = false;
         }
     }
@@ -226,17 +226,17 @@ function webhookConfig() {
                     body.webhook_enabled = body.webhook_enabled ? 'true' : 'false';
                 }
                 await api('/alert/settings', { method: 'PUT', body });
-                showToast('Webhook 配置已保存', 'success');
+                showToast('Webhook configuration saved', 'success');
             } catch(e) { showToast(e.message, 'error'); }
             this.saving = false;
         },
         async test() {
-            if (!this.cfg.webhook_url) { showToast('请填写 Webhook URL', 'error'); return; }
+            if (!this.cfg.webhook_url) { showToast('Please enter a Webhook URL', 'error'); return; }
             this.testing = true;
             try {
                 const r = await api('/alert/test-webhook', { method: 'POST', body: { channel: this.cfg.webhook_channel, url: this.cfg.webhook_url } });
-                showToast(r.data?.message || '发送成功', 'success');
-            } catch(e) { showToast(e.message || '发送失败', 'error'); }
+                showToast(r.data?.message || 'Sent successfully', 'success');
+            } catch(e) { showToast(e.message || 'Send failed', 'error'); }
             this.testing = false;
         }
     }
@@ -276,7 +276,7 @@ function alertManager() {
             } catch(e) {}
         },
         typeLabel(t) {
-            const m = { alert_cpu: 'CPU高负载', alert_memory: '可用内存不足', alert_disk: '磁盘不足', alert_service: '服务异常', alert_ssl: 'SSL到期', alert_backup: '备份失败', alert_remote_backup: '远程备份失败', alert_cron_fail: '计划任务失败', alert_website_expiry: '网站到期', alert_site: '网站不可用', alert_system_update: '系统可用更新', alert_panel_update: '面板新版本' };
+            const m = { alert_cpu: 'CPU High Load', alert_memory: 'Low Available Memory', alert_disk: 'Disk Low', alert_service: 'Service Anomaly', alert_ssl: 'SSL Expiring', alert_backup: 'Backup Failed', alert_remote_backup: 'Remote Backup Failed', alert_cron_fail: 'Cron Task Failed', alert_website_expiry: 'Site Expiring', alert_site: 'Site Unavailable', alert_system_update: 'System Update Available', alert_panel_update: 'Panel New Version' };
             return m[t] || t;
         }
     }

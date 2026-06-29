@@ -161,31 +161,31 @@ func init() {
 	database.RegisterUpgrade("1.0.4", HardenSiteUnixIsolation)
 }
 
-// HardenSiteUnixIsolation 对所有已有站点执行 Unix 用户组隔离和敏感文件权限加固（升级迁移用）。
+// HardenSiteUnixIsolation applies Unix user group isolation and hardens sensitive file permissions for all existing sites (for upgrade migration).
 func HardenSiteUnixIsolation() error {
 	db := database.GetDB()
 	rows, err := db.Query("SELECT domain, web_root, system_user FROM websites")
 	if err != nil {
-		return fmt.Errorf("查询网站列表失败: %w", err)
+		return fmt.Errorf("failed to query site list: %w", err)
 	}
 	defer rows.Close()
 
 	for rows.Next() {
 		var domain, webRoot, systemUser string
 		if err := rows.Scan(&domain, &webRoot, &systemUser); err != nil {
-			log.Printf("[权限加固] 读取网站数据失败: %v", err)
+			log.Printf("[permission hardening] failed to read site data: %v", err)
 			continue
 		}
 		if err := HardenSiteSensitivePermissions(domain, webRoot, systemUser); err != nil {
-			log.Printf("[权限加固] %s: 安全权限设置失败: %v", domain, err)
+			log.Printf("[permission hardening] %s: security permission setting failed: %v", domain, err)
 		}
 	}
 
 	return rows.Err()
 }
 
-// InstallPluginPermissions 安装插件时设置插件目录和密钥目录权限。
-// 与 HardenSiteSensitivePermissions 不同，此函数不 chown 整站，且所有错误静默忽略（不阻断插件安装）。
+// InstallPluginPermissions sets plugin directory and secrets directory permissions during plugin installation.
+// Unlike HardenSiteSensitivePermissions, this function does not chown the entire site, and all errors are silently ignored (not blocking plugin installation).
 func InstallPluginPermissions(domain, systemUser, pluginDir string) {
 	systemUser = strings.TrimSpace(systemUser)
 	if systemUser == "" {

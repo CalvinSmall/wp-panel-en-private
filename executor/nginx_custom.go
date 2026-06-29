@@ -16,15 +16,15 @@ const nginxCustomDir = "/www/server/panel/nginx-custom"
 func executeSaveNginxCustom(task *Task) TaskResult {
 	payload, ok := task.Payload.(*SaveNginxCustomPayload)
 	if !ok {
-		return TaskResult{Success: false, Message: "任务参数类型错误"}
+		return TaskResult{Success: false, Message: "task parameter type error"}
 	}
 
 	site := payload.Site
 	domain := site.Domain
 
 	if err := os.MkdirAll(nginxCustomDir, 0755); err != nil {
-		log.Printf("创建配置目录失败: %v", err)
-		return TaskResult{Success: false, Message: "创建配置目录失败"}
+		log.Printf("failed to create config directory: %v", err)
+		return TaskResult{Success: false, Message: "failed to create config directory"}
 	}
 
 	prePath := filepath.Join(nginxCustomDir, domain+".pre.conf")
@@ -34,13 +34,13 @@ func executeSaveNginxCustom(task *Task) TaskResult {
 	oldMain, _ := os.ReadFile(mainPath)
 
 	if err := os.WriteFile(prePath, []byte(payload.PreContent), 0644); err != nil {
-		log.Printf("写入 pre.conf 失败: %v", err)
-		return TaskResult{Success: false, Message: "写入 pre.conf 失败"}
+		log.Printf("failed to write pre.conf: %v", err)
+		return TaskResult{Success: false, Message: "failed to write pre.conf"}
 	}
 	if err := os.WriteFile(mainPath, []byte(payload.Content), 0644); err != nil {
 		os.WriteFile(prePath, oldPre, 0644)
-		log.Printf("写入 conf 失败: %v", err)
-		return TaskResult{Success: false, Message: "写入 conf 失败"}
+		log.Printf("failed to write conf: %v", err)
+		return TaskResult{Success: false, Message: "failed to write conf"}
 	}
 
 	ngxTest := exec.Command("nginx", "-t")
@@ -48,18 +48,18 @@ func executeSaveNginxCustom(task *Task) TaskResult {
 	if err != nil {
 		os.WriteFile(prePath, oldPre, 0644)
 		os.WriteFile(mainPath, oldMain, 0644)
-		return TaskResult{Success: false, Message: "Nginx 语法检查失败:\n" + string(out)}
+		return TaskResult{Success: false, Message: "Nginx syntax check failed:\n" + string(out)}
 	}
 
 	exec.Command("nginx", "-s", "reload").Run()
 
-	return TaskResult{Success: true, Message: "Nginx 自定义配置已保存并生效"}
+	return TaskResult{Success: true, Message: "Nginx custom config saved and applied"}
 }
 
 func executeSetAccessLogMode(task *Task) TaskResult {
 	payload, ok := task.Payload.(*SetAccessLogModePayload)
 	if !ok {
-		return TaskResult{Success: false, Message: "任务参数类型错误"}
+		return TaskResult{Success: false, Message: "task parameter type error"}
 	}
 
 	site := payload.Site
@@ -68,20 +68,20 @@ func executeSetAccessLogMode(task *Task) TaskResult {
 	engine := NewTemplateEngine(cfg.Panel.BackupDir)
 	nginxData, err := nginxDataFromSiteChecked(site)
 	if err != nil {
-		return taskFailure("CDN 真实 IP 配置无效", err)
+		return taskFailure("CDN Real IP config is invalid", err)
 	}
 	nginxData.AccessLogMode = payload.Mode
 
 	nginxConfig, err := engine.RenderNginxConfig(nginxData)
 	if err != nil {
-		log.Printf("渲染 Nginx 配置失败: %v", err)
-		return taskFailure("渲染 Nginx 配置失败", err)
+		log.Printf("render Nginx config failed: %v", err)
+		return taskFailure("render Nginx config failed", err)
 	}
 
 	if err := engine.ApplyNginxConfig(nginxConfig, site.NginxConfPath,
 		nginxEnabledPath(cfg, site.NginxConfPath, site.Domain)); err != nil {
-		log.Printf("应用 Nginx 配置失败: %v", err)
-		return taskFailure("应用 Nginx 配置失败", err)
+		log.Printf("apply Nginx config failed: %v", err)
+		return taskFailure("apply Nginx config failed", err)
 	}
 
 	// Update database
@@ -95,13 +95,13 @@ func executeSetAccessLogMode(task *Task) TaskResult {
 	}
 
 	modeLabels := map[string]string{
-		"off":        "访问日志已关闭",
-		"error_only": "访问日志已设为仅记录异常",
-		"full":       "访问日志已设为全部记录",
+		"off":        "access log disabled",
+		"error_only": "access log set to error-only logging",
+		"full":       "access log set to full logging",
 	}
 	msg := modeLabels[payload.Mode]
 	if msg == "" {
-		msg = "访问日志模式已更新"
+		msg = "access log mode updated"
 	}
 	return TaskResult{Success: true, Message: msg}
 }
@@ -109,11 +109,11 @@ func executeSetAccessLogMode(task *Task) TaskResult {
 func executeSetCDNRealIP(task *Task) TaskResult {
 	payload, ok := task.Payload.(*SetCDNRealIPPayload)
 	if !ok {
-		return TaskResult{Success: false, Message: "任务参数类型错误"}
+		return TaskResult{Success: false, Message: "task parameter type error"}
 	}
 	site := payload.Site
 	if site == nil {
-		return TaskResult{Success: false, Message: "网站不存在"}
+		return TaskResult{Success: false, Message: "site does not exist"}
 	}
 
 	var groups []models.CDNRealIPGroup
@@ -124,7 +124,7 @@ func executeSetCDNRealIP(task *Task) TaskResult {
 			return TaskResult{Success: false, Message: err.Error()}
 		}
 		if len(groups) == 0 {
-			return TaskResult{Success: false, Message: "启用 CDN 真实 IP 时至少选择一个配置组"}
+			return TaskResult{Success: false, Message: "at least one config group must be selected when enabling CDN Real IP"}
 		}
 	}
 
@@ -143,8 +143,8 @@ func executeSetCDNRealIP(task *Task) TaskResult {
 	}
 	nginxConfig, err := engine.RenderNginxConfig(nginxData)
 	if err != nil {
-		log.Printf("渲染 Nginx 配置失败: %v", err)
-		return taskFailure("渲染 Nginx 配置失败", err)
+		log.Printf("render Nginx config failed: %v", err)
+		return taskFailure("render Nginx config failed", err)
 	}
 
 	oldEnabled := site.CDNRealIPEnabled
@@ -158,13 +158,13 @@ func executeSetCDNRealIP(task *Task) TaskResult {
 		oldRenderErr = oldDataErr
 	}
 	if err := SaveWebsiteCDNRealIPSettings(site.ID, payload.Enabled, payload.GroupIDs); err != nil {
-		return taskFailure("保存 CDN 真实 IP 设置失败", err)
+		return taskFailure("failed to save CDN Real IP settings", err)
 	}
 	if err := engine.ApplyNginxConfig(nginxConfig, site.NginxConfPath,
 		nginxEnabledPath(cfg, site.NginxConfPath, site.Domain)); err != nil {
-		log.Printf("应用 Nginx 配置失败: %v", err)
+		log.Printf("apply Nginx config failed: %v", err)
 		_ = SaveWebsiteCDNRealIPSettings(site.ID, oldEnabled, oldGroupIDs)
-		return taskFailure("应用 Nginx 配置失败", err)
+		return taskFailure("apply Nginx config failed", err)
 	}
 	if err := ApplyFail2banSettings(); err != nil {
 		_ = SaveWebsiteCDNRealIPSettings(site.ID, oldEnabled, oldGroupIDs)
@@ -172,10 +172,10 @@ func executeSetCDNRealIP(task *Task) TaskResult {
 			_ = engine.ApplyNginxConfig(oldNginxConfig, site.NginxConfPath,
 				nginxEnabledPath(cfg, site.NginxConfPath, site.Domain))
 		}
-		return taskFailure("CDN 真实 IP 已回滚，Fail2ban 白名单应用失败", err)
+		return taskFailure("CDN Real IP rolled back; Fail2ban whitelist application failed", err)
 	}
 
-	return TaskResult{Success: true, Message: "CDN 真实 IP 设置已保存并生效"}
+	return TaskResult{Success: true, Message: "CDN Real IP settings saved and applied"}
 }
 
 func cdnRealIPGroupIDs(groups []models.CDNRealIPGroup) []int {
@@ -196,14 +196,14 @@ func boolToDBInt(v bool) int {
 func executeSetDocumentRoot(task *Task) TaskResult {
 	payload, ok := task.Payload.(*SetDocumentRootPayload)
 	if !ok {
-		return TaskResult{Success: false, Message: "任务参数类型错误"}
+		return TaskResult{Success: false, Message: "task parameter type error"}
 	}
 	site := payload.Site
 	if site == nil {
-		return TaskResult{Success: false, Message: "网站不存在"}
+		return TaskResult{Success: false, Message: "site does not exist"}
 	}
 	if site.SiteType != "php" {
-		return TaskResult{Success: false, Message: "只有通用 PHP 网站支持修改 Web 入口目录"}
+		return TaskResult{Success: false, Message: "only generic PHP sites support changing the web entry directory"}
 	}
 
 	documentRootSubdir, err := NormalizeDocumentRootSubdir(site.SiteType, payload.DocumentRootSubdir)
@@ -211,36 +211,36 @@ func executeSetDocumentRoot(task *Task) TaskResult {
 		return TaskResult{Success: false, Message: err.Error()}
 	}
 	if _, err := EnsureEffectiveDocumentRoot(site.WebRoot, site.SiteType, documentRootSubdir, site.SystemUser); err != nil {
-		return taskFailure("准备Web入口目录失败", err)
+		return taskFailure("failed to prepare web entry directory", err)
 	}
 
 	siteCopy := *site
 	siteCopy.DocumentRootSubdir = documentRootSubdir
 	nginxData, err := nginxDataFromSiteChecked(&siteCopy)
 	if err != nil {
-		return taskFailure("CDN 真实 IP 配置无效", err)
+		return taskFailure("CDN Real IP config is invalid", err)
 	}
 
 	cfg := config.AppConfig
 	engine := NewTemplateEngine(cfg.Panel.BackupDir)
 	nginxConfig, err := engine.RenderNginxConfig(nginxData)
 	if err != nil {
-		log.Printf("渲染 Nginx 配置失败: %v", err)
-		return taskFailure("渲染 Nginx 配置失败", err)
+		log.Printf("render Nginx config failed: %v", err)
+		return taskFailure("render Nginx config failed", err)
 	}
 	if err := engine.ApplyNginxConfig(nginxConfig, site.NginxConfPath,
 		nginxEnabledPath(cfg, site.NginxConfPath, site.Domain)); err != nil {
-		log.Printf("应用 Nginx 配置失败: %v", err)
-		return taskFailure("应用 Nginx 配置失败", err)
+		log.Printf("apply Nginx config failed: %v", err)
+		return taskFailure("apply Nginx config failed", err)
 	}
 
 	db := database.GetDB()
 	if _, err := db.Exec("UPDATE websites SET document_root_subdir = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", documentRootSubdir, site.ID); err != nil {
-		return TaskResult{Success: false, Message: "保存 Web 入口目录失败: " + err.Error()}
+		return TaskResult{Success: false, Message: "failed to save web entry directory: " + err.Error()}
 	}
 
 	if documentRootSubdir == "" {
-		return TaskResult{Success: true, Message: "Web 入口目录已切换为项目根"}
+		return TaskResult{Success: true, Message: "web entry directory switched to project root"}
 	}
-	return TaskResult{Success: true, Message: "Web 入口目录已切换为 public"}
+	return TaskResult{Success: true, Message: "web entry directory switched to public"}
 }

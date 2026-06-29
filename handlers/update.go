@@ -32,7 +32,7 @@ func (h *UpdateHandler) Check(c *gin.Context) {
 			"current_version": h.CurrentVersion,
 			"latest_version":  "",
 			"has_update":      false,
-			"error":           "获取版本信息失败",
+			"error":           "Failed to get version info",
 		}))
 		return
 	}
@@ -43,7 +43,7 @@ func (h *UpdateHandler) Check(c *gin.Context) {
 		notes = strings.TrimSpace(notes[:idx])
 	}
 	if notes == "" {
-		notes = "（无更新说明）"
+		notes = "(No release notes)"
 	}
 
 	c.JSON(http.StatusOK, models.SuccessResponse(gin.H{
@@ -69,15 +69,15 @@ func (h *UpdateHandler) Update(c *gin.Context) {
 	})
 	if err != nil {
 		code := http.StatusInternalServerError
-		if strings.Contains(err.Error(), "已有更新任务") {
+		if strings.Contains(err.Error(), "already in progress") {
 			code = http.StatusConflict
-		} else if strings.Contains(err.Error(), "已经是最新版本") || strings.Contains(err.Error(), "仅支持 Linux") {
+		} else if strings.Contains(err.Error(), "already up to date") || strings.Contains(err.Error(), "only Linux") {
 			code = http.StatusBadRequest
 		}
 		c.JSON(code, models.ErrorResponse(err.Error()))
 		return
 	}
 	c.JSON(http.StatusOK, models.SuccessResponse(gin.H{
-		"message": fmt.Sprintf("正在更新到 %s，面板即将重启并执行健康检查...", latest.TagName),
+		"message": fmt.Sprintf("Updating to %s, panel will restart and run health check...", latest.TagName),
 	}))
 }

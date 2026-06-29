@@ -1,39 +1,39 @@
-# 更新说明
+# Release Notes
 
 ## v1.2.24
 
-### 新增：S3 兼容对象存储远程备份
+### New: S3-Compatible Object Storage for Remote Backup
 
-- 远程备份新增「S3 兼容对象存储」后端，可用于 Cloudflare R2、AWS S3、MinIO、Backblaze B2 等兼容服务。
-- 保留原有 SSH / rsync 远程备份方式，已配置 rsync 的服务器升级后默认行为不变。
-- 设置页新增备份目标选择，可在 SSH / rsync 与 S3 兼容对象存储之间切换。
-- S3 配置支持 Endpoint、Bucket、Region、Access Key ID、Secret Access Key 和路径前缀。
-- Cloudflare R2 可使用 `auto` 作为 Region，并使用账号专属 R2 Endpoint。
+- Added "S3-Compatible Object Storage" backend for remote backups, supporting Cloudflare R2, AWS S3, MinIO, Backblaze B2 and other compatible services.
+- Preserved the original SSH / rsync remote backup method; existing rsync-configured servers retain default behavior after upgrade.
+- Added backup destination selection in settings, allowing switching between SSH / rsync and S3-compatible object storage.
+- S3 configuration supports Endpoint, Bucket, Region, Access Key ID, Secret Access Key, and path prefix.
+- Cloudflare R2 can use `auto` as Region with an account-specific R2 Endpoint.
 
-### 改进：大文件备份上传
+### Improved: Large File Backup Upload
 
-- S3 后端支持 multipart upload，大文件会自动分片上传，上传完成后在对象存储中仍显示为一个完整备份对象。
-- 单次分片上传失败时会自动 abort multipart upload，减少远程未完成分片残留。
-- 小文件继续使用单次 PUT 上传，避免不必要的分片流程。
-- S3 文件上传超时调整为更适合备份场景的长超时，连接测试仍保持短超时。
+- S3 backend supports multipart upload; large files are automatically split into parts and appear as a single complete backup object in object storage.
+- Failed part uploads automatically abort the multipart upload, reducing incomplete part residue on the remote end.
+- Small files continue to use single PUT upload to avoid unnecessary multipart overhead.
+- S3 file upload timeout adjusted to a longer duration suitable for backup scenarios; connection tests retain short timeout.
 
-### 安全与兼容
+### Security & Compatibility
 
-- S3 Endpoint 必须使用 HTTPS。
-- Bucket、Region、Access Key ID、路径前缀等配置均增加格式校验。
-- Secret Access Key 和 SSH 密码在接口返回时继续脱敏显示。
-- 本地上传路径仍限制在面板备份目录下，避免任意文件被同步。
-- S3 上传使用标准 SigV4 签名，不依赖 rclone 或额外系统命令。
+- S3 Endpoint must use HTTPS.
+- Added format validation for Bucket, Region, Access Key ID, path prefix, etc.
+- Secret Access Key and SSH passwords continue to be masked in API responses.
+- Local upload paths remain restricted to the panel backup directory to prevent arbitrary file sync.
+- S3 uploads use standard SigV4 signing, no dependency on rclone or additional system commands.
 
-### 数据库升级
+### Database Upgrade
 
-- `remote_backup_settings` 新增 S3 远程备份配置字段。
-- 新装数据库和老版本升级路径均已处理。
-- 老用户升级后默认 `backup_type` 为 `rsync`，不会自动切换备份后端。
+- `remote_backup_settings` now includes S3 remote backup configuration fields.
+- Both fresh install and upgrade paths are handled.
+- After upgrade, default `backup_type` is `rsync`; backup backend is not automatically switched.
 
-### 测试
+### Testing
 
-- 增加远程备份类型和 S3 参数校验测试。
-- 增加新装和老版本升级的数据库字段测试。
-- 增加 mock S3 服务测试，覆盖连接探测、multipart 成功上传和失败 abort。
-- 增加 S3 XML complete 请求测试，确认 `Content-Type: application/xml` 和 ETag XML 格式。
+- Added remote backup type and S3 parameter validation tests.
+- Added database field tests for fresh install and upgrade scenarios.
+- Added mock S3 service tests covering connection detection, multipart successful upload, and failed abort.
+- Added S3 XML complete request tests verifying `Content-Type: application/xml` and ETag XML format.

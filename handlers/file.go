@@ -103,7 +103,7 @@ func newFileTransferError(status int, format string, args ...interface{}) error 
 func newFileTransferConflictError(conflicts []string) error {
 	return &fileTransferError{
 		status:    http.StatusConflict,
-		message:   "以下项目已存在，请选择覆盖或跳过",
+		message:   "The following items already exist, please choose overwrite or skip",
 		conflicts: conflicts,
 	}
 }
@@ -151,7 +151,7 @@ func normalizeFileConflictPolicy(policy string) (string, error) {
 	case fileConflictPolicySkip:
 		return fileConflictPolicySkip, nil
 	default:
-		return "", newFileTransferError(http.StatusBadRequest, "冲突处理策略无效")
+		return "", newFileTransferError(http.StatusBadRequest, "Invalid conflict resolution policy")
 	}
 }
 
@@ -166,7 +166,7 @@ func fileBasePath(siteID int) (string, error) {
 	}
 	site := getWebsiteByID(siteID)
 	if site == nil {
-		return "", fmt.Errorf("网站不存在")
+		return "", fmt.Errorf("Website not found")
 	}
 	return site.WebRoot, nil
 }
@@ -312,7 +312,7 @@ func paginateFileEntries(files []fileEntry, page, perPage int) ([]fileEntry, int
 func cleanFileOperationName(name string) (string, error) {
 	name = strings.TrimSpace(name)
 	if name == "" || name == "." || name == ".." || filepath.IsAbs(name) || strings.ContainsAny(name, "/\\") {
-		return "", fmt.Errorf("文件名非法")
+		return "", fmt.Errorf("Illegal filename")
 	}
 	return name, nil
 }
@@ -322,7 +322,7 @@ func resolvePathForAccess(path string) (string, error) {
 	if resolved, err := filepath.EvalSymlinks(cleanPath); err == nil {
 		return resolved, nil
 	}
-	// 向上逐级查找第一个存在的目录
+	// Traverse upward to find the first existing directory
 	for p := filepath.Dir(cleanPath); ; p = filepath.Dir(p) {
 		resolved, err := filepath.EvalSymlinks(p)
 		if err == nil {
@@ -334,7 +334,7 @@ func resolvePathForAccess(path string) (string, error) {
 		}
 		parent := filepath.Dir(p)
 		if p == "/" || p == "." || parent == p {
-			// 根目录不存在则无法验证，退回到 Clean 结果
+			// Root does not exist, cannot verify, falling back to Clean result
 			return cleanPath, nil
 		}
 	}
@@ -367,7 +367,7 @@ func cleanupExpiredUploadSessions(root string, ttl time.Duration) {
 	entries, err := os.ReadDir(root)
 	if err != nil {
 		if !os.IsNotExist(err) {
-			log.Printf("扫描上传会话目录失败 root=%s: %v", root, err)
+			log.Printf("Failed to scan upload session directory root=%s: %v", root, err)
 		}
 		return
 	}
@@ -393,7 +393,7 @@ func cleanupExpiredUploadSessions(root string, ttl time.Duration) {
 			continue
 		}
 		if err := os.RemoveAll(dir); err != nil {
-			log.Printf("清理过期上传会话失败 dir=%s: %v", dir, err)
+			log.Printf("Failed to clean up expired upload sessions dir=%s: %v", dir, err)
 		}
 	}
 }
@@ -408,9 +408,9 @@ func cleanupUploadSessions() {
 
 func uploadSaveErrorMessage(action string, err error) string {
 	if err != nil && strings.Contains(strings.ToLower(err.Error()), "no space left on device") {
-		return action + "失败：上传暂存空间不足，请清理磁盘后重试"
+		return action + " failed: Upload staging space insufficient, please clean disk and retry"
 	}
-	return action + "失败"
+	return action + "Failed"
 }
 
 func sanitizeUploadFilename(filename string) string {
@@ -485,27 +485,27 @@ func (h *FileHandler) List(c *gin.Context) {
 
 	siteID, err := strconv.Atoi(siteIDStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("无效的网站ID"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Invalid website ID"))
 		return
 	}
 
 	basePath, err := fileBasePath(siteID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, models.ErrorResponse("网站不存在"))
+		c.JSON(http.StatusNotFound, models.ErrorResponse("Website not found"))
 		return
 	}
 
 	fullPath := filepath.Join(basePath, relPath)
 	fullPath = filepath.Clean(fullPath)
 	if !isPathWithin(basePath, fullPath) {
-		c.JSON(http.StatusForbidden, models.ErrorResponse("路径越权"))
+		c.JSON(http.StatusForbidden, models.ErrorResponse("Path access denied"))
 		return
 	}
 
 	entries, err := os.ReadDir(fullPath)
 	if err != nil {
-		log.Printf("读取目录失败 path=%s: %v", fullPath, err)
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse("读取目录失败"))
+		log.Printf("Failed to read directory path=%s: %v", fullPath, err)
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse("Failed to read directory"))
 		return
 	}
 
@@ -558,37 +558,37 @@ func (h *FileHandler) Upload(c *gin.Context) {
 
 	siteID, err := strconv.Atoi(siteIDStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("无效的网站ID"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Invalid website ID"))
 		return
 	}
 
 	basePath, err := fileBasePath(siteID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, models.ErrorResponse("网站不存在"))
+		c.JSON(http.StatusNotFound, models.ErrorResponse("Website not found"))
 		return
 	}
 
 	file, err := c.FormFile("file")
 	if err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("请选择文件"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Please select a file"))
 		return
 	}
 
 	destPath := filepath.Join(basePath, relPath, filepath.Base(file.Filename))
 	destPath = filepath.Clean(destPath)
 	if !isPathWithin(basePath, destPath) {
-		c.JSON(http.StatusForbidden, models.ErrorResponse("路径越权"))
+		c.JSON(http.StatusForbidden, models.ErrorResponse("Path access denied"))
 		return
 	}
 
 	if err := c.SaveUploadedFile(file, destPath); err != nil {
-		log.Printf("文件上传失败 path=%s: %v", destPath, err)
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse("上传失败"))
+		log.Printf("FileUpload failed path=%s: %v", destPath, err)
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse("Upload failed"))
 		return
 	}
 	os.Chmod(destPath, 0644)
 
-	c.JSON(http.StatusOK, models.SuccessResponse(gin.H{"message": "文件上传成功"}))
+	c.JSON(http.StatusOK, models.SuccessResponse(gin.H{"message": "File uploaded successfully"}))
 }
 
 func (h *FileHandler) UploadInit(c *gin.Context) {
@@ -601,18 +601,18 @@ func (h *FileHandler) UploadInit(c *gin.Context) {
 		LastModified int64  `json:"last_modified"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("参数无效"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Invalid parameters"))
 		return
 	}
 	if req.SiteID == nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("请选择网站或备份目录"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Please select a website or backup directory"))
 		return
 	}
 	siteID := *req.SiteID
 	filename := sanitizeUploadFilename(req.Filename)
 	expectedChunks := expectedUploadChunks(req.FileSize)
 	if filename == "" || req.FileSize < 0 || req.TotalChunks != expectedChunks || req.TotalChunks > maxUploadChunks {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("参数无效"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Invalid parameters"))
 		return
 	}
 	if req.Path == "" {
@@ -621,13 +621,13 @@ func (h *FileHandler) UploadInit(c *gin.Context) {
 
 	basePath, err := fileBasePath(siteID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, models.ErrorResponse("网站不存在"))
+		c.JSON(http.StatusNotFound, models.ErrorResponse("Website not found"))
 		return
 	}
 	destPath := filepath.Join(basePath, req.Path, filename)
 	destPath = filepath.Clean(destPath)
 	if !isPathWithin(basePath, destPath) {
-		c.JSON(http.StatusForbidden, models.ErrorResponse("路径越权"))
+		c.JSON(http.StatusForbidden, models.ErrorResponse("Path access denied"))
 		return
 	}
 
@@ -645,16 +645,16 @@ func (h *FileHandler) UploadInit(c *gin.Context) {
 	uploadID := makeUploadID(session)
 	dir := uploadSessionDir(uploadID)
 	if err := os.MkdirAll(dir, 0700); err != nil {
-		log.Printf("创建上传会话失败 dir=%s: %v", dir, err)
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse(uploadSaveErrorMessage("创建上传会话", err)))
+		log.Printf("Create upload sessionFailed dir=%s: %v", dir, err)
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse(uploadSaveErrorMessage("Create upload session", err)))
 		return
 	}
 	if existing, err := loadUploadSession(dir); err == nil {
 		session.CreatedAt = existing.CreatedAt
 	}
 	if err := saveUploadSession(dir, session); err != nil {
-		log.Printf("保存上传会话失败 dir=%s: %v", dir, err)
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse(uploadSaveErrorMessage("保存上传会话", err)))
+		log.Printf("Save upload sessionFailed dir=%s: %v", dir, err)
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse(uploadSaveErrorMessage("Save upload session", err)))
 		return
 	}
 
@@ -668,34 +668,34 @@ func (h *FileHandler) UploadChunk(c *gin.Context) {
 	uploadID := c.PostForm("upload_id")
 	chunkIdxStr := c.PostForm("chunk_index")
 	if uploadID == "" || chunkIdxStr == "" {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("参数无效"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Invalid parameters"))
 		return
 	}
 
 	chunkIdx, err := strconv.Atoi(chunkIdxStr)
 	if err != nil || chunkIdx < 0 || chunkIdx >= maxUploadChunks {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("分片索引无效"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Invalid chunk index"))
 		return
 	}
 
 	dir := uploadSessionDir(uploadID)
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
-		c.JSON(http.StatusNotFound, models.ErrorResponse("上传会话不存在"))
+		c.JSON(http.StatusNotFound, models.ErrorResponse("Upload session not found"))
 		return
 	}
 	session, err := loadUploadSession(dir)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("上传会话无效"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Invalid upload session"))
 		return
 	}
 	if chunkIdx >= session.TotalChunks {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("分片索引无效"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Invalid chunk index"))
 		return
 	}
 
 	file, err := c.FormFile("chunk")
 	if err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("请选择文件"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Please select a file"))
 		return
 	}
 	expectedSize := uploadChunkSize
@@ -703,21 +703,21 @@ func (h *FileHandler) UploadChunk(c *gin.Context) {
 		expectedSize = session.FileSize - int64(chunkIdx)*uploadChunkSize
 	}
 	if file.Size != expectedSize {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("分片大小无效"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Invalid chunk size"))
 		return
 	}
 
 	chunkPath := filepath.Join(dir, fmt.Sprintf("chunk-%d", chunkIdx))
 	tmpPath := chunkPath + ".tmp"
 	if err := c.SaveUploadedFile(file, tmpPath); err != nil {
-		log.Printf("保存上传分片失败 path=%s: %v", tmpPath, err)
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse(uploadSaveErrorMessage("保存分片", err)))
+		log.Printf("Failed to save upload chunk path=%s: %v", tmpPath, err)
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse(uploadSaveErrorMessage("Save chunk", err)))
 		return
 	}
 	os.Remove(chunkPath)
 	if err := os.Rename(tmpPath, chunkPath); err != nil {
 		os.Remove(tmpPath)
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse("保存分片失败"))
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse("Failed to save chunk"))
 		return
 	}
 
@@ -731,52 +731,52 @@ func (h *FileHandler) UploadComplete(c *gin.Context) {
 		Path     string `json:"path"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil || req.UploadID == "" {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("参数无效"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Invalid parameters"))
 		return
 	}
 	if req.SiteID == nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("请选择网站或备份目录"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Please select a website or backup directory"))
 		return
 	}
 
 	uploadID := filepath.Base(req.UploadID)
 	dir := uploadSessionDir(uploadID)
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
-		c.JSON(http.StatusNotFound, models.ErrorResponse("上传会话不存在"))
+		c.JSON(http.StatusNotFound, models.ErrorResponse("Upload session not found"))
 		return
 	}
 	session, err := loadUploadSession(dir)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("上传会话无效"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Invalid upload session"))
 		return
 	}
 	if *req.SiteID != session.SiteID || filepath.Clean(req.Path) != filepath.Clean(session.Path) {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("上传会话不匹配"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Upload session mismatch"))
 		return
 	}
 
 	basePath, err := fileBasePath(session.SiteID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, models.ErrorResponse("网站不存在"))
+		c.JSON(http.StatusNotFound, models.ErrorResponse("Website not found"))
 		return
 	}
 
 	destPath := filepath.Join(basePath, session.Path, session.Filename)
 	destPath = filepath.Clean(destPath)
 	if !isPathWithin(basePath, destPath) {
-		c.JSON(http.StatusForbidden, models.ErrorResponse("路径越权"))
+		c.JSON(http.StatusForbidden, models.ErrorResponse("Path access denied"))
 		return
 	}
 
 	if missing := missingUploadChunks(dir, session.TotalChunks); len(missing) > 0 {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse(fmt.Sprintf("分片 %d 缺失，请重新上传", missing[0])))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse(fmt.Sprintf("Chunk %d missing, please re-upload", missing[0])))
 		return
 	}
 
 	tmpDestPath := destPath + ".uploading-" + uploadID
 	dst, err := os.OpenFile(tmpDestPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse(uploadSaveErrorMessage("创建文件", err)))
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse(uploadSaveErrorMessage("Create file", err)))
 		return
 	}
 	copyOK := false
@@ -791,33 +791,33 @@ func (h *FileHandler) UploadComplete(c *gin.Context) {
 		chunkPath := filepath.Join(dir, fmt.Sprintf("chunk-%d", i))
 		src, err := os.Open(chunkPath)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, models.ErrorResponse(fmt.Sprintf("分片 %d 缺失，请重新上传", i)))
+			c.JSON(http.StatusInternalServerError, models.ErrorResponse(fmt.Sprintf("Chunk %d missing, please re-upload", i)))
 			return
 		}
 		if _, err := io.Copy(dst, src); err != nil {
 			src.Close()
-			log.Printf("合并上传分片失败 dest=%s chunk=%s: %v", tmpDestPath, chunkPath, err)
-			c.JSON(http.StatusInternalServerError, models.ErrorResponse(uploadSaveErrorMessage("合并分片", err)))
+			log.Printf("Failed to merge upload chunks dest=%s chunk=%s: %v", tmpDestPath, chunkPath, err)
+			c.JSON(http.StatusInternalServerError, models.ErrorResponse(uploadSaveErrorMessage("Merge chunks", err)))
 			return
 		}
 		src.Close()
 	}
 	if err := dst.Close(); err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse("保存文件失败"))
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse("Failed to save file"))
 		return
 	}
 
 	if err := os.Chmod(tmpDestPath, 0644); err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse("设置文件权限失败"))
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse("Failed to set file permissions"))
 		return
 	}
 	if err := os.Rename(tmpDestPath, destPath); err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse("保存文件失败"))
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse("Failed to save file"))
 		return
 	}
 	copyOK = true
 	os.RemoveAll(dir)
-	c.JSON(http.StatusOK, models.SuccessResponse(gin.H{"message": "上传完成"}))
+	c.JSON(http.StatusOK, models.SuccessResponse(gin.H{"message": "Upload complete"}))
 }
 
 func (h *FileHandler) Download(c *gin.Context) {
@@ -826,30 +826,30 @@ func (h *FileHandler) Download(c *gin.Context) {
 
 	siteID, err := strconv.Atoi(siteIDStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("无效的网站ID"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Invalid website ID"))
 		return
 	}
 
 	basePath, err := fileBasePath(siteID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, models.ErrorResponse("网站不存在"))
+		c.JSON(http.StatusNotFound, models.ErrorResponse("Website not found"))
 		return
 	}
 
 	fullPath := filepath.Join(basePath, relPath)
 	fullPath = filepath.Clean(fullPath)
 	if !isPathWithin(basePath, fullPath) {
-		c.JSON(http.StatusForbidden, models.ErrorResponse("路径越权"))
+		c.JSON(http.StatusForbidden, models.ErrorResponse("Path access denied"))
 		return
 	}
 	if isSamePath(basePath, fullPath) {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("不能删除根目录"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Cannot delete root directory"))
 		return
 	}
 
 	info, err := os.Stat(fullPath)
 	if err != nil || info.IsDir() {
-		c.JSON(http.StatusNotFound, models.ErrorResponse("文件不存在"))
+		c.JSON(http.StatusNotFound, models.ErrorResponse("File not found"))
 		return
 	}
 
@@ -862,44 +862,44 @@ func (h *FileHandler) Delete(c *gin.Context) {
 
 	siteID, err := strconv.Atoi(siteIDStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("无效的网站ID"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Invalid website ID"))
 		return
 	}
 
 	basePath, err := fileBasePath(siteID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, models.ErrorResponse("网站不存在"))
+		c.JSON(http.StatusNotFound, models.ErrorResponse("Website not found"))
 		return
 	}
 
 	fullPath := filepath.Join(basePath, relPath)
 	fullPath = filepath.Clean(fullPath)
 	if !isPathWithin(basePath, fullPath) {
-		c.JSON(http.StatusForbidden, models.ErrorResponse("路径越权"))
+		c.JSON(http.StatusForbidden, models.ErrorResponse("Path access denied"))
 		return
 	}
 
 	info, err := os.Stat(fullPath)
 	if err != nil {
-		c.JSON(http.StatusNotFound, models.ErrorResponse("路径不存在"))
+		c.JSON(http.StatusNotFound, models.ErrorResponse("Path not found"))
 		return
 	}
 
 	if info.IsDir() {
 		if err := os.RemoveAll(fullPath); err != nil {
-			log.Printf("删除失败 path=%s: %v", fullPath, err)
-			c.JSON(http.StatusInternalServerError, models.ErrorResponse("删除失败"))
+			log.Printf("Delete failed path=%s: %v", fullPath, err)
+			c.JSON(http.StatusInternalServerError, models.ErrorResponse("Delete failed"))
 			return
 		}
 	} else {
 		if err := os.Remove(fullPath); err != nil {
-			log.Printf("删除失败 path=%s: %v", fullPath, err)
-			c.JSON(http.StatusInternalServerError, models.ErrorResponse("删除失败"))
+			log.Printf("Delete failed path=%s: %v", fullPath, err)
+			c.JSON(http.StatusInternalServerError, models.ErrorResponse("Delete failed"))
 			return
 		}
 	}
 
-	c.JSON(http.StatusOK, models.SuccessResponse(gin.H{"message": "删除成功"}))
+	c.JSON(http.StatusOK, models.SuccessResponse(gin.H{"message": "Deleted successfully"}))
 }
 
 func (h *FileHandler) Rename(c *gin.Context) {
@@ -909,13 +909,13 @@ func (h *FileHandler) Rename(c *gin.Context) {
 		NewName string `json:"new_name"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("参数错误"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Invalid parameters"))
 		return
 	}
 
 	basePath, err := fileBasePath(req.SiteID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, models.ErrorResponse("网站不存在"))
+		c.JSON(http.StatusNotFound, models.ErrorResponse("Website not found"))
 		return
 	}
 
@@ -924,17 +924,17 @@ func (h *FileHandler) Rename(c *gin.Context) {
 
 	if !isPathWithin(basePath, oldFull) ||
 		!isPathWithin(basePath, newFull) {
-		c.JSON(http.StatusForbidden, models.ErrorResponse("路径越权"))
+		c.JSON(http.StatusForbidden, models.ErrorResponse("Path access denied"))
 		return
 	}
 
 	if err := os.Rename(oldFull, newFull); err != nil {
-		log.Printf("重命名失败 old=%s new=%s: %v", oldFull, newFull, err)
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse("重命名失败"))
+		log.Printf("Rename failed old=%s new=%s: %v", oldFull, newFull, err)
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse("Rename failed"))
 		return
 	}
 
-	c.JSON(http.StatusOK, models.SuccessResponse(gin.H{"message": "重命名成功"}))
+	c.JSON(http.StatusOK, models.SuccessResponse(gin.H{"message": "Renamed successfully"}))
 }
 
 func (h *FileHandler) Permissions(c *gin.Context) {
@@ -943,26 +943,26 @@ func (h *FileHandler) Permissions(c *gin.Context) {
 
 	siteID, err := strconv.Atoi(siteIDStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("无效的网站ID"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Invalid website ID"))
 		return
 	}
 
 	basePath, err := fileBasePath(siteID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, models.ErrorResponse("网站不存在"))
+		c.JSON(http.StatusNotFound, models.ErrorResponse("Website not found"))
 		return
 	}
 
 	fullPath := filepath.Join(basePath, relPath)
 	fullPath = filepath.Clean(fullPath)
 	if !isPathWithin(basePath, fullPath) {
-		c.JSON(http.StatusForbidden, models.ErrorResponse("路径越权"))
+		c.JSON(http.StatusForbidden, models.ErrorResponse("Path access denied"))
 		return
 	}
 
 	info, err := os.Stat(fullPath)
 	if err != nil {
-		c.JSON(http.StatusNotFound, models.ErrorResponse("路径不存在"))
+		c.JSON(http.StatusNotFound, models.ErrorResponse("Path not found"))
 		return
 	}
 
@@ -983,20 +983,20 @@ func (h *FileHandler) BatchCompress(c *gin.Context) {
 		ArchiveName string   `json:"archive_name"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil || len(req.Names) == 0 {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("请选择要压缩的文件或目录"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Please select files or directories to compress"))
 		return
 	}
 
 	basePath, err := fileBasePath(req.SiteID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, models.ErrorResponse("网站不存在"))
+		c.JSON(http.StatusNotFound, models.ErrorResponse("Website not found"))
 		return
 	}
 
 	workPath := filepath.Join(basePath, req.Path)
 	workPath = filepath.Clean(workPath)
 	if !isPathWithin(basePath, workPath) {
-		c.JSON(http.StatusForbidden, models.ErrorResponse("路径越权"))
+		c.JSON(http.StatusForbidden, models.ErrorResponse("Path access denied"))
 		return
 	}
 
@@ -1010,12 +1010,12 @@ func (h *FileHandler) BatchCompress(c *gin.Context) {
 
 	zipPath := filepath.Join(workPath, archiveName)
 	if !isPathWithin(basePath, zipPath) {
-		c.JSON(http.StatusForbidden, models.ErrorResponse("压缩文件名非法"))
+		c.JSON(http.StatusForbidden, models.ErrorResponse("compressIllegal filename"))
 		return
 	}
 	zipFile, err := os.Create(zipPath)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse("创建压缩文件失败"))
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse("Failed to create archive file"))
 		return
 	}
 	defer zipFile.Close()
@@ -1089,7 +1089,7 @@ func (h *FileHandler) BatchCompress(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, models.SuccessResponse(gin.H{"message": fmt.Sprintf("已压缩为 %s", archiveName)}))
+	c.JSON(http.StatusOK, models.SuccessResponse(gin.H{"message": fmt.Sprintf("Compressed as  %s", archiveName)}))
 }
 
 func (h *FileHandler) Compress(c *gin.Context) {
@@ -1098,38 +1098,38 @@ func (h *FileHandler) Compress(c *gin.Context) {
 
 	siteID, err := strconv.Atoi(siteIDStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("无效的网站ID"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Invalid website ID"))
 		return
 	}
 
 	basePath, err := fileBasePath(siteID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, models.ErrorResponse("网站不存在"))
+		c.JSON(http.StatusNotFound, models.ErrorResponse("Website not found"))
 		return
 	}
 
 	fullPath := filepath.Join(basePath, relPath)
 	fullPath = filepath.Clean(fullPath)
 	if !isPathWithin(basePath, fullPath) {
-		c.JSON(http.StatusForbidden, models.ErrorResponse("路径越权"))
+		c.JSON(http.StatusForbidden, models.ErrorResponse("Path access denied"))
 		return
 	}
 
 	info, err := os.Stat(fullPath)
 	if err != nil {
-		c.JSON(http.StatusNotFound, models.ErrorResponse("路径不存在"))
+		c.JSON(http.StatusNotFound, models.ErrorResponse("Path not found"))
 		return
 	}
 
 	zipName := info.Name() + ".zip"
 	zipPath := filepath.Join(filepath.Dir(fullPath), zipName)
 	if !isPathWithin(basePath, zipPath) {
-		c.JSON(http.StatusForbidden, models.ErrorResponse("压缩文件名非法"))
+		c.JSON(http.StatusForbidden, models.ErrorResponse("compressIllegal filename"))
 		return
 	}
 	zipFile, err := os.Create(zipPath)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse("创建压缩文件失败"))
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse("Failed to create archive file"))
 		return
 	}
 	defer zipFile.Close()
@@ -1178,7 +1178,7 @@ func (h *FileHandler) Compress(c *gin.Context) {
 	} else {
 		header, err := zip.FileInfoHeader(info)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, models.ErrorResponse("压缩失败"))
+			c.JSON(http.StatusInternalServerError, models.ErrorResponse("Compression failed"))
 			return
 		}
 		header.Name = info.Name()
@@ -1186,19 +1186,19 @@ func (h *FileHandler) Compress(c *gin.Context) {
 
 		writer, err := w.CreateHeader(header)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, models.ErrorResponse("压缩失败"))
+			c.JSON(http.StatusInternalServerError, models.ErrorResponse("Compression failed"))
 			return
 		}
 		f, err := os.Open(fullPath)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, models.ErrorResponse("压缩失败"))
+			c.JSON(http.StatusInternalServerError, models.ErrorResponse("Compression failed"))
 			return
 		}
 		defer f.Close()
 		io.Copy(writer, f)
 	}
 
-	c.JSON(http.StatusOK, models.SuccessResponse(gin.H{"message": fmt.Sprintf("已压缩为 %s", zipName)}))
+	c.JSON(http.StatusOK, models.SuccessResponse(gin.H{"message": fmt.Sprintf("Compressed as  %s", zipName)}))
 }
 
 func archiveFormat(path string) string {
@@ -1218,7 +1218,7 @@ func archiveFormat(path string) string {
 }
 
 func supportedArchiveMessage() string {
-	return "仅支持解压 .zip / .tar / .tar.gz / .tgz / .tar.bz2 / .tbz2 文件"
+	return "Only .zip / .tar / .tar.gz / .tgz / .tar.bz2 / .tbz2 files are supported for decompression"
 }
 
 func shellQuoteForDisplay(s string) string {
@@ -1245,9 +1245,9 @@ func archiveSSHExtractCommand(archivePath, format string) string {
 func oversizedArchiveMessage(archivePath, format string) string {
 	cmd := archiveSSHExtractCommand(archivePath, format)
 	if cmd == "" {
-		return "文件超大，面板解压可能不稳定，建议从 SSH 端执行解压命令。"
+		return "File is very large, panel decompression may be unstable. Decompression via SSH is recommended."
 	}
-	return "文件超大，面板解压可能不稳定，建议从 SSH 端执行解压命令：\n" + cmd
+	return "File is very large, panel decompression may be unstable. Run via  SSH SSH: \n" + cmd
 }
 
 func openTarReader(path, format string) (*tar.Reader, io.Closer, error) {
@@ -1280,7 +1280,7 @@ func tarTargetForHeader(basePath, destDir string, hdr *tar.Header) (string, bool
 	case tar.TypeXHeader, tar.TypeXGlobalHeader, tar.TypeGNULongName, tar.TypeGNULongLink:
 		return "", true, nil
 	default:
-		return "", false, fmt.Errorf("压缩包包含不支持的条目: %s", hdr.Name)
+		return "", false, fmt.Errorf("Archive contains unsupported entries: %s", hdr.Name)
 	}
 
 	if hdr.Name == "" {
@@ -1290,7 +1290,7 @@ func tarTargetForHeader(basePath, destDir string, hdr *tar.Header) (string, bool
 	target := filepath.Join(destDir, filepath.FromSlash(hdr.Name))
 	target = filepath.Clean(target)
 	if !isPathWithin(basePath, target) {
-		return "", false, fmt.Errorf("压缩包包含非法路径: %s", hdr.Name)
+		return "", false, fmt.Errorf("Archive contains illegal paths: %s", hdr.Name)
 	}
 	return target, false, nil
 }
@@ -1314,7 +1314,7 @@ func checkTarArchive(archivePath, format, basePath, destDir string, overwrite bo
 		}
 		count++
 		if count > maxArchiveEntries {
-			return nil, fmt.Errorf("压缩包文件数量过多")
+			return nil, fmt.Errorf("Archive contains too many files")
 		}
 
 		target, skip, err := tarTargetForHeader(basePath, destDir, hdr)
@@ -1349,7 +1349,7 @@ func extractTarArchive(archivePath, format, basePath, destDir string) error {
 		}
 		count++
 		if count > maxArchiveEntries {
-			return fmt.Errorf("压缩包文件数量过多")
+			return fmt.Errorf("Archive contains too many files")
 		}
 
 		target, skip, err := tarTargetForHeader(basePath, destDir, hdr)
@@ -1362,27 +1362,27 @@ func extractTarArchive(archivePath, format, basePath, destDir string) error {
 
 		if hdr.Typeflag == tar.TypeDir {
 			if err := os.MkdirAll(target, 0755); err != nil {
-				return fmt.Errorf("创建目录失败: %s", hdr.Name)
+				return fmt.Errorf("Failed to create directory:  %s", hdr.Name)
 			}
 			continue
 		}
 
 		if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
-			return fmt.Errorf("创建目录失败: %s", hdr.Name)
+			return fmt.Errorf("Failed to create directory:  %s", hdr.Name)
 		}
 		dst, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 		if err != nil {
-			return fmt.Errorf("创建文件失败: %s", hdr.Name)
+			return fmt.Errorf("Failed to create file:  %s", hdr.Name)
 		}
 		_, copyErr := io.Copy(dst, tr)
 		closeErr := dst.Close()
 		if copyErr != nil {
 			os.Remove(target)
-			return fmt.Errorf("写入文件失败: %s", hdr.Name)
+			return fmt.Errorf("Failed to write file:  %s", hdr.Name)
 		}
 		if closeErr != nil {
 			os.Remove(target)
-			return fmt.Errorf("保存文件失败: %s", hdr.Name)
+			return fmt.Errorf("Failed to save file:  %s", hdr.Name)
 		}
 	}
 	return nil
@@ -1394,12 +1394,12 @@ func zipTargetForFile(basePath, destDir string, f *zip.File) (string, bool, erro
 	}
 	info := f.FileInfo()
 	if !info.IsDir() && info.Mode().Type() != 0 {
-		return "", false, fmt.Errorf("压缩包包含不支持的条目: %s", f.Name)
+		return "", false, fmt.Errorf("Archive contains unsupported entries: %s", f.Name)
 	}
 	target := filepath.Join(destDir, filepath.FromSlash(f.Name))
 	target = filepath.Clean(target)
 	if !isPathWithin(basePath, target) {
-		return "", false, fmt.Errorf("压缩包包含非法路径: %s", f.Name)
+		return "", false, fmt.Errorf("Archive contains illegal paths: %s", f.Name)
 	}
 	return target, false, nil
 }
@@ -1410,20 +1410,20 @@ func (h *FileHandler) Decompress(c *gin.Context) {
 
 	siteID, err := strconv.Atoi(siteIDStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("无效的网站ID"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Invalid website ID"))
 		return
 	}
 
 	basePath, err := fileBasePath(siteID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, models.ErrorResponse("网站不存在"))
+		c.JSON(http.StatusNotFound, models.ErrorResponse("Website not found"))
 		return
 	}
 
 	fullPath := filepath.Join(basePath, relPath)
 	fullPath = filepath.Clean(fullPath)
 	if !isPathWithin(basePath, fullPath) {
-		c.JSON(http.StatusForbidden, models.ErrorResponse("路径越权"))
+		c.JSON(http.StatusForbidden, models.ErrorResponse("Path access denied"))
 		return
 	}
 
@@ -1435,7 +1435,7 @@ func (h *FileHandler) Decompress(c *gin.Context) {
 
 	info, err := os.Stat(fullPath)
 	if err != nil {
-		c.JSON(http.StatusNotFound, models.ErrorResponse("压缩文件不存在"))
+		c.JSON(http.StatusNotFound, models.ErrorResponse("Archive file not found"))
 		return
 	}
 	if info.Size() > maxPanelArchiveBytes {
@@ -1453,27 +1453,27 @@ func (h *FileHandler) Decompress(c *gin.Context) {
 			return
 		}
 		if len(conflicts) > 0 {
-			c.JSON(http.StatusConflict, gin.H{"success": false, "message": "以下文件已存在，确认覆盖？", "conflicts": conflicts})
+			c.JSON(http.StatusConflict, gin.H{"success": false, "message": "The following files already exist, confirm overwrite?", "conflicts": conflicts})
 			return
 		}
 		if err := extractTarArchive(fullPath, format, basePath, destDir); err != nil {
 			c.JSON(http.StatusInternalServerError, models.ErrorResponse(err.Error()))
 			return
 		}
-		c.JSON(http.StatusOK, models.SuccessResponse(gin.H{"message": "解压完成"}))
+		c.JSON(http.StatusOK, models.SuccessResponse(gin.H{"message": "Decompression complete"}))
 		return
 	}
 
 	r, err := zip.OpenReader(fullPath)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse("打开压缩文件失败"))
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse("Failed to open archive file"))
 		return
 	}
 	defer r.Close()
 
 	var conflicts []string
 	if len(r.File) > maxArchiveEntries {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("压缩包文件数量过多"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Archive contains too many files"))
 		return
 	}
 	for _, f := range r.File {
@@ -1492,7 +1492,7 @@ func (h *FileHandler) Decompress(c *gin.Context) {
 		}
 	}
 	if len(conflicts) > 0 {
-		c.JSON(http.StatusConflict, gin.H{"success": false, "message": "以下文件已存在，确认覆盖？", "conflicts": conflicts})
+		c.JSON(http.StatusConflict, gin.H{"success": false, "message": "The following files already exist, confirm overwrite?", "conflicts": conflicts})
 		return
 	}
 
@@ -1508,25 +1508,25 @@ func (h *FileHandler) Decompress(c *gin.Context) {
 
 		if f.FileInfo().IsDir() {
 			if err := os.MkdirAll(target, 0755); err != nil {
-				c.JSON(http.StatusInternalServerError, models.ErrorResponse("创建目录失败: "+f.Name))
+				c.JSON(http.StatusInternalServerError, models.ErrorResponse("Failed to create directory:  "+f.Name))
 				return
 			}
 			continue
 		}
 
 		if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
-			c.JSON(http.StatusInternalServerError, models.ErrorResponse("创建目录失败: "+f.Name))
+			c.JSON(http.StatusInternalServerError, models.ErrorResponse("Failed to create directory:  "+f.Name))
 			return
 		}
 		src, err := f.Open()
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, models.ErrorResponse("读取压缩包文件失败: "+f.Name))
+			c.JSON(http.StatusInternalServerError, models.ErrorResponse("Failed to read archive entry: "+f.Name))
 			return
 		}
 		dst, err := os.Create(target)
 		if err != nil {
 			src.Close()
-			c.JSON(http.StatusInternalServerError, models.ErrorResponse("创建文件失败: "+f.Name))
+			c.JSON(http.StatusInternalServerError, models.ErrorResponse("Failed to create file:  "+f.Name))
 			return
 		}
 		_, copyErr := io.Copy(dst, src)
@@ -1534,17 +1534,17 @@ func (h *FileHandler) Decompress(c *gin.Context) {
 		closeErr := dst.Close()
 		if copyErr != nil {
 			os.Remove(target)
-			c.JSON(http.StatusInternalServerError, models.ErrorResponse("写入文件失败: "+f.Name))
+			c.JSON(http.StatusInternalServerError, models.ErrorResponse("Failed to write file:  "+f.Name))
 			return
 		}
 		if closeErr != nil {
 			os.Remove(target)
-			c.JSON(http.StatusInternalServerError, models.ErrorResponse("保存文件失败: "+f.Name))
+			c.JSON(http.StatusInternalServerError, models.ErrorResponse("Failed to save file:  "+f.Name))
 			return
 		}
 	}
 
-	c.JSON(http.StatusOK, models.SuccessResponse(gin.H{"message": "解压完成"}))
+	c.JSON(http.StatusOK, models.SuccessResponse(gin.H{"message": "Decompression complete"}))
 }
 
 func resolveTransferRequest(req fileTransferRequest) (int, string, string, string, string, []fileTransferItem, []string, error) {
@@ -1557,22 +1557,22 @@ func resolveTransferRequest(req fileTransferRequest) (int, string, string, strin
 		destSiteID = *req.DestSiteID
 	}
 	if req.SiteID != destSiteID && (req.SiteID == 0 || destSiteID == 0) {
-		return 0, "", "", "", "", nil, nil, newFileTransferError(http.StatusBadRequest, "跨站复制/剪切仅支持网站目录")
+		return 0, "", "", "", "", nil, nil, newFileTransferError(http.StatusBadRequest, "Cross-site copy/move only supports website directories")
 	}
 
 	srcBase, err := fileBasePath(req.SiteID)
 	if err != nil {
-		return 0, "", "", "", "", nil, nil, newFileTransferError(http.StatusNotFound, "源网站不存在")
+		return 0, "", "", "", "", nil, nil, newFileTransferError(http.StatusNotFound, "Source website not found")
 	}
 	destBase, err := fileBasePath(destSiteID)
 	if err != nil {
-		return 0, "", "", "", "", nil, nil, newFileTransferError(http.StatusNotFound, "目标网站不存在")
+		return 0, "", "", "", "", nil, nil, newFileTransferError(http.StatusNotFound, "Target website not found")
 	}
 
 	srcDir := filepath.Clean(filepath.Join(srcBase, req.SrcPath))
 	destDir := filepath.Clean(filepath.Join(destBase, req.DestPath))
 	if !isPathWithin(srcBase, srcDir) || !isPathWithin(destBase, destDir) {
-		return 0, "", "", "", "", nil, nil, newFileTransferError(http.StatusForbidden, "路径越权")
+		return 0, "", "", "", "", nil, nil, newFileTransferError(http.StatusForbidden, "Path access denied")
 	}
 
 	items := make([]fileTransferItem, 0, len(req.Names))
@@ -1586,14 +1586,14 @@ func resolveTransferRequest(req fileTransferRequest) (int, string, string, strin
 		src := filepath.Clean(filepath.Join(srcDir, cleanName))
 		dest := filepath.Clean(filepath.Join(destDir, cleanName))
 		if !isPathWithin(srcBase, src) || !isPathWithin(destBase, dest) {
-			return 0, "", "", "", "", nil, nil, newFileTransferError(http.StatusForbidden, "路径越权")
+			return 0, "", "", "", "", nil, nil, newFileTransferError(http.StatusForbidden, "Path access denied")
 		}
 		if isSamePath(src, dest) {
-			return 0, "", "", "", "", nil, nil, newFileTransferError(http.StatusBadRequest, "源和目标相同: %s", cleanName)
+			return 0, "", "", "", "", nil, nil, newFileTransferError(http.StatusBadRequest, "Source and destination are the same: %s", cleanName)
 		}
 		if _, err := os.Stat(src); err != nil {
 			if os.IsNotExist(err) {
-				return 0, "", "", "", "", nil, nil, newFileTransferError(http.StatusNotFound, "源文件不存在: %s", cleanName)
+				return 0, "", "", "", "", nil, nil, newFileTransferError(http.StatusNotFound, "Source file not found: %s", cleanName)
 			}
 			return 0, "", "", "", "", nil, nil, err
 		}
@@ -1624,7 +1624,7 @@ func chownTransferredPath(destSiteID int, dest string) error {
 	}
 	site := getWebsiteByID(destSiteID)
 	if site == nil {
-		return fmt.Errorf("目标网站不存在")
+		return fmt.Errorf("Target website not found")
 	}
 	return executor.ChownSitePath(dest, site.WebRoot, site.SystemUser)
 }
@@ -1647,7 +1647,7 @@ func cleanupTransferredItems(items []fileTransferItem) []string {
 			continue
 		}
 		if err := removeFileOrDir(item.dest); err != nil && !os.IsNotExist(err) {
-			log.Printf("跨站操作清理目标失败 dest=%s: %v", item.dest, err)
+			log.Printf("Cross-site operation cleanup failed dest=%s: %v", item.dest, err)
 			failed = append(failed, item.name)
 		}
 	}
@@ -1659,15 +1659,15 @@ func joinItemNames(items []string) string {
 		return ""
 	}
 	if len(items) > 5 {
-		return strings.Join(items[:5], "、") + fmt.Sprintf(" 等 %d 个项目", len(items))
+		return strings.Join(items[:5], ", ") + fmt.Sprintf(" and %d  other items", len(items))
 	}
-	return strings.Join(items, "、")
+	return strings.Join(items, ", ")
 }
 
 func transferSuccessMessage(action string, processed int, skipped []string) string {
-	msg := fmt.Sprintf("已%s %d 个项目", action, processed)
+	msg := fmt.Sprintf("%s %d  other items", action, processed)
 	if len(skipped) > 0 {
-		msg += fmt.Sprintf("，已跳过 %d 个已存在项目", len(skipped))
+		msg += fmt.Sprintf(", skip  %d  filesexisting items", len(skipped))
 	}
 	return msg
 }
@@ -1675,7 +1675,7 @@ func transferSuccessMessage(action string, processed int, skipped []string) stri
 func (h *FileHandler) Move(c *gin.Context) {
 	var req fileTransferRequest
 	if err := c.ShouldBindJSON(&req); err != nil || len(req.Names) == 0 {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("参数错误"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Invalid parameters"))
 		return
 	}
 
@@ -1689,24 +1689,24 @@ func (h *FileHandler) Move(c *gin.Context) {
 		for _, item := range items {
 			if item.conflict {
 				if err := copyFileOrDirWithOverwrite(srcBase, destBase, item.src, item.dest, true); err != nil {
-					log.Printf("移动覆盖失败 src=%s dest=%s: %v", item.src, item.dest, err)
-					c.JSON(http.StatusInternalServerError, models.ErrorResponse("移动失败"))
+					log.Printf("Move overwrite failed src=%s dest=%s: %v", item.src, item.dest, err)
+					c.JSON(http.StatusInternalServerError, models.ErrorResponse("Move failed"))
 					return
 				}
 				if err := removeFileOrDir(item.src); err != nil {
-					log.Printf("移动覆盖后删除源失败 src=%s: %v", item.src, err)
-					c.JSON(http.StatusInternalServerError, models.ErrorResponse("移动未完全完成：目标已更新，但源文件未能删除: "+item.name))
+					log.Printf("Move overwrite source deletion failed src=%s: %v", item.src, err)
+					c.JSON(http.StatusInternalServerError, models.ErrorResponse("Move not fully completed: destination updated, but source file could not be deleted: "+item.name))
 					return
 				}
 			} else {
 				if err := os.Rename(item.src, item.dest); err != nil {
-					log.Printf("移动失败 src=%s dest=%s: %v", item.src, item.dest, err)
-					c.JSON(http.StatusInternalServerError, models.ErrorResponse("移动失败"))
+					log.Printf("Move failed src=%s dest=%s: %v", item.src, item.dest, err)
+					c.JSON(http.StatusInternalServerError, models.ErrorResponse("Move failed"))
 					return
 				}
 			}
 		}
-		c.JSON(http.StatusOK, models.SuccessResponse(gin.H{"message": transferSuccessMessage("移动", len(items), skipped)}))
+		c.JSON(http.StatusOK, models.SuccessResponse(gin.H{"message": transferSuccessMessage("move ", len(items), skipped)}))
 		return
 	}
 
@@ -1714,10 +1714,10 @@ func (h *FileHandler) Move(c *gin.Context) {
 	for _, item := range items {
 		if err := copyFileOrDirWithOverwrite(srcBase, destBase, item.src, item.dest, item.conflict); err != nil {
 			cleanupFailed := cleanupTransferredItems(copied)
-			log.Printf("跨站移动复制失败 src=%s dest=%s: %v", item.src, item.dest, err)
-			msg := "移动失败"
+			log.Printf("Cross-site move Copy failed src=%s dest=%s: %v", item.src, item.dest, err)
+			msg := "Move failed"
 			if len(cleanupFailed) > 0 {
-				msg += "，且目标清理失败: " + joinItemNames(cleanupFailed)
+				msg += ",  and destination cleanup failed: " + joinItemNames(cleanupFailed)
 			}
 			c.JSON(http.StatusInternalServerError, models.ErrorResponse(msg))
 			return
@@ -1725,10 +1725,10 @@ func (h *FileHandler) Move(c *gin.Context) {
 		copied = append(copied, item)
 		if err := chownTransferredPath(destSiteID, item.dest); err != nil {
 			cleanupFailed := cleanupTransferredItems(copied)
-			log.Printf("跨站移动权限修复失败 dest=%s: %v", item.dest, err)
-			msg := "目标权限修复失败"
+			log.Printf("Cross-site move permissions repair failed dest=%s: %v", item.dest, err)
+			msg := "Target permissions repair failed"
 			if len(cleanupFailed) > 0 {
-				msg += "，且目标清理失败: " + joinItemNames(cleanupFailed)
+				msg += ",  and destination cleanup failed: " + joinItemNames(cleanupFailed)
 			}
 			c.JSON(http.StatusInternalServerError, models.ErrorResponse(msg))
 			return
@@ -1738,22 +1738,22 @@ func (h *FileHandler) Move(c *gin.Context) {
 	deleteFailed := []string{}
 	for _, item := range items {
 		if err := removeFileOrDir(item.src); err != nil {
-			log.Printf("跨站移动删除源失败 src=%s: %v", item.src, err)
+			log.Printf("Cross-site move source deletion failed src=%s: %v", item.src, err)
 			deleteFailed = append(deleteFailed, item.name)
 		}
 	}
 	if len(deleteFailed) > 0 {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse("移动未完全完成：目标站点已有文件副本，但源站点文件未能删除: "+joinItemNames(deleteFailed)))
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse("Move not fully completed: target site has file copies, but source site files could not be deleted: "+joinItemNames(deleteFailed)))
 		return
 	}
 
-	c.JSON(http.StatusOK, models.SuccessResponse(gin.H{"message": transferSuccessMessage("移动", len(items), skipped)}))
+	c.JSON(http.StatusOK, models.SuccessResponse(gin.H{"message": transferSuccessMessage("move ", len(items), skipped)}))
 }
 
 func (h *FileHandler) Copy(c *gin.Context) {
 	var req fileTransferRequest
 	if err := c.ShouldBindJSON(&req); err != nil || len(req.Names) == 0 {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("参数错误"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Invalid parameters"))
 		return
 	}
 
@@ -1765,23 +1765,23 @@ func (h *FileHandler) Copy(c *gin.Context) {
 
 	for _, item := range items {
 		if err := copyFileOrDirWithOverwrite(srcBase, destBase, item.src, item.dest, item.conflict); err != nil {
-			log.Printf("复制失败 src=%s dest=%s: %v", item.src, item.dest, err)
-			c.JSON(http.StatusInternalServerError, models.ErrorResponse("复制失败"))
+			log.Printf("Copy failed src=%s dest=%s: %v", item.src, item.dest, err)
+			c.JSON(http.StatusInternalServerError, models.ErrorResponse("Copy failed"))
 			return
 		}
 		if req.SiteID != destSiteID {
 			if err := chownTransferredPath(destSiteID, item.dest); err != nil {
 				if cleanupErr := removeFileOrDir(item.dest); cleanupErr != nil && !os.IsNotExist(cleanupErr) {
-					log.Printf("跨站复制清理目标失败 dest=%s: %v", item.dest, cleanupErr)
+					log.Printf("Cross-site copy cleanup failed dest=%s: %v", item.dest, cleanupErr)
 				}
-				log.Printf("跨站复制权限修复失败 dest=%s: %v", item.dest, err)
-				c.JSON(http.StatusInternalServerError, models.ErrorResponse("目标权限修复失败"))
+				log.Printf("Cross-site copy permissions repair failed dest=%s: %v", item.dest, err)
+				c.JSON(http.StatusInternalServerError, models.ErrorResponse("Target permissions repair failed"))
 				return
 			}
 		}
 	}
 
-	c.JSON(http.StatusOK, models.SuccessResponse(gin.H{"message": transferSuccessMessage("复制", len(items), skipped)}))
+	c.JSON(http.StatusOK, models.SuccessResponse(gin.H{"message": transferSuccessMessage("copy ", len(items), skipped)}))
 }
 
 func copyFileOrDir(srcBase, destBase, src, dest string) error {
@@ -1948,54 +1948,54 @@ func (h *FileHandler) CreateDir(c *gin.Context) {
 		Name string `json:"name"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil || strings.TrimSpace(req.Name) == "" {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("请输入目录名"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Please enter directory name"))
 		return
 	}
 	name := strings.TrimSpace(req.Name)
 	if strings.ContainsAny(name, "/\\") {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("目录名不能包含路径分隔符"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Directory name cannot contain path separators"))
 		return
 	}
 
 	siteID, err := strconv.Atoi(siteIDStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("无效的网站ID"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Invalid website ID"))
 		return
 	}
 
 	basePath, err := fileBasePath(siteID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, models.ErrorResponse("网站不存在"))
+		c.JSON(http.StatusNotFound, models.ErrorResponse("Website not found"))
 		return
 	}
 
 	fullPath := filepath.Join(basePath, relPath, name)
 	fullPath = filepath.Clean(fullPath)
 	if !isPathWithin(basePath, fullPath) {
-		c.JSON(http.StatusForbidden, models.ErrorResponse("路径越权"))
+		c.JSON(http.StatusForbidden, models.ErrorResponse("Path access denied"))
 		return
 	}
 
 	if err := os.MkdirAll(fullPath, 0755); err != nil {
-		log.Printf("创建目录失败 path=%s: %v", fullPath, err)
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse("创建目录失败"))
+		log.Printf("Failed to create directory path=%s: %v", fullPath, err)
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse("Failed to create directory"))
 		return
 	}
 
-	c.JSON(http.StatusOK, models.SuccessResponse(gin.H{"message": "目录创建成功"}))
+	c.JSON(http.StatusOK, models.SuccessResponse(gin.H{"message": "Directory created successfully"}))
 }
 
 func (h *FileHandler) FixPermissions(c *gin.Context) {
 	siteIDStr := c.Query("site_id")
 	siteID, err := strconv.Atoi(siteIDStr)
 	if err != nil || siteID == 0 {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("无效的网站ID"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Invalid website ID"))
 		return
 	}
 
 	site := getWebsiteByID(siteID)
 	if site == nil {
-		c.JSON(http.StatusNotFound, models.ErrorResponse("网站不存在"))
+		c.JSON(http.StatusNotFound, models.ErrorResponse("Website not found"))
 		return
 	}
 
@@ -2018,19 +2018,19 @@ func (h *FileHandler) FixPermissions(c *gin.Context) {
 		return nil
 	})
 	if err != nil {
-		log.Printf("权限修复失败 root=%s: %v", webRoot, err)
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse("权限修复失败"))
+		log.Printf("Permissions repair failed root=%s: %v", webRoot, err)
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse("Permissions repair failed"))
 		return
 	}
 
 	if err := executor.HardenSiteSensitivePermissions(site.Domain, webRoot, site.SystemUser); err != nil {
-		log.Printf("安全权限修复失败 root=%s: %v", webRoot, err)
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse("安全权限修复失败"))
+		log.Printf("Safe Permissions repair failed root=%s: %v", webRoot, err)
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse("Safe Permissions repair failed"))
 		return
 	}
 
 	c.JSON(http.StatusOK, models.SuccessResponse(gin.H{
-		"message":    fmt.Sprintf("权限修复完成，目录 %d 个，文件 %d 个", dirCount, fileCount),
+		"message":    fmt.Sprintf("Permissions repair complete, directories %d  directories,  %d  files", dirCount, fileCount),
 		"dir_count":  dirCount,
 		"file_count": fileCount,
 	}))

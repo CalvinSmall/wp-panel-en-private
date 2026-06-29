@@ -31,7 +31,7 @@ type AuthHandler struct {
 
 func (h *AuthHandler) LoginPage(c *gin.Context) {
 	c.HTML(http.StatusOK, "login.html", gin.H{
-		"Title":        "登录",
+		"Title":        "Login",
 		"RandomSuffix": h.Prefix,
 		"Active":       "login",
 		"AssetPrefix":  "/" + h.Prefix + "/assets",
@@ -42,7 +42,7 @@ func (h *AuthHandler) LoginPage(c *gin.Context) {
 func (h *AuthHandler) Login(c *gin.Context) {
 	var req models.LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("请提供用户名和密码"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Please provide username and password"))
 		return
 	}
 
@@ -52,12 +52,12 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	).Scan(&hash)
 
 	if err != nil {
-		// 防止计时攻击：空跑一次校验
+		// Prevent timing attacks: run a dummy verification
 		bcrypt.CompareHashAndPassword([]byte("$2a$12$vI8aWBnW3fID.ZQ4/zo1G.q1lRps.9cGLcZEiGDMVr5yUP1KUOYTa"), []byte(req.Password))
 		if h.Tracker != nil {
 			h.Tracker.RecordAttempt(c.ClientIP(), "web_login")
 		}
-		c.JSON(http.StatusUnauthorized, models.ErrorResponse("用户名或密码错误"))
+		c.JSON(http.StatusUnauthorized, models.ErrorResponse("Incorrect username or password"))
 		return
 	}
 
@@ -65,7 +65,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		if h.Tracker != nil {
 			h.Tracker.RecordAttempt(c.ClientIP(), "web_login")
 		}
-		c.JSON(http.StatusUnauthorized, models.ErrorResponse("用户名或密码错误"))
+		c.JSON(http.StatusUnauthorized, models.ErrorResponse("Incorrect username or password"))
 		return
 	}
 
@@ -93,7 +93,7 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 func (h *AuthHandler) Check(c *gin.Context) {
 	username, exists := c.Get("session_username")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, models.ErrorResponse("未登录"))
+		c.JSON(http.StatusUnauthorized, models.ErrorResponse("Not logged in"))
 		return
 	}
 	c.JSON(http.StatusOK, models.SuccessResponse(gin.H{
@@ -104,7 +104,7 @@ func (h *AuthHandler) Check(c *gin.Context) {
 func (h *AuthHandler) CSRFToken(c *gin.Context) {
 	token, err := c.Cookie("csrf_token")
 	if err != nil || token == "" {
-		c.JSON(http.StatusOK, models.ErrorResponse("无CSRF token"))
+		c.JSON(http.StatusOK, models.ErrorResponse("No CSRF token"))
 		return
 	}
 	c.JSON(http.StatusOK, models.SuccessResponse(gin.H{

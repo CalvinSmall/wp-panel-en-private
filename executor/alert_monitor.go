@@ -72,8 +72,8 @@ func (m *alertManager) loop() {
 }
 
 func (m *alertManager) runChecks() {
-	// 站点监控的串行 curl 调用可能耗时较长（多站点 + 超时），
-	// 提前到全局锁之外执行，避免阻塞 CPU/内存/磁盘等其他告警规则。
+	// Site monitoring serial curl calls may take a while (multiple sites + timeout),
+	// so run them outside the global lock to avoid blocking CPU/memory/disk and other alert rules.
 	sitePreChecked := false
 	var siteFiring bool
 	var siteMsg string
@@ -114,10 +114,10 @@ func (m *alertManager) runChecks() {
 			r.lastAlertMsg = msg
 			logAlert(r.key, "critical", msg)
 			if hasSMTP {
-				go SendMail("", getPanelTitle()+" 告警 — "+alertLabel(r.key), formatEmailHTML(alertLabel(r.key), msg, getEmailTip(r.key, false), true))
+				go SendMail("", getPanelTitle()+" Alert — "+alertLabel(r.key), formatEmailHTML(alertLabel(r.key), msg, getEmailTip(r.key, false), true))
 			}
 			if hasWebhook {
-				go SendWebhook(getPanelTitle()+" 告警 — "+alertLabel(r.key), msg)
+				go SendWebhook(getPanelTitle()+" Alert — "+alertLabel(r.key), msg)
 			}
 		} else if !firing && r.firing {
 			// Transition: alert → normal
@@ -125,13 +125,13 @@ func (m *alertManager) runChecks() {
 			recoveryDetail := buildRecoveryDetail(r)
 			logAlert(r.key, "info", recoveryDetail)
 			database.GetDB().Exec("UPDATE alert_log SET resolved = 1 WHERE alert_type = ? AND resolved = 0", r.key)
-			// 即时告警（无阈值）直接发送恢复通知，有阈值的等 5 分钟防抖
+			// Immediate alerts (no threshold) send recovery notice directly; thresholded alerts wait 5 min debounce
 			sendRecovery := time.Since(r.lastFired) > 5*time.Minute || r.thresholdDuration <= 0
 			if hasSMTP && sendRecovery {
-				go SendMail("", getPanelTitle()+" 恢复通知", formatEmailHTML(alertLabel(r.key)+" 已恢复正常", recoveryDetail, getEmailTip(r.key, true), false))
+				go SendMail("", getPanelTitle()+" Recovery notice", formatEmailHTML(alertLabel(r.key)+" has returned to normal", recoveryDetail, getEmailTip(r.key, true), false))
 			}
 			if hasWebhook && sendRecovery {
-				go SendWebhook(getPanelTitle()+" 恢复通知", recoveryDetail)
+				go SendWebhook(getPanelTitle()+" Recovery notice", recoveryDetail)
 			}
 		} else if firing && r.firing {
 			r.lastAlertMsg = msg
@@ -140,10 +140,10 @@ func (m *alertManager) runChecks() {
 				r.lastFired = time.Now()
 				logAlert(r.key, "critical", msg)
 				if hasSMTP {
-					go SendMail("", getPanelTitle()+" 告警 — "+alertLabel(r.key)+"（持续中）", formatEmailHTML(alertLabel(r.key)+"（持续中）", msg, getEmailTip(r.key, false), true))
+					go SendMail("", getPanelTitle()+" Alert — "+alertLabel(r.key)+" (ongoing)", formatEmailHTML(alertLabel(r.key)+" (ongoing)", msg, getEmailTip(r.key, false), true))
 				}
 				if hasWebhook {
-					go SendWebhook(getPanelTitle()+" 告警 — "+alertLabel(r.key)+"（持续中）", msg)
+					go SendWebhook(getPanelTitle()+" Alert — "+alertLabel(r.key)+" (ongoing)", msg)
 				}
 			}
 		}
@@ -184,29 +184,29 @@ func isRuleEnabled(key string) bool {
 func alertLabel(key string) string {
 	switch key {
 	case "alert_cpu":
-		return "CPU 高负载"
+		return "CPU high load"
 	case "alert_memory":
-		return "可用内存不足"
+		return "Available memory low"
 	case "alert_disk":
-		return "磁盘空间不足"
+		return "Disk space low"
 	case "alert_service":
-		return "服务进程异常"
+		return "Service process abnormal"
 	case "alert_ssl":
-		return "SSL 证书即将到期"
+		return "SSL certificate expiring soon"
 	case "alert_backup":
-		return "数据库备份失败"
+		return "Database backup failed"
 	case "alert_website_expiry":
-		return "网站即将到期"
+		return "Website expiring soon"
 	case "alert_remote_backup":
-		return "远程备份失败"
+		return "Remote backup failed"
 	case "alert_cron_fail":
-		return "计划任务执行失败"
+		return "Scheduled task execution failed"
 	case "alert_site":
-		return "网站不可用"
+		return "Website unavailable"
 	case "alert_system_update":
-		return "系统有可用更新"
+		return "System updates available"
 	case "alert_panel_update":
-		return "面板有新版本"
+		return "Panel new version available"
 	}
 	return key
 }
@@ -224,56 +224,56 @@ func logAlert(alertType, level, message string) {
 func getEmailTip(key string, isRecovery bool) string {
 	switch key {
 	case "alert_cpu":
-		return "小提示：CPU 持续高负载可能是流量增长或被攻击的信号，建议登录面板查看实时趋势图。"
+		return "Tip: Sustained high CPU may be a sign of traffic growth or attack. Consider logging into the panel to view real-time trend charts."
 	case "alert_memory":
-		return "小提示：内存不足可能是 PHP 进程或 Redis 占用过高，也可能是恶意爬虫大量请求所致，建议登录面板查看访问日志，排查异常流量。"
+		return "Tip: Low memory may be caused by high PHP process or Redis usage, or heavy malicious crawler requests. Consider checking access logs in the panel to investigate abnormal traffic."
 	case "alert_disk":
-		return "小提示：优先清理旧备份文件和日志通常能快速释放大量空间，比升级硬盘更实际。"
+		return "Tip: Cleaning old backup files and logs usually frees up significant space quickly and is more practical than upgrading storage."
 	case "alert_service":
 		if isRecovery {
-			return "小提示：问题解决后建议回顾日志，了解根因有助于预防再次发生。"
+			return "Tip: After resolution, reviewing logs to understand the root cause helps prevent recurrence."
 		}
-		return "小提示：服务会自动尝试重启，若反复告警请登录面板查看对应日志排查根因。"
+		return "Tip: Services will auto-restart. If alerts recur, log into the panel and check the corresponding logs to investigate the root cause."
 	case "alert_ssl":
 		if isRecovery {
-			return "小提示：建议在日历中标注下次到期日，提前 30 天续签更从容。"
+			return "Tip: Consider marking the next expiry date on your calendar. Renewing 30 days in advance gives you more peace of mind."
 		}
-		return "小提示：证书过期会导致浏览器「不安全」警告，影响访客信任和 SEO，建议尽快续签。"
+		return "Tip: An expired certificate causes browser \"Not Secure\" warnings, affecting visitor trust and SEO. Renew as soon as possible."
 	case "alert_backup":
-		return "小提示：养成定期备份网站的好习惯，数据安全有备无患。"
+		return "Tip: Regular website backups are a good habit — data security through preparedness."
 	case "alert_website_expiry":
 		if isRecovery {
-			return "小提示：养成定期备份网站的好习惯，数据安全有备无患。"
+			return "Tip: Regular website backups are a good habit — data security through preparedness."
 		}
-		return "小提示：请及时提醒网站用户续费或备份数据，到期后网站将无法访问。"
+		return "Tip: Please remind website users to renew or back up data promptly. The website will become inaccessible after expiry."
 	case "alert_remote_backup":
-		return "小提示：养成定期备份网站的好习惯，数据安全有备无患。"
+		return "Tip: Regular website backups are a good habit — data security through preparedness."
 	case "alert_cron_fail":
 		if isRecovery {
-			return "小提示：问题解决后建议回顾日志，了解根因有助于预防再次发生。"
+			return "Tip: After resolution, reviewing logs to understand the root cause helps prevent recurrence."
 		}
-		return "小提示：计划任务失败可能是脚本错误或资源不足，建议查看执行日志定位原因。"
+		return "Tip: Scheduled task failures may be due to script errors or insufficient resources. Check execution logs to identify the cause."
 	case "alert_site":
 		if isRecovery {
-			return "小提示：建议确认网站已可正常访问，并将此次故障情况同步给网站用户。"
+			return "Tip: Confirm the website is accessible, and communicate the outage status to website users."
 		}
-		return "小提示：请尽快排查服务器状态、域名解析和网站程序是否正常，避免长时间离线影响用户业务。"
+		return "Tip: Check server status, DNS resolution, and website application health as soon as possible to avoid prolonged downtime affecting user business."
 	case "alert_system_update":
 		if isRecovery {
-			return "小提示：建议定期保持系统更新，这是维护服务器安全最简单有效的方式。"
+			return "Tip: Keeping the system updated regularly is the simplest and most effective way to maintain server security."
 		}
-		return "小提示：建议尽快登录面板设置页执行系统更新。安全更新通常修复已知漏洞，延迟更新会增加被攻击风险。"
+		return "Tip: Log into the panel settings page to perform system updates as soon as possible. Security updates usually fix known vulnerabilities; delaying updates increases attack risk."
 	case "alert_panel_update":
 		if isRecovery {
-			return "小提示：面板已更新后，建议简单检查网站列表、备份、计划任务等关键页面是否正常。"
+			return "Tip: After updating the panel, briefly check key pages such as website list, backups, and scheduled tasks to ensure everything is working normally."
 		}
-		return "小提示：建议及时更新面板，避免跨多个版本升级时累积变更过多，增加升级风险。"
+		return "Tip: Update the panel promptly to avoid accumulating too many changes across multiple version upgrades, which increases upgrade risk."
 	}
 	return ""
 }
 
 func extractDomains(msg string) string {
-	parts := strings.Split(msg, "；")
+	parts := strings.Split(msg, "\uFF1B")
 	var domains []string
 	for _, p := range parts {
 		p = strings.TrimSpace(p)
@@ -284,30 +284,30 @@ func extractDomains(msg string) string {
 			domains = append(domains, p[:idx])
 		}
 	}
-	return strings.Join(domains, "、")
+	return strings.Join(domains, ", ")
 }
 
 func buildRecoveryDetail(r *alertRule) string {
 	if r.key == "alert_site" && r.lastAlertMsg != "" {
 		domains := extractDomains(r.lastAlertMsg)
 		if domains != "" {
-			return domains + " 已恢复正常"
+			return domains + " has returned to normal"
 		}
 	}
 	if r.key == "alert_system_update" {
-		return "系统所有软件包已更新完毕，当前为最新版本"
+		return "All system packages are up to date, currently at the latest version"
 	}
 	if r.key == "alert_panel_update" {
-		return "面板已更新到最新版本"
+		return "Panel has been updated to the latest version"
 	}
-	return alertLabel(r.key) + " 已恢复正常"
+	return alertLabel(r.key) + " has returned to normal"
 }
 
 func formatEmailHTML(title, detail, tip string, isAlert bool) string {
-	icon := "ℹ️"
+	icon := "\u2139\uFE0F"
 	titleColor := "#1976d2"
 	if isAlert {
-		icon = "⚠️"
+		icon = "\u26A0\uFE0F"
 		titleColor = "#d32f2f"
 	}
 	panelTitle := html.EscapeString(getPanelTitle())
@@ -326,7 +326,7 @@ func formatEmailHTML(title, detail, tip string, isAlert bool) string {
 		b.WriteString(`<hr style="border: none; border-top: 1px solid #e0e0e0; margin: 24px 0;">` + "\n")
 		fmt.Fprintf(&b, `<p style="font-size: 13px; line-height: 1.6; color: #888; margin: 0;">%s</p>`+"\n", tip)
 	}
-	fmt.Fprintf(&b, `<p style="font-size: 12px; color: #aaa; margin: 20px 0 0 0;">— 来自 %s 面板</p>`+"\n", panelTitle)
+	fmt.Fprintf(&b, `<p style="font-size: 12px; color: #aaa; margin: 20px 0 0 0;">— From %s Panel</p>`+"\n", panelTitle)
 	b.WriteString(`</body>
 </html>`)
 	return b.String()
@@ -340,7 +340,7 @@ func checkCPU() (bool, string) {
 	db.QueryRow("SELECT cpu_percent, recorded_at FROM monitoring_metrics ORDER BY id DESC LIMIT 1").Scan(&cpu, &ts)
 	v, _ := strconv.ParseFloat(cpu, 64)
 	if v > 80 {
-		return true, fmt.Sprintf("CPU 使用率 %.1f%%（阈值 80%%），于 %s", v, toLocalTime(ts))
+		return true, fmt.Sprintf("CPU usage %.1f%% (threshold 80%%), at %s", v, toLocalTime(ts))
 	}
 	return false, ""
 }
@@ -351,7 +351,7 @@ func checkMemory() (bool, string) {
 	db.QueryRow("SELECT memory_percent, recorded_at FROM monitoring_metrics ORDER BY id DESC LIMIT 1").Scan(&mem, &ts)
 	v, _ := strconv.ParseFloat(mem, 64)
 	if v > 90 {
-		return true, fmt.Sprintf("可用内存低于 10%%（当前使用率 %.1f%%），于 %s", v, toLocalTime(ts))
+		return true, fmt.Sprintf("Available memory below 10%% (current usage %.1f%%), at %s", v, toLocalTime(ts))
 	}
 	return false, ""
 }
@@ -386,7 +386,7 @@ func checkDisk() (bool, string) {
 	useStr := strings.TrimSuffix(fields[4], "%")
 	use, _ := strconv.Atoi(useStr)
 	if use > 90 {
-		return true, fmt.Sprintf("磁盘使用率 %d%%（阈值 90%%），剩余 %s", use, fields[3])
+		return true, fmt.Sprintf("Disk usage %d%% (threshold 90%%), %s remaining", use, fields[3])
 	}
 	return false, ""
 }
@@ -396,19 +396,19 @@ func checkService() (bool, string) {
 	var msgs []string
 	for _, s := range svcs {
 		if !s.Running && !s.Paused && s.Restarts > 0 {
-			msgs = append(msgs, fmt.Sprintf("%s 异常（已自动重启 %d 次，最近: %s）", s.Name, s.Restarts, s.LastIncident))
+			msgs = append(msgs, fmt.Sprintf("%s abnormal (auto-restarted %d times, latest: %s)", s.Name, s.Restarts, s.LastIncident))
 		}
 	}
 	if len(msgs) > 0 {
-		return true, strings.Join(msgs, "；")
+		return true, strings.Join(msgs, "\uFF1B")
 	}
 	return false, ""
 }
 
 func checkSSL() (bool, string) {
 	db := database.GetDB()
-	// 包含最近 7 天内过期的证书，避免已过期证书被静默忽略
-	rows, err := db.Query(`SELECT domain, ssl_expires_at FROM websites WHERE ssl_enabled = 1 AND ssl_expires_at > datetime('now', '-7 days')`)
+	// Include certificates expiring within the last 7 days to avoid silently ignoring already-expired certificates
+	rows, err := db.Query("SELECT domain, ssl_expires_at FROM websites WHERE ssl_enabled = 1 AND ssl_expires_at > datetime('now', '-7 days')")
 	if err != nil {
 		return false, ""
 	}
@@ -424,32 +424,20 @@ func checkSSL() (bool, string) {
 		}
 		days := int(expiresAt.Sub(now).Hours() / 24)
 		if days < 0 {
-			msgs = append(msgs, fmt.Sprintf("%s 证书已过期 %d 天", domain, -days))
+			msgs = append(msgs, fmt.Sprintf("%s certificate expired %d days ago", domain, -days))
 		} else if days <= 14 {
-			msgs = append(msgs, fmt.Sprintf("%s 证书 %d 天后到期", domain, days))
+			msgs = append(msgs, fmt.Sprintf("%s certificate expires in %d days", domain, days))
 		}
 	}
 	if len(msgs) > 0 {
-		return true, strings.Join(msgs, "；")
+		return true, strings.Join(msgs, "\uFF1B")
 	}
 	return false, ""
 }
 
 func checkBackup() (bool, string) {
 	db := database.GetDB()
-	rows, err := db.Query(`SELECT w.domain FROM backup_settings bs
-		JOIN websites w ON w.id = bs.site_id
-		WHERE bs.enabled = 1
-		AND EXISTS (
-			SELECT 1 FROM db_backups b
-			WHERE b.site_id = bs.site_id AND b.auto = 1
-		)
-		AND NOT EXISTS (
-			SELECT 1 FROM db_backups b
-			WHERE b.site_id = bs.site_id AND b.auto = 1
-			AND b.created_at > datetime('now', '-1 day', '-5 minutes')
-		)
-		ORDER BY w.domain`)
+	rows, err := db.Query("SELECT w.domain FROM backup_settings bs JOIN websites w ON w.id = bs.site_id WHERE bs.enabled = 1 AND EXISTS (SELECT 1 FROM db_backups b WHERE b.site_id = bs.site_id AND b.auto = 1) AND NOT EXISTS (SELECT 1 FROM db_backups b WHERE b.site_id = bs.site_id AND b.auto = 1 AND b.created_at > datetime('now', '-1 day', '-5 minutes')) ORDER BY w.domain")
 	if err != nil {
 		return false, ""
 	}
@@ -463,14 +451,14 @@ func checkBackup() (bool, string) {
 		}
 	}
 	if len(domains) > 0 {
-		return true, strings.Join(domains, "、") + " 最近 24 小时内没有成功的自动备份"
+		return true, strings.Join(domains, ", ") + " no successful auto backup in the last 24 hours"
 	}
 	return false, ""
 }
 
 func checkWebsiteExpiry() (bool, string) {
 	db := database.GetDB()
-	rows, err := db.Query(`SELECT domain, expires_at FROM websites WHERE expires_at IS NOT NULL AND expires_at > datetime('now')`)
+	rows, err := db.Query("SELECT domain, expires_at FROM websites WHERE expires_at IS NOT NULL AND expires_at > datetime('now')")
 	if err != nil {
 		return false, ""
 	}
@@ -490,18 +478,17 @@ func checkWebsiteExpiry() (bool, string) {
 		if !milestones[days] {
 			continue
 		}
-		// 检查此域名今天是否已告警过
+		// Check if this domain has already been alerted today
 		var alerted int
-		db.QueryRow(`SELECT COUNT(*) FROM alert_log
-			WHERE alert_type = 'alert_website_expiry' AND message LIKE ? AND created_at > datetime('now', '-24 hours')`,
+		db.QueryRow("SELECT COUNT(*) FROM alert_log WHERE alert_type = 'alert_website_expiry' AND message LIKE ? AND created_at > datetime('now', '-24 hours')",
 			domain+"%").Scan(&alerted)
 		if alerted > 0 {
 			continue
 		}
-		msgs = append(msgs, fmt.Sprintf("%s %d 天后到期", domain, days))
+		msgs = append(msgs, fmt.Sprintf("%s expires in %d days", domain, days))
 	}
 	if len(msgs) > 0 {
-		return true, strings.Join(msgs, "；")
+		return true, strings.Join(msgs, "\uFF1B")
 	}
 	return false, ""
 }
@@ -514,22 +501,18 @@ func checkRemoteBackup() (bool, string) {
 		return false, ""
 	}
 
-	// 检查最近1小时的同步日志是否有失败记录
+	// Check sync logs in the last hour for failure records
 	var failCount int
-	db.QueryRow(`SELECT COUNT(*) FROM operation_logs
-		WHERE operation = '远程备份' AND message LIKE '远程同步失败%'
-		AND created_at > datetime('now', '-1 hour')`).Scan(&failCount)
+	db.QueryRow("SELECT COUNT(*) FROM operation_logs WHERE operation = 'remote backup' AND message LIKE 'remote sync failed%' AND created_at > datetime('now', '-1 hour')").Scan(&failCount)
 	if failCount > 0 {
-		return true, fmt.Sprintf("近1小时内有 %d 次远程备份同步失败", failCount)
+		return true, fmt.Sprintf("%d remote backup sync failure(s) in the last hour", failCount)
 	}
 	return false, ""
 }
 
 func checkCronFail() (bool, string) {
 	db := database.GetDB()
-	rows, err := db.Query(`SELECT name FROM cron_jobs
-		WHERE enabled = 1 AND notify_fail = 1 AND running = 0
-		AND last_status = 'failed' AND last_run_at > datetime('now', '-1 hour')`)
+	rows, err := db.Query("SELECT name FROM cron_jobs WHERE enabled = 1 AND notify_fail = 1 AND running = 0 AND last_status = 'failed' AND last_run_at > datetime('now', '-1 hour')")
 	if err != nil {
 		return false, ""
 	}
@@ -539,11 +522,11 @@ func checkCronFail() (bool, string) {
 	for rows.Next() {
 		var name string
 		if rows.Scan(&name) == nil {
-			names = append(names, "「"+name+"」")
+			names = append(names, "\u300C"+name+"\u300D")
 		}
 	}
 	if len(names) > 0 {
-		return true, "计划任务 " + strings.Join(names, "、") + " 执行失败"
+		return true, "Scheduled task " + strings.Join(names, ", ") + " execution failed"
 	}
 	return false, ""
 }
@@ -556,7 +539,7 @@ var siteFailureCounts = make(map[string]int)
 
 func checkSites() (bool, string) {
 	db := database.GetDB()
-	rows, err := db.Query(`SELECT id, domain, ssl_enabled, monitoring_interval FROM websites WHERE status = 'active' AND monitoring_enabled = 1`)
+	rows, err := db.Query("SELECT id, domain, ssl_enabled, monitoring_interval FROM websites WHERE status = 'active' AND monitoring_enabled = 1")
 	if err != nil {
 		return false, ""
 	}
@@ -621,7 +604,7 @@ func checkSites() (bool, string) {
 
 	if len(toCheck) == 0 {
 		if len(msgs) > 0 {
-			return true, strings.Join(msgs, "；")
+			return true, strings.Join(msgs, "\uFF1B")
 		}
 		return false, ""
 	}
@@ -655,14 +638,14 @@ func checkSites() (bool, string) {
 	for range toCheck {
 		r := <-resultCh
 		if r.err != nil {
-			msg := fmt.Sprintf("%s 无法访问 (%v)", r.domain, r.err)
+			msg := fmt.Sprintf("%s unreachable (%v)", r.domain, r.err)
 			siteFailureMessages[r.id] = msg
 			siteFailureCounts[r.id]++
 			if siteFailureCounts[r.id] >= siteFailureAlertThreshold {
 				msgs = append(msgs, msg)
 			}
 		} else if r.code < 200 || r.code >= 400 {
-			msg := fmt.Sprintf("%s 返回 %d", r.domain, r.code)
+			msg := fmt.Sprintf("%s returned %d", r.domain, r.code)
 			siteFailureMessages[r.id] = msg
 			siteFailureCounts[r.id]++
 			if siteFailureCounts[r.id] >= siteFailureAlertThreshold {
@@ -675,7 +658,7 @@ func checkSites() (bool, string) {
 	}
 
 	if len(msgs) > 0 {
-		return true, strings.Join(msgs, "；")
+		return true, strings.Join(msgs, "\uFF1B")
 	}
 	return false, ""
 }
@@ -714,7 +697,7 @@ func checkSystemUpdate() (bool, string) {
 		names := sysUpdateCache.names
 		sysUpdateCache.mu.Unlock()
 		if len(names) > 0 {
-			return true, fmt.Sprintf("系统有 %d 个可用更新：%s", len(names), strings.Join(names, "、"))
+			return true, fmt.Sprintf("System has %d available update(s): %s", len(names), strings.Join(names, ", "))
 		}
 		return false, ""
 	}
@@ -743,7 +726,7 @@ func checkSystemUpdate() (bool, string) {
 	sysUpdateCache.mu.Unlock()
 
 	if len(names) > 0 {
-		return true, fmt.Sprintf("系统有 %d 个可用更新：%s", len(names), strings.Join(names, "、"))
+		return true, fmt.Sprintf("System has %d available update(s): %s", len(names), strings.Join(names, ", "))
 	}
 	return false, ""
 }
@@ -768,7 +751,7 @@ func checkPanelUpdate() (bool, string) {
 
 	msg := ""
 	if CompareVersions(latest.TagName, panelCurrentVersion) > 0 {
-		msg = fmt.Sprintf("面板有新版本 %s 可用，当前版本 %s。建议尽快到面板设置页更新，避免跨多个版本升级。", latest.TagName, panelCurrentVersion)
+		msg = fmt.Sprintf("Panel new version %s is available, current version %s. Update promptly via panel settings to avoid skipping multiple versions.", latest.TagName, panelCurrentVersion)
 	}
 
 	panelUpdateCache.mu.Lock()

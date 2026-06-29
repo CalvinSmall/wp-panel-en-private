@@ -26,7 +26,7 @@ func SetupRouter(cfg *config.Config, tmplFS embed.FS, staticFS embed.FS, version
 	r.Use(middleware.CustomRecovery())
 	r.Use(middleware.SecurityHeaders())
 
-	// /healthz 必须在 ScanDefense 之前注册，否则本机健康检查会被扫描防御误封
+	// /healthz must be registered before ScanDefense, otherwise local health checks will be falsely blocked by scan defense
 	r.GET("/healthz", func(c *gin.Context) {
 		ip := net.ParseIP(c.ClientIP())
 		if ip == nil || !ip.IsLoopback() {
@@ -86,7 +86,7 @@ func SetupRouter(cfg *config.Config, tmplFS embed.FS, staticFS embed.FS, version
 	panelGroup.Use(middleware.RandomPath(suffix))
 	panelGroup.Use(middleware.BasicAuth(basicAuthChecker))
 
-	// 面板根路径重定向到登录页（解决用户访问面板地址不带 /login 的问题）
+	// Redirect panel root path to Login page (resolves issue of users accessing panel URL without  /login )
 	panelGroup.GET("", func(c *gin.Context) {
 		if c.Request.URL.Path == "/"+suffix {
 			c.Redirect(http.StatusFound, "/"+suffix+"/login")
@@ -99,7 +99,7 @@ func SetupRouter(cfg *config.Config, tmplFS embed.FS, staticFS embed.FS, version
 		middleware.SetCSRFToken(c)
 		csrfToken := middleware.GetCSRFToken(c)
 		c.HTML(http.StatusOK, "login.html", gin.H{
-			"Title":        "登录",
+			"Title":        "Login",
 			"PanelTitle":   handlers.GetPanelTitle(),
 			"RandomSuffix": suffix,
 			"Active":       "login",
@@ -334,17 +334,17 @@ func SetupRouter(cfg *config.Config, tmplFS embed.FS, staticFS embed.FS, version
 }
 
 var pageTitles = map[string]string{
-	"dashboard":      "控制台",
-	"websites":       "网站管理",
-	"ai-diagnostics": "AI 诊断",
-	"cron":           "计划任务",
-	"firewall":       "安全防御",
-	"security":       "安全设置",
-	"files":          "文件管理",
-	"software":       "软件管理",
-	"alert":          "告警通知",
-	"extensions":     "扩展配置",
-	"settings":       "面板设置",
+	"dashboard":      "Dashboard",
+	"websites":       "Site Management",
+	"ai-diagnostics": "AI Diagnostics",
+	"cron":           "Scheduled Tasks",
+	"firewall":       "Security Defense",
+	"security":       "Security Settings",
+	"files":          "File Manager",
+	"software":       "Software",
+	"alert":          "Alert Notifications",
+	"extensions":     "Extensions",
+	"settings":       "Panel Settings",
 }
 
 func pageData(suffix string, active string, contentTpl string, c *gin.Context) gin.H {

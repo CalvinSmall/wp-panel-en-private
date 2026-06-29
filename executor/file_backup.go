@@ -18,11 +18,11 @@ func ExecuteFileBackup(siteID int, mode string, keepCount int) (string, error) {
 		keepCount = 3
 	}
 
-	// 文件备份排队锁：多个站点同时触发时依次执行，避免并发争抢磁盘/CPU
+	// File backup queue lock: execute sequentially when multiple sites trigger simultaneously, preventing concurrent disk/CPU contention
 	lockPath := "/tmp/wp-panel-file-backup.lock"
 	myPID := fmt.Sprintf("%d", os.Getpid())
 	acquired := false
-	for i := 0; i < 1440; i++ { // 最多等2小时（每5秒检查一次）
+	for i := 0; i < 1440; i++ { // Max wait 2 hours (check every 5 seconds)
 		f, err := os.OpenFile(lockPath, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0644)
 		if err == nil {
 			f.WriteString(myPID)
@@ -30,18 +30,18 @@ func ExecuteFileBackup(siteID int, mode string, keepCount int) (string, error) {
 			acquired = true
 			break
 		}
-		// 检查锁持有者是否还活着
+		// Check if lock holder is still alive
 		if stale, _ := os.ReadFile(lockPath); len(stale) > 0 {
 			pid := strings.TrimSpace(string(stale))
 			if _, err := os.Stat("/proc/" + pid); os.IsNotExist(err) {
-				os.Remove(lockPath) // 死锁清理
+				os.Remove(lockPath) // Dead lock cleanup
 				continue
 			}
 		}
 		time.Sleep(5 * time.Second)
 	}
 	if !acquired {
-		return "", fmt.Errorf("等待备份锁超时（有其他备份任务未完成），请稍后重试")
+		return "", fmt.Errorf("backup lock timeout (another backup task in progress), please try again later")
 	}
 	defer os.Remove(lockPath)
 
@@ -49,7 +49,7 @@ func ExecuteFileBackup(siteID int, mode string, keepCount int) (string, error) {
 	var domain, webRoot string
 	err := db.QueryRow("SELECT domain, web_root FROM websites WHERE id = ?", siteID).Scan(&domain, &webRoot)
 	if err != nil {
-		return "", fmt.Errorf("网站不存在")
+		return "", fmt.Errorf("site does not exist")
 	}
 
 	backupDir := filepath.Join("/www/server/panel/backups", domain, "files")
@@ -58,7 +58,7 @@ func ExecuteFileBackup(siteID int, mode string, keepCount int) (string, error) {
 
 	// Check disk space: need at least 1GB free after backup
 	if !checkDiskSpace(backupDir, 1024*1024*1024) {
-		return "", fmt.Errorf("磁盘空间不足，备份取消")
+		return "", fmt.Errorf("insufficient disk space, backup cancelled")
 	}
 
 	ts := time.Now().Format("20060102_150405")
@@ -101,23 +101,23 @@ func ExecuteFileBackup(siteID int, mode string, keepCount int) (string, error) {
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			if len(out) == 0 {
-				return "", fmt.Errorf("全量备份失败: %v", err)
+				return "", fmt.Errorf("full backup failed: %v", err)
 			}
-			return "", fmt.Errorf("全量备份失败: %s", string(out))
+			return "", fmt.Errorf("full backup failed: %s", string(out))
 		}
 	} else {
 		tarName = fmt.Sprintf("file_inc_%s.tar.gz", ts)
 		fullPath = filepath.Join(backupDir, tarName)
 		uploadsDir := filepath.Join(webRoot, "wp-content", "uploads")
 		if _, err := os.Stat(uploadsDir); os.IsNotExist(err) {
-			return "", fmt.Errorf("uploads 目录不存在")
+			return "", fmt.Errorf("uploads directory does not exist")
 		}
 		// Check if there are new files since last backup
 		checkCmd := exec.Command("find", uploadsDir, "-newer", stampFile, "-type", "f")
 		out, _ := checkCmd.Output()
 		if len(out) == 0 {
 			os.WriteFile(stampFile, []byte(time.Now().Format(time.RFC3339)), 0644)
-			return fmt.Sprintf("%s 文件备份跳过: 无新文件", domain), nil
+			return fmt.Sprintf("%s file backup skipped: no new files", domain), nil
 		}
 		script := fmt.Sprintf(
 			`find '%s' -newer '%s' -type f | tar -czf '%s' --ignore-failed-read -T -`,
@@ -126,9 +126,9 @@ func ExecuteFileBackup(siteID int, mode string, keepCount int) (string, error) {
 		out, err = exec.Command("bash", "-c", script).CombinedOutput()
 		if err != nil {
 			if len(out) == 0 {
-				return "", fmt.Errorf("增量备份失败: %v", err)
+				return "", fmt.Errorf("incremental backup failed: %v", err)
 			}
-			return "", fmt.Errorf("增量备份失败: %s", string(out))
+			return "", fmt.Errorf("incremental backup failed: %s", string(out))
 		}
 	}
 
@@ -139,7 +139,7 @@ func ExecuteFileBackup(siteID int, mode string, keepCount int) (string, error) {
 	}
 
 	SyncBackupToRemote(fullPath)
-	logMsg := fmt.Sprintf("%s 文件备份成功: %s (%s)", domain, tarName, map[bool]string{true: "全量", false: "增量"}[isFull])
+	logMsg := fmt.Sprintf("%s file backup successful: %s (%s)", domain, tarName, map[bool]string{true: "full", false: "incremental"}[isFull])
 	appendCronLog(logMsg)
 	return logMsg, nil
 }

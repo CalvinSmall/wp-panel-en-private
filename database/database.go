@@ -25,7 +25,7 @@ func Open(dbPath string) error {
 		return fmt.Errorf("failed to open sqlite: %w", err)
 	}
 
-	// WAL 模式下允许多个连接并行读取，单连接会成为全站瓶颈
+	// WAL mode allows multiple concurrent readers; a single connection would bottleneck the entire site.
 	db.SetMaxOpenConns(4)
 	db.SetMaxIdleConns(2)
 	db.SetConnMaxIdleTime(5 * time.Minute)

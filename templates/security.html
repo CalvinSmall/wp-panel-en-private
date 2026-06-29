@@ -2,218 +2,218 @@
 {{define "security_content"}}
 <div x-data="securitySettings()" x-init="fetchSettings(); fetchCDNGroups()">
     <div class="flex items-center justify-between mb-6">
-        <h2 class="text-xl font-bold text-white">安全设置</h2>
-        <button @click="showHelp = true" class="btn-secondary text-sm">帮助说明</button>
+        <h2 class="text-xl font-bold text-white">Security Settings</h2>
+        <button @click="showHelp = true" class="btn-secondary text-sm">Help & Info</button>
     </div>
 
     <div x-show="showHelp" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/60" @click.self="showHelp = false">
         <div class="bg-gray-800 rounded-lg p-6 max-w-4xl w-full mx-4 shadow-xl max-h-[80vh] overflow-y-auto">
-            <h3 class="text-lg font-bold text-white mb-4">安全设置说明</h3>
+            <h3 class="text-lg font-bold text-white mb-4">Security SettingsGuide</h3>
             <div class="text-sm text-gray-300 space-y-4">
                 <div>
-                    <p class="text-white font-semibold mb-2">Fail2ban 配置项</p>
+                    <p class="text-white font-semibold mb-2">Fail2ban Configuration Items</p>
                     <ul class="space-y-3 ml-2">
                         <li>
-                            <p class="text-blue-400 font-medium">触发阈值（次）</p>
-                            <p>在统计窗口内，单个 IP 触发特征规则的次数达到此值即自动封禁。默认 <span class="text-blue-400">5</span> 次。调低更敏感（容易误封），调高更宽松。具体检测特征规则详见「安全防御」页面。</p>
+                            <p class="text-blue-400 font-medium">Trigger Threshold (hits)</p>
+                            <p>Within the tracking window, an IP reaching this many pattern hits is auto-banned. Default:  <span class="text-blue-400">5</span>  hits. Lower = more sensitive (risk of false positives); higher = more lenient. See Security Defense page for pattern details.</p>
                         </li>
                         <li>
-                            <p class="text-blue-400 font-medium">统计窗口（秒）</p>
-                            <p>用于累计违规次数的时间范围。默认 <span class="text-blue-400">60</span> 秒。与触发阈值配合使用：例如默认配置即"60 秒内违规 5 次则封禁"。窗口越大，累计越容易触发。</p>
+                            <p class="text-blue-400 font-medium">Tracking Window (seconds)</p>
+                            <p>Time range for accumulating violation counts. Default:  <span class="text-blue-400">60</span>  seconds. Works with trigger threshold: e.g., default means "5 violations in 60 seconds triggers ban". Larger window makes it easier to trigger.</p>
                         </li>
                         <li>
-                            <p class="text-blue-400 font-medium">封禁时长（秒）</p>
-                            <p>首次违规触发封禁后，IP 被防火墙拦截的时长。默认 <span class="text-blue-400">600</span> 秒（10 分钟）。到期后 fail2ban 自动解封，但若该 IP 在 24 小时内再次违规，将自动升级为 24 小时封禁。</p>
+                            <p class="text-blue-400 font-medium">Ban Duration (seconds)</p>
+                            <p>How long an IP is blocked after first violation triggers a ban. Default:  <span class="text-blue-400">600</span>  seconds (10 minutes). Fail2ban auto-releases on expiry, but if the IP re-violates within 24 hours, it escalates to a 24-hour ban.</p>
                         </li>
                     </ul>
                 </div>
                 <div>
-                    <p class="text-white font-semibold mb-2">白名单机制</p>
+                    <p class="text-white font-semibold mb-2">Whitelist Mechanism</p>
                     <ul class="space-y-3 ml-2">
                         <li>
-                            <p class="text-blue-400 font-medium">官方白名单</p>
-                            <p>面板自动从以下官方来源拉取最新 IP 段，加入 fail2ban 白名单，防止误封合法爬虫和 CDN 节点：</p>
+                            <p class="text-blue-400 font-medium">Official Whitelist</p>
+                            <p>Panel auto-fetches the latest IP ranges from the following official sources and adds them to the Fail2ban whitelist to prevent blocking legitimate crawlers and CDN nodes:</p>
                             <ul class="list-disc list-inside ml-2 mt-1 space-y-0.5">
-                                <li><span class="text-white">Cloudflare</span> — 全球 CDN 和反向代理 IP 段（ipv4 + ipv6）</li>
-                                <li><span class="text-white">Googlebot</span> — Google 搜索爬虫官方 IP 段</li>
-                                <li><span class="text-white">Bingbot</span> — Bing 搜索爬虫官方 IP 段</li>
+                                <li><span class="text-white">Cloudflare</span>  — global CDN and reverse proxy IP ranges (IPv4 + IPv6)</li>
+                                <li><span class="text-white">Googlebot</span>  — Google search crawler official IP ranges</li>
+                                <li><span class="text-white">Bingbot</span>  — Bing search crawler official IP ranges</li>
                             </ul>
-                            <p class="text-gray-500 mt-1">勾选"每周自动更新"后，系统将在每周一凌晨 4:00 自动重新拉取最新 IP。</p>
+                            <p class="text-gray-500 mt-1">When "Auto-update weekly" is enabled, the system re-fetches the latest IPs every Monday at 4:00 AM.</p>
                         </li>
                         <li>
-                            <p class="text-blue-400 font-medium">自定义白名单</p>
-                            <p>手动添加不会被封禁的 IP 或 IP 段，每行一个。支持 IPv4/IPv6 地址和 CIDR 格式（如 <code>10.0.0.0/8</code>）。自定义白名单不会被官方拉取覆盖。</p>
+                            <p class="text-blue-400 font-medium">Custom Whitelist</p>
+                            <p>Manually add IPs or IP ranges that should never be banned, one per line. Supports IPv4/IPv6 addresses and CIDR format (e.g.  <code>10.0.0.0/8</code>）。Custom Whitelistdoes NOToverwritten by official fetches。</p>
                         </li>
                         <li>
-                            <p class="text-blue-400 font-medium">WordPress 安全日志路径白名单</p>
-                            <p>用于排除搜索引擎、广告平台、站点所有权验证等正常文件。该配置只影响 WordPress 异常访问统计，不影响通用 PHP 网站，不会直接放行或封禁请求。</p>
-                        </li>
-                    </ul>
-                </div>
-                <div>
-                    <p class="text-white font-semibold mb-2">请求频率限制详解</p>
-                    <ul class="space-y-3 ml-2">
-                        <li>
-                            <p class="text-blue-400 font-medium">工作原理：令牌桶算法</p>
-                            <p>系统为每个 IP 维护一个容量等于「突发缓冲」的令牌桶，每秒自动补充 1 个令牌（由请求频率决定）。请求到达时消耗令牌，耗尽后返回 429。<span class="text-green-400">人类浏览有自然停顿（阅读页面），停顿期间桶自动回满</span>；机器人持续不断请求，令牌耗尽后被限制在每秒仅 1 次请求。</p>
-                        </li>
-                        <li>
-                            <p class="text-blue-400 font-medium">请求频率（次/分钟）</p>
-                            <p>控制长期持续速率，即令牌补充速度。默认 <span class="text-blue-400">60</span> 次/分钟（= 1 次/秒）。机器人扫描通常远超此值，因此会在数秒内耗尽令牌桶，几乎所有请求都被返回 429。</p>
-                        </li>
-                        <li>
-                            <p class="text-blue-400 font-medium">突发缓冲（次）</p>
-                            <p>控制令牌桶容量，即页面打开瞬间允许的最大并发请求数。默认 <span class="text-blue-400">300</span> 次，可覆盖 Elementor + 多插件站点（单页 100+ 请求）同时打开 2-3 个标签页的场景。如需同时打开更多标签页，请设置更大值（如 500-600）。非 Elementor / 轻量站点可适当调低至 30-120。</p>
-                            <p class="text-green-400 mt-1">增大此值<span class="text-green-300 font-semibold">不会</span>延迟拦截机器人——机器人被持续速率（1 次/秒）压制，与突发缓冲大小无关，安全防护不削弱。</p>
-                        </li>
-                        <li>
-                            <p class="text-red-400 font-semibold">⚠ 警告：多次返回 429 的 IP 将被 Fail2ban 自动封禁</p>
-                            <p class="text-red-400">429 响应会被 Fail2ban 规则捕获并计入违规次数（与 wp-login 暴力破解等同级处理）。累计触发阈值后将导致该 IP 被防火墙封锁。请确保突发缓冲足够日常使用，避免正常访客误触发 429 而被拉黑。</p>
-                        </li>
-                        <li>
-                            <p class="text-green-400 font-semibold">✓ 提高突发缓冲不影响拦截机器人</p>
-                            <p>机器人的特征是持续不断发请求（无人类浏览停顿），会被「请求频率」死死限制在 1 次/秒，令牌桶耗尽后几乎所有请求都返回 429。提高突发缓冲只会给人类访客更宽松的首屏加载空间，<span class="text-green-400">安全防护能力完全不受影响</span>。真正的限制来自持续速率，而非突发上限。</p>
-                        </li>
-                        <li>
-                            <p class="text-blue-400 font-medium">如何测试配置是否合适</p>
-                            <p>用浏览器无痕窗口打开网站，随机浏览 5-10 个页面（含首页、分类页、文章页）。打开开发者工具（F12）→ Network 标签，观察是否有红色 429 状态码。全部 200/304 即表示配置合理。</p>
+                            <p class="text-blue-400 font-medium">WordPress Security Log Path Whitelist</p>
+                            <p>Excludes normal files from search engines, ad platforms, site ownership verification, etc. This setting only affects WordPress anomaly access statistics, not generic PHP sites, and does not directly allow or block requests.</p>
                         </li>
                     </ul>
                 </div>
                 <div>
-                    <p class="text-white font-semibold mb-2">爬虫限速说明</p>
+                    <p class="text-white font-semibold mb-2">Rate Limiting Details</p>
                     <ul class="space-y-3 ml-2">
                         <li>
-                            <p class="text-blue-400 font-medium">限速范围</p>
-                            <p>爬虫限速默认关闭。开启后，每个站点拥有独立的爬虫限速桶；同一站点内命中的常见 Bot UA 共享该桶，普通浏览器不会进入此限速层。</p>
+                            <p class="text-blue-400 font-medium">How It Works: Token Bucket Algorithm</p>
+                            <p>The system maintains one token bucket per IP, with capacity equal to the burst buffer, refilling 1 token per second (based on request rate). Requests consume tokens; when depleted, returns 429. <span class="text-green-400">Human browsing has natural pauses (reading pages), during which the bucket auto-refills</span>; bots making continuous requests are limited to 1 request/sec once tokens are exhausted.</p>
                         </li>
                         <li>
-                            <p class="text-blue-400 font-medium">搜索引擎豁免</p>
-                            <p>Googlebot/Bingbot 只有在来源 IP 命中官方 IP 段时才豁免爬虫限速。伪装成搜索引擎的请求会进入站点的爬虫限速桶。</p>
+                            <p class="text-blue-400 font-medium">Request Rate (req/min)</p>
+                            <p>Controls the long-term sustained rate, i.e., token refill speed. Default:  <span class="text-blue-400">60</span>  req/min (= 1 req/sec). Bot scans usually far exceed this, depleting the token bucket within seconds — nearly all requests return 429.</p>
                         </li>
                         <li>
-                            <p class="text-blue-400 font-medium">默认识别的 Bot</p>
-                            <p>当前默认匹配 Googlebot、Bingbot、Facebook/Meta（facebookexternalhit、facebook、meta-externalagent）、Twitterbot、LinkedInBot、Slackbot、Discordbot、TelegramBot、SemrushBot、AhrefsBot、MJ12Bot、DotBot，以及 UA 中包含 bot、crawler、spider、scraper、scan 的请求。</p>
+                            <p class="text-blue-400 font-medium">Burst Buffer (hits)</p>
+                            <p>Controls token bucket capacity, i.e., maximum concurrent requests allowed at page open. Default:  <span class="text-blue-400">300</span>  hits, covering Elementor + multi-plugin sites (100+ requests/page) with 2-3 tabs open. For more concurrent tabs, set a larger value (e.g., 500-600). Non-Elementor / light sites can lower to 30-120.</p>
+                            <p class="text-green-400 mt-1">Increasing this value<span class="text-green-300 font-semibold">does NOT</span>delay bot blocking — bots are suppressed by the sustained rate (1 req/sec), independent of burst buffer size. Security is not weakened.</p>
                         </li>
                         <li>
-                            <p class="text-blue-400 font-medium">建议默认值</p>
-                            <p>默认 30 次/分钟、突发 20 次，主要用于压制多 IP 假爬虫持续扫描，降低 WordPress 动态 404 压力。调整后可观察访问日志中 429 数量和正常抓取情况。</p>
+                            <p class="text-red-400 font-semibold">⚠️ Warning: IPs that repeatedly return 429 will be auto-banned by Fail2ban</p>
+                            <p class="text-red-400">429 responses are captured by Fail2ban rules and counted as violations (same level as wp-login brute force). Accumulating to the threshold triggers a firewall ban. Ensure the burst buffer is sufficient for normal use to avoid legitimate visitors accidentally triggering 429 and being blocked.</p>
+                        </li>
+                        <li>
+                            <p class="text-green-400 font-semibold">✓ Increasing burst buffer does not affect bot blocking</p>
+                            <p>Bots are characterized by continuous requests (no human browsing pauses) and are strictly limited to 1 req/sec by the request rate; after token depletion, nearly all requests return 429. Increasing burst buffer only gives human visitors more leeway for initial page load, <span class="text-green-400">security protection is completely unaffected</span>. The real constraint comes from the sustained rate, not the burst ceiling.</p>
+                        </li>
+                        <li>
+                            <p class="text-blue-400 font-medium">How to Test Configuration Suitability</p>
+                            <p>Open the site in a browser incognito window and browse 5-10 random pages (homepage, category, post). Open Developer Tools (F12) → Network tab and check for red 429 status codes. All 200/304 means the configuration is appropriate.</p>
+                        </li>
+                    </ul>
+                </div>
+                <div>
+                    <p class="text-white font-semibold mb-2">Bot Rate Limiting Guide</p>
+                    <ul class="space-y-3 ml-2">
+                        <li>
+                            <p class="text-blue-400 font-medium">Scope</p>
+                            <p>Bot Rate LimitingOff by default. When enabled, each site has its ownBot Rate Limitingbucket；Common bots hitting the same site Bot UA share that bucket，Regular browsersdoes NOTenter this rate limit layer。</p>
+                        </li>
+                        <li>
+                            <p class="text-blue-400 font-medium">Search Engine Exemption</p>
+                            <p>Googlebot/Bingbot are only exempt from bot rate limiting when their source IP matches official IP ranges. Requests impersonating search engines enter the site's bot rate limit bucket.</p>
+                        </li>
+                        <li>
+                            <p class="text-blue-400 font-medium">Default Bot Detection</p>
+                            <p>Currently matches Googlebot, Bingbot, Facebook/Meta (facebookexternalhit, facebook, meta-externalagent), Twitterbot, LinkedInBot, Slackbot, Discordbot, TelegramBot, SemrushBot, AhrefsBot, MJ12Bot, DotBot, and requests with bot, crawler, spider, scraper, or scan in the UA.</p>
+                        </li>
+                        <li>
+                            <p class="text-blue-400 font-medium">Recommended Defaults</p>
+                            <p>Default 30 req/min, burst 20, primarily used to suppress multi-IP fake crawler scanning and reduce WordPress dynamic 404 pressure. After adjusting, monitor 429 counts and normal crawl behavior in access logs.</p>
                         </li>
                     </ul>
                 </div>
             </div>
             <div class="mt-5 text-right">
-                <button @click="showHelp = false" class="btn-primary text-sm">知道了</button>
+                <button @click="showHelp = false" class="btn-primary text-sm">Got it</button>
             </div>
         </div>
     </div>
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-6">
         <div class="card">
-            <h3 class="text-lg font-semibold text-white mb-4">Fail2ban 配置</h3>
+            <h3 class="text-lg font-semibold text-white mb-4">Fail2ban Configuration</h3>
             <form @submit.prevent="save">
                 <div class="mb-4">
-                    <label class="label">触发阈值 (次)</label>
+                    <label class="label">Trigger Threshold (hits)</label>
                     <input type="number" x-model="settings.fail2ban_maxretry" class="input-field" min="1" max="20">
                 </div>
                 <div class="mb-4">
-                    <label class="label">统计窗口 (秒)</label>
+                    <label class="label">Tracking Window (sec)</label>
                     <input type="number" x-model="settings.fail2ban_findtime" class="input-field" min="10" max="3600">
                 </div>
                 <div class="mb-4">
-                    <label class="label">封禁时长 (秒)</label>
+                    <label class="label">Ban Duration (sec)</label>
                     <input type="number" x-model="settings.fail2ban_bantime" class="input-field" min="60" max="86400">
                 </div>
                 <div class="mb-6">
                     <label class="flex items-center space-x-2 cursor-pointer">
                         <input type="checkbox" x-model="settings.auto_whitelist_enabled" class="w-4 h-4 rounded border-gray-600 bg-gray-700 text-blue-600">
-                        <span class="text-gray-300">每周自动更新官方白名单</span>
+                        <span class="text-gray-300">Weekly auto-updateOfficial Whitelist</span>
                     </label>
                 </div>
-                <button type="submit" class="btn-primary">保存设置</button>
+                <button type="submit" class="btn-primary">Save Settings</button>
             </form>
         </div>
 
         <div class="card">
-            <h3 class="text-lg font-semibold text-white mb-4">请求频率限制</h3>
+            <h3 class="text-lg font-semibold text-white mb-4">Request Rate Limiting</h3>
             <form @submit.prevent="saveRateLimit">
                 <div class="mb-4">
                     <label class="flex items-center space-x-2 cursor-pointer">
                         <input type="checkbox" x-model="settings.rate_limit_enabled" class="w-4 h-4 rounded border-gray-600 bg-gray-700 text-blue-600">
-                        <span class="text-gray-300">开启全局限速</span>
+                        <span class="text-gray-300">Enable Global Rate Limiting</span>
                     </label>
-                    <p class="text-xs text-gray-500 mt-1">开启后未登录访客受频率限制，已登录 WordPress 用户自动豁免。触发多次 429 将被 Fail2ban 封禁</p>
+                    <p class="text-xs text-gray-500 mt-1">When enabled, unauthenticated visitors are rate-limited. Logged-in WordPress users are automatically exempt. Repeated 429 triggers will be banned by Fail2ban.</p>
                 </div>
                 <div class="mb-4">
-                    <label class="label">请求频率限制 (次/分钟)</label>
+                    <label class="label">Request Rate Limiting (/)</label>
                     <input type="number" x-model="settings.rate_limit_rpm" class="input-field" min="10" max="600">
-                    <p class="text-xs text-gray-500 mt-1">非 Elementor 等重型页面建议 30-60。Elementor / 多插件站点建议 60-120。调整建议和测试方法详见右上角「帮助说明」</p>
+                    <p class="text-xs text-gray-500 mt-1">For non-Elementor heavy pages, 30-60 is recommended. Elementor / multi-plugin sites:  60-120。See the "Help & Info" button for adjustment and testing guidance.</p>
                 </div>
                 <div class="mb-4">
-                    <label class="label">突发缓冲 (次)</label>
+                    <label class="label">Burst Buffer (hits)</label>
                     <input type="number" x-model="settings.rate_limit_burst" class="input-field" min="5" max="600">
-                    <p class="text-xs text-gray-500 mt-1">页面首屏瞬间并发请求缓冲量。Elementor / 多插件站点建议 150-300，非 Elementor 建议 30-120。调整建议和测试方法详见右上角「帮助说明」</p>
-                    <p class="text-xs text-red-400 mt-1">注意：多次触发 429 的 IP 将被 Fail2ban 自动封禁，请确保预留足够缓冲</p>
+                    <p class="text-xs text-gray-500 mt-1">Concurrent request buffer for initial page load.。Elementor / multi-plugin sites:  150-300，Non- Elementor Recommended 30-120。See the "Help & Info" button for adjustment and testing guidance.</p>
+                    <p class="text-xs text-red-400 mt-1">Note: IPs repeatedly triggering 429 will be auto-banned by Fail2ban; ensure sufficient buffer is reserved.</p>
                 </div>
-                <button type="submit" class="btn-primary">保存限速设置</button>
+                <button type="submit" class="btn-primary">Save Rate Limit Settings</button>
             </form>
         </div>
 
         <div class="card">
-            <h3 class="text-lg font-semibold text-white mb-4">爬虫限速</h3>
+            <h3 class="text-lg font-semibold text-white mb-4">Bot Rate Limiting</h3>
             <form @submit.prevent="saveBotLimit">
                 <div class="mb-4">
                     <label class="flex items-center space-x-2 cursor-pointer">
                         <input type="checkbox" x-model="settings.bot_limit_enabled" class="w-4 h-4 rounded border-gray-600 bg-gray-700 text-blue-600">
-                        <span class="text-gray-300">开启 Bot UA 统一限速</span>
+                        <span class="text-gray-300">Enable Bot UA Unified Rate Limiting</span>
                     </label>
-                    <p class="text-xs text-gray-500 mt-1">默认关闭。开启后，每个站点独立限速；同一站点内常见 Bot UA 共享该站点的限速桶，普通浏览器不受此层影响。</p>
+                    <p class="text-xs text-gray-500 mt-1">Off by default. When enabled, each site has independent rate limits; common Bot UAs share that site's bucket. Regular browsers are unaffected.</p>
                 </div>
                 <div class="mb-4">
-                    <label class="label">Bot 请求频率 (次/分钟)</label>
+                    <label class="label">Bot Request Rate (req/min)</label>
                     <input type="number" x-model="settings.bot_limit_rpm" class="input-field" min="5" max="300">
-                    <p class="text-xs text-gray-500 mt-1">默认 30。用于压制多 IP 假爬虫持续扫站，避免打满 WordPress 动态 404。</p>
+                    <p class="text-xs text-gray-500 mt-1">Default 30. Used to suppress multi-IP fake crawler scanning and prevent overwhelming WordPress dynamic 404.</p>
                 </div>
                 <div class="mb-4">
-                    <label class="label">Bot 突发缓冲 (次)</label>
+                    <label class="label">Bot Burst Buffer (hits)</label>
                     <input type="number" x-model="settings.bot_limit_burst" class="input-field" min="5" max="300">
-                    <p class="text-xs text-gray-500 mt-1">默认 20。Googlebot/Bingbot 仅在来源 IP 属于官方段时豁免；假冒搜索爬虫会进入限速桶。</p>
+                    <p class="text-xs text-gray-500 mt-1">Default 20. Googlebot/Bingbot are only exempt when source IP matches official ranges; fake crawlers enter the rate limit bucket.</p>
                 </div>
-                <button type="submit" class="btn-primary">保存爬虫限速</button>
+                <button type="submit" class="btn-primary">SaveBot Rate Limiting</button>
             </form>
         </div>
         <div class="card">
-            <h3 class="text-lg font-semibold text-white mb-4">白名单管理</h3>
+            <h3 class="text-lg font-semibold text-white mb-4">Whitelist Management</h3>
         <div class="mb-4">
             <div class="flex items-center justify-between mb-2">
-                <label class="label">官方白名单（由面板自动拉取）</label>
-                <button @click="refreshWhitelist" class="text-sm py-1 px-3 rounded" style="background-color: #166534; color: #bbf7d0;">立即拉取</button>
+                <label class="label">Official Whitelist（auto-fetched by panel）</label>
+                <button @click="refreshWhitelist" class="text-sm py-1 px-3 rounded" style="background-color: #166534; color: #bbf7d0;">Fetch Now</button>
             </div>
             <textarea x-model="settings.official_whitelist_ips" class="input-field font-mono text-sm" rows="5" readonly disabled style="opacity: 0.6;"></textarea>
-            <p class="text-gray-500 text-xs mt-1" x-text="'上次更新: ' + (settings.last_whitelist_update || '从未')"></p>
+            <p class="text-gray-500 text-xs mt-1" x-text="'Last updated: ' + (settings.last_whitelist_update || 'Never')"></p>
         </div>
         <div class="mb-4">
-            <label class="label">自定义白名单（不会被官方拉取覆盖）</label>
+            <label class="label">Custom Whitelist（does NOToverwritten by official fetches）</label>
             <textarea x-model="settings.whitelist_ips" class="input-field font-mono text-sm" rows="4" placeholder="1.2.3.4&#10;10.0.0.0/8"></textarea>
         </div>
-        <button @click="saveWhitelist" class="btn-primary">保存自定义白名单</button>
+        <button @click="saveWhitelist" class="btn-primary">SaveCustom Whitelist</button>
         <div class="mt-6 pt-4 border-t border-gray-700/50">
-            <label class="label">WordPress 安全日志路径白名单</label>
+            <label class="label">WordPress Security Log Path Whitelist</label>
             <textarea x-model="settings.wp_security_log_whitelist" class="input-field font-mono text-sm" rows="5" placeholder="/google*.html&#10;/BingSiteAuth.xml&#10;/custom-verify-*.txt"></textarea>
-            <p class="text-xs text-gray-500 mt-1">一行一个路径，可使用 * 通配符；必须以 / 开头。不支持正则，不允许空格、分号、引号或 ..。</p>
-            <button @click="saveWPSecurityLogWhitelist" class="btn-primary mt-3">保存路径白名单</button>
+            <p class="text-xs text-gray-500 mt-1">One path per line; wildcard * allowed. Must start with /. No regex, spaces, semicolons, quotes, or ..</p>
+            <button @click="saveWPSecurityLogWhitelist" class="btn-primary mt-3">Save Path Whitelist</button>
         </div>
     </div>
 
     <div class="card">
         <div class="flex items-center justify-between mb-4">
-            <h3 class="text-lg font-semibold text-white">CDN 真实 IP 配置组</h3>
-            <span class="text-xs text-gray-500">一处填写，多处调用</span>
+            <h3 class="text-lg font-semibold text-white">CDN Real IP Config Groups</h3>
+            <span class="text-xs text-gray-500">Configure once, use everywhere</span>
         </div>
         <div class="rounded border border-blue-900/60 bg-blue-950/30 p-3 mb-4 text-sm text-blue-100">
-            <p class="font-medium text-blue-200">结论：网站启用 CDN Real IP 后，日志分析、异常访问识别和自动封禁会按真实访客 IP 工作。</p>
-            <p class="text-xs text-blue-200/80 mt-1">不会填写 CDN 回源 IP 段时，选择“通用 CDN（兼容模式）”即可。正常 CDN 场景下不会误封 CDN 节点。</p>
-            <p class="text-xs text-blue-200/80 mt-1">能拿到 CDN 回源 IP 段时，再新增配置组并填写，可降低 Header 被伪造的风险。Cloudflare 由系统自动处理。</p>
+            <p class="font-medium text-blue-200">When CDN Real IP is enabled for a site, log analysis, anomaly detection, and auto-banning work based on the real visitor IP.</p>
+            <p class="text-xs text-blue-200/80 mt-1">does NOTfill in CDN origin IP ，choose“Generic CDN（Compatibility Mode）”。In normal CDN scenarios, CDN nodes are not mistakenly blocked.</p>
+            <p class="text-xs text-blue-200/80 mt-1">If you have the CDN origin IP ranges, create a config group and fill them in to reduce header spoofing risk. Cloudflare is handled automatically by the system.</p>
         </div>
         <div class="space-y-2 mb-4">
             <template x-for="g in cdnGroups" :key="g.id">
@@ -222,20 +222,20 @@
                         <div>
                             <div class="text-white font-medium">
                                 <span x-text="g.name"></span>
-                                <span x-show="g.builtin" class="badge-info ml-2">内置</span>
-                                <span x-show="!g.enabled" class="badge-warning ml-2">已禁用</span>
+                                <span x-show="g.builtin" class="badge-info ml-2">Built-in</span>
+                                <span x-show="!g.enabled" class="badge-warning ml-2">Disabled</span>
                             </div>
                             <div class="text-xs text-gray-400 mt-1">
                                 <span x-text="'Header: ' + g.header_name"></span>
                                 <span class="mx-2">|</span>
                                 <span x-text="cdnGroupModeLabel(g)"></span>
                             </div>
-                            <p x-show="g.provider === 'compatible'" class="text-xs text-gray-500 mt-1">不会填写 CDN 回源 IP 段时选择此模式，适合大多数普通 CDN 场景。</p>
-                            <p x-show="g.provider === 'cloudflare'" class="text-xs text-gray-500 mt-1">Cloudflare 真实 IP 已由系统全局自动处理，网站详情页无需选择此组。</p>
+                            <p x-show="g.provider === 'compatible'" class="text-xs text-gray-500 mt-1">choose this mode if CDN origin IP ranges are unknown; suitable for most CDN scenarios.</p>
+                            <p x-show="g.provider === 'cloudflare'" class="text-xs text-gray-500 mt-1">Cloudflare real IP is handled globally by the system; no need to select this group on the site detail page.</p>
                         </div>
                         <div x-show="!g.builtin" class="flex items-center space-x-2">
-                            <button @click="editCDNGroup(g)" class="btn-secondary text-xs py-1 px-2">编辑</button>
-                            <button @click="deleteCDNGroup(g)" class="btn-danger text-xs py-1 px-2">删除</button>
+                            <button @click="editCDNGroup(g)" class="btn-secondary text-xs py-1 px-2">Edit</button>
+                            <button @click="deleteCDNGroup(g)" class="btn-danger text-xs py-1 px-2">Delete</button>
                         </div>
                     </div>
                 </div>
@@ -244,43 +244,43 @@
         <div class="rounded border border-gray-700 p-3">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
-                    <label class="label text-xs">名称</label>
-                    <input x-model="cdnGroupForm.name" class="input-field text-sm" placeholder="阿里云 ESA">
+                    <label class="label text-xs">Name</label>
+                    <input x-model="cdnGroupForm.name" class="input-field text-sm" placeholder="Alibaba Cloud ESA">
                 </div>
                 <div>
-                    <label class="label text-xs">真实 IP Header</label>
+                    <label class="label text-xs">Real IP Header</label>
                     <input x-model="cdnGroupForm.header_name" class="input-field text-sm font-mono" placeholder="X-Forwarded-For">
                 </div>
             </div>
             <div class="mt-3">
-                <label class="label text-xs">可信 CDN 回源 IP/CIDR</label>
-                <textarea x-model="cdnGroupForm.ip_ranges" class="input-field font-mono text-sm" rows="4" placeholder="一行一个，可留空进入兼容模式"></textarea>
-                <p class="text-xs text-gray-500 mt-1">不会填写 CDN 回源 IP 段时可以留空，网站将使用兼容模式；能拿到厂商回源 IP 段时填写在这里，日志和封禁会更严格、更可靠。</p>
+                <label class="label text-xs">Trusted CDN Origin IP/CIDR</label>
+                <textarea x-model="cdnGroupForm.ip_ranges" class="input-field font-mono text-sm" rows="4" placeholder="One per line; leave empty for compatibility mode"></textarea>
+                <p class="text-xs text-gray-500 mt-1">does If you don't know the CDN origin IP ranges, you can leave it blank; the site will use compatibility mode. If you have the provider's origin IP ranges, fill them in here for stricter, more reliable logging and banning.</p>
             </div>
             <div class="mt-3">
-                <label class="label text-xs">备注</label>
-                <input x-model="cdnGroupForm.description" class="input-field text-sm" placeholder="用于说明 CDN 厂商或用途">
+                <label class="label text-xs">Notes</label>
+                <input x-model="cdnGroupForm.description" class="input-field text-sm" placeholder="For describing CDN provider or usage">
             </div>
             <label class="flex items-center space-x-2 text-sm text-gray-300 mt-3">
                 <input type="checkbox" x-model="cdnGroupForm.enabled">
-                <span>启用配置组</span>
+                <span>Enable Config Group</span>
             </label>
             <div class="mt-3 flex items-center space-x-2">
-                <button @click="saveCDNGroup()" :disabled="cdnGroupSaving" class="btn-primary text-sm" x-text="cdnGroupForm.id ? '保存配置组' : '新增配置组'"></button>
-                <button x-show="cdnGroupForm.id" @click="resetCDNGroupForm()" class="btn-secondary text-sm">取消编辑</button>
+                <button @click="saveCDNGroup()" :disabled="cdnGroupSaving" class="btn-primary text-sm" x-text="cdnGroupForm.id ? 'Save Config Group' : 'Create Config Group'"></button>
+                <button x-show="cdnGroupForm.id" @click="resetCDNGroupForm()" class="btn-secondary text-sm">CancelEdit</button>
             </div>
-            <p class="text-xs text-gray-500 mt-2">常见国内 CDN 通常使用 X-Forwarded-For；Header 名只允许英文字母、数字和短横线。</p>
+            <p class="text-xs text-gray-500 mt-2">Common CDN providers typically use X-Forwarded-For; header names only allow letters, digits, and hyphens.</p>
         </div>
     </div>
 
     <div class="card">
-        <h3 class="text-lg font-semibold text-white mb-4">匿名安装统计</h3>
+        <h3 class="text-lg font-semibold text-white mb-4">Anonymous Installation Statistics</h3>
         <div class="mb-4">
             <label class="flex items-center space-x-2 cursor-pointer">
                 <input type="checkbox" x-model="settings.telemetry_enabled" @change="saveTelemetry" class="w-4 h-4 rounded border-gray-600 bg-gray-700 text-blue-600">
-                <span class="text-gray-300">开启匿名安装统计</span>
+                <span class="text-gray-300">EnablingAnonymous Installation Statistics</span>
             </label>
-            <p class="text-xs text-gray-500 mt-2">每天上报一次匿名心跳到 stats.wp-panel.org，内容仅包含机器匿名标识（/etc/machine-id 的 SHA256 哈希）和面板版本号。<strong>不含</strong> IP、域名、网站信息等任何敏感数据。这可以让我们知道 WP Panel 受到了多少用户的支持。</p>
+            <p class="text-xs text-gray-500 mt-2">Reports an anonymous heartbeat once daily to stats.wp-panel.org, containing only an anonymous machine identifier (SHA256 hash of /etc/machine-id) and the panel version. <strong>Does NOT include</strong> IP, domain, site info, or any sensitive data. This helps us know how many users support WP Panel.</p>
         </div>
     </div>
 </div>
@@ -315,13 +315,13 @@ function securitySettings() {
             try {
                 const r = await api('/security/cdn-realip-groups');
                 if (r.success) this.cdnGroups = r.data || [];
-            } catch(e) { showToast('读取 CDN 配置组失败: ' + e.message, 'error'); }
+            } catch(e) { showToast('Failed to read CDN config groups: ' + e.message, 'error'); }
         },
         cdnGroupModeLabel(group) {
-            if ((group.ip_ranges || '').trim()) return '严格模式：已填写可信回源 IP 段';
-            if (group.provider === 'cloudflare') return '系统自动处理：自动拉取 Cloudflare IP';
-            if (group.provider === 'compatible') return '兼容模式：不会填写回源 IP 段时使用';
-            return '兼容模式：未填写可信回源 IP 段';
+            if ((group.ip_ranges || '').trim()) return 'Strict mode: trusted origin IP ranges provided';
+            if (group.provider === 'cloudflare') return 'System-managed: auto-fetches Cloudflare IPs';
+            if (group.provider === 'compatible') return 'Compatibility Mode：does not fill in origin IP ranges.';
+            return 'Compatibility mode: no trusted origin IP ranges provided';
         },
         resetCDNGroupForm() {
             this.cdnGroupForm = { id: null, name: '', header_name: 'X-Forwarded-For', ip_ranges: '', enabled: true, description: '' };
@@ -349,24 +349,24 @@ function securitySettings() {
                 const url = this.cdnGroupForm.id ? '/security/cdn-realip-groups/' + this.cdnGroupForm.id : '/security/cdn-realip-groups';
                 const method = this.cdnGroupForm.id ? 'PUT' : 'POST';
                 const r = await api(url, { method, body });
-                showToast(r.data?.message || 'CDN 配置组已保存', 'success');
+                showToast(r.data?.message || 'CDN config group saved', 'success');
                 this.resetCDNGroupForm();
                 await this.fetchCDNGroups();
             } catch(e) { showToast(e.message, 'error'); }
             finally { this.cdnGroupSaving = false; }
         },
         async deleteCDNGroup(group) {
-            if (!await confirmModal('确认删除 CDN 配置组「' + group.name + '」？已绑定的网站将不再使用该组。')) return;
+            if (!await confirmModal('Confirm deletion of CDN config group "' + group.name + '"? Sites bound to it will no longer use this group.')) return;
             try {
                 const r = await api('/security/cdn-realip-groups/' + group.id, { method: 'DELETE' });
-                showToast(r.data?.message || 'CDN 配置组已删除', 'success');
+                showToast(r.data?.message || 'CDN config group deleted', 'success');
                 await this.fetchCDNGroups();
             } catch(e) { showToast(e.message, 'error'); }
         },
         async save() {
             try {
                 await api('/security/settings', { method: 'PUT', body: this.settings });
-                showToast('设置已保存', 'success');
+                showToast('Settings saved', 'success');
             } catch(e) { showToast(e.message, 'error'); }
         },
         async saveRateLimit() {
@@ -376,7 +376,7 @@ function securitySettings() {
                     rate_limit_rpm: String(this.settings.rate_limit_rpm || 60),
                     rate_limit_burst: String(this.settings.rate_limit_burst || 300),
                 } });
-                showToast('限速设置已保存', 'success');
+                showToast('rate limitSettings saved', 'success');
             } catch(e) { showToast(e.message, 'error'); }
         },
         async saveBotLimit() {
@@ -386,16 +386,16 @@ function securitySettings() {
                     bot_limit_rpm: String(this.settings.bot_limit_rpm || 30),
                     bot_limit_burst: String(this.settings.bot_limit_burst || 20),
                 } });
-                showToast('爬虫限速已保存', 'success');
+                showToast('Bot Rate Limiting saved', 'success');
             } catch(e) { showToast(e.message, 'error'); }
         },
         async saveTelemetry() {
             if (!this.settings.telemetry_enabled) {
                 const confirmed = await confirmModal(
-                    '关闭后将无法统计到您的服务器安装。\n\n' +
-                    '上报内容绝对不包含任何敏感信息——只有机器匿名标识（SHA256 哈希）和面板版本号。' +
-                    '这仅是让我们知道 WP Panel 受到了多少用户的支持。\n\n' +
-                    '确认关闭？'
+                    'Disabling will stop counting your server in installation statistics.\n\n' +
+                    'Reported data contains absolutely no sensitive information — only the anonymous machine identifier (SHA256 hash) and panel version.' +
+                    'This is purely to let us know how many users support WP Panel.\n\n' +
+                    'Confirm disabling?'
                 );
                 if (!confirmed) {
                     this.settings.telemetry_enabled = true;
@@ -406,25 +406,25 @@ function securitySettings() {
                 await api('/security/settings', { method: 'PUT', body: {
                     telemetry_enabled: this.settings.telemetry_enabled ? 'true' : 'false',
                 } });
-                showToast(this.settings.telemetry_enabled ? '匿名统计已开启' : '匿名统计已关闭', 'success');
+                showToast(this.settings.telemetry_enabled ? 'Anonymous stats enabled' : 'Anonymous stats disabled', 'success');
             } catch(e) { showToast(e.message, 'error'); }
         },
         async saveWhitelist() {
             try {
                 await api('/security/settings', { method: 'PUT', body: { whitelist_ips: this.settings.whitelist_ips || '' } });
-                showToast('白名单已更新', 'success');
+                showToast('Whitelist updated', 'success');
             } catch(e) { showToast(e.message, 'error'); }
         },
         async saveWPSecurityLogWhitelist() {
             try {
                 await api('/security/settings', { method: 'PUT', body: { wp_security_log_whitelist: this.settings.wp_security_log_whitelist || '' } });
-                showToast('WordPress 安全日志路径白名单已更新', 'success');
+                showToast('WordPress Security Log Path WhitelistUpdated', 'success');
             } catch(e) { showToast(e.message, 'error'); }
         },
         async refreshWhitelist() {
             try {
                 const r = await api('/security/whitelist/refresh', { method: 'POST' });
-                showToast(r.data?.message || '已触发', 'success');
+                showToast(r.data?.message || 'Triggered', 'success');
                 await this.fetchSettings();
             } catch(e) { showToast(e.message, 'error'); }
         }

@@ -163,11 +163,11 @@ func uniqueRequestDomains(domain string, aliases []string) []string {
 func runSSLPreflight(ctx context.Context, domain string, aliases []string) (sslPreflightResult, error) {
 	domains := uniqueRequestDomains(domain, aliases)
 	if len(domains) == 0 {
-		return sslPreflightResult{}, fmt.Errorf("域名不能为空")
+		return sslPreflightResult{}, fmt.Errorf("Domain cannot be empty")
 	}
 	for _, domain := range domains {
 		if !executor.IsValidDomain(domain) {
-			return sslPreflightResult{}, fmt.Errorf("域名格式不合法: %s", domain)
+			return sslPreflightResult{}, fmt.Errorf("Invalid domain format: %s", domain)
 		}
 	}
 
@@ -176,9 +176,9 @@ func runSSLPreflight(ctx context.Context, domain string, aliases []string) (sslP
 	for _, domain := range domains {
 		records, err := net.DefaultResolver.LookupIPAddr(ctx, domain)
 		if err != nil || len(records) == 0 {
-			msg := domain + " 未解析到 A/AAAA 记录，Let's Encrypt 无法访问验证文件。"
+			msg := domain + "  does not resolve to  A/AAAA  records, Let's Encrypt None cannot access verification files."
 			if ctx.Err() != nil {
-				msg = domain + " DNS 解析超时，请稍后重试或检查 DNS 服务。"
+				msg = domain + " DNS  resolution timed out, please try again later or check  DNS  service."
 			}
 			result.HardWarnings = append(result.HardWarnings, msg)
 			result.Domains = append(result.Domains, sslPreflightDomain{Domain: domain})
@@ -201,10 +201,10 @@ func runSSLPreflight(ctx context.Context, domain string, aliases []string) (sslP
 			}
 		}
 		if !item.Matched {
-			result.Warnings = append(result.Warnings, domain+" 没有解析到当前服务器网卡 IP。如果使用 CDN，请确认 CDN 已正确回源到当前服务器，并且未缓存、重写或拦截 /.well-known/acme-challenge/。")
+			result.Warnings = append(result.Warnings, domain+"  does not resolve to any local server IP IP. If using  CDN, please confirm  CDN is correctly proxying to this server and is not caching, rewriting,  or or blocking  /.well-known/acme-challenge/. ")
 		}
 		if item.HasIPv6 && !item.MatchedIPv6 {
-			result.Warnings = append(result.Warnings, domain+" 存在 AAAA 记录，但未匹配到当前服务器 IPv6。Let's Encrypt 可能访问 IPv6 并导致验证 404，请删除错误 AAAA 记录或配置正确 IPv6。")
+			result.Warnings = append(result.Warnings, domain+"  has  AAAA  records, but does not match current server  IPv6. Let's Encrypt may access  IPv6 causing verification  404, please remove invalid  AAAA records or or configure correct  IPv6. ")
 		}
 		result.Domains = append(result.Domains, item)
 	}
@@ -215,7 +215,7 @@ func runSSLPreflight(ctx context.Context, domain string, aliases []string) (sslP
 func (h *WebsiteHandler) SSLPreflight(c *gin.Context) {
 	var req models.CreateWebsiteRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("参数错误"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Invalid parameters"))
 		return
 	}
 
@@ -234,7 +234,7 @@ func (h *WebsiteHandler) List(c *gin.Context) {
 	db := database.GetDB()
 	rows, err := db.Query("SELECT " + websiteCols + " FROM websites ORDER BY created_at DESC")
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse("查询失败"))
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse("Query failed"))
 		return
 	}
 	defer rows.Close()
@@ -277,7 +277,7 @@ func (h *WebsiteHandler) List(c *gin.Context) {
 func (h *WebsiteHandler) Get(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("无效的网站ID"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Invalid website ID"))
 		return
 	}
 
@@ -285,7 +285,7 @@ func (h *WebsiteHandler) Get(c *gin.Context) {
 		"SELECT "+websiteCols+" FROM websites WHERE id = ?", id,
 	).Scan)
 	if err != nil {
-		c.JSON(http.StatusNotFound, models.ErrorResponse("网站不存在"))
+		c.JSON(http.StatusNotFound, models.ErrorResponse("Website not found"))
 		return
 	}
 	if w.SiteType == "wordpress" {
@@ -327,16 +327,16 @@ func isAliasConflicting(alias string, excludeID int) (bool, string) {
 func (h *WebsiteHandler) Create(c *gin.Context) {
 	var req models.CreateWebsiteRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("参数错误"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Invalid parameters"))
 		return
 	}
 
 	if strings.TrimSpace(req.Domain) == "" {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("域名不能为空"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Domain cannot be empty"))
 		return
 	}
 	if conflict, target := isAliasConflicting(req.Domain, 0); conflict {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("域名 "+req.Domain+" 已被站点 "+target+" 使用"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Domain  "+req.Domain+"  is already used by site  "+target+" "))
 		return
 	}
 
@@ -346,11 +346,11 @@ func (h *WebsiteHandler) Create(c *gin.Context) {
 			continue
 		}
 		if alias == req.Domain {
-			c.JSON(http.StatusBadRequest, models.ErrorResponse("别名不能与主域名相同"))
+			c.JSON(http.StatusBadRequest, models.ErrorResponse("Alias cannot be the same as the primary domain"))
 			return
 		}
 		if conflict, target := isAliasConflicting(alias, 0); conflict {
-			c.JSON(http.StatusBadRequest, models.ErrorResponse("别名 "+alias+" 已被站点 "+target+" 使用"))
+			c.JSON(http.StatusBadRequest, models.ErrorResponse("Alias  "+alias+"  is already used by site  "+target+" "))
 			return
 		}
 	}
@@ -369,9 +369,9 @@ func (h *WebsiteHandler) Create(c *gin.Context) {
 		preflight, preflightErr := runSSLPreflight(ctx, req.Domain, req.Aliases)
 		cancel()
 		if preflightErr != nil {
-			log.Printf("SSL 预检跳过 domain=%s: %v", req.Domain, preflightErr)
+			log.Printf("SSL preflight skipped domain=%s: %v", req.Domain, preflightErr)
 		} else if !preflight.OK {
-			log.Printf("SSL 预检风险 domain=%s hard=%v warnings=%v", req.Domain, preflight.HardWarnings, preflight.Warnings)
+			log.Printf("SSL preflight risk domain=%s hard=%v warnings=%v", req.Domain, preflight.HardWarnings, preflight.Warnings)
 		}
 	}
 
@@ -401,17 +401,17 @@ func (h *WebsiteHandler) Create(c *gin.Context) {
 func (h *WebsiteHandler) SetDocumentRoot(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("无效的网站ID"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Invalid website ID"))
 		return
 	}
 
 	site := getWebsiteByID(id)
 	if site == nil {
-		c.JSON(http.StatusNotFound, models.ErrorResponse("网站不存在"))
+		c.JSON(http.StatusNotFound, models.ErrorResponse("Website not found"))
 		return
 	}
 	if site.SiteType != "php" {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("只有通用 PHP 网站支持修改 Web 入口目录"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Only generic PHP sites support modifying the web document root directory"))
 		return
 	}
 
@@ -419,7 +419,7 @@ func (h *WebsiteHandler) SetDocumentRoot(c *gin.Context) {
 		DocumentRootSubdir string `json:"document_root_subdir"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("参数错误"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Invalid parameters"))
 		return
 	}
 
@@ -443,13 +443,13 @@ func (h *WebsiteHandler) SetDocumentRoot(c *gin.Context) {
 func (h *WebsiteHandler) Delete(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("无效的网站ID"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Invalid website ID"))
 		return
 	}
 
 	site := getWebsiteByID(id)
 	if site == nil {
-		c.JSON(http.StatusNotFound, models.ErrorResponse("网站不存在"))
+		c.JSON(http.StatusNotFound, models.ErrorResponse("Website not found"))
 		return
 	}
 
@@ -466,19 +466,19 @@ func (h *WebsiteHandler) Delete(c *gin.Context) {
 func (h *WebsiteHandler) ToggleStatus(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("无效的网站ID"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Invalid website ID"))
 		return
 	}
 
 	var req models.UpdateWebsiteStatusRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("参数错误"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Invalid parameters"))
 		return
 	}
 
 	site := getWebsiteByID(id)
 	if site == nil {
-		c.JSON(http.StatusNotFound, models.ErrorResponse("网站不存在"))
+		c.JSON(http.StatusNotFound, models.ErrorResponse("Website not found"))
 		return
 	}
 
@@ -489,7 +489,7 @@ func (h *WebsiteHandler) ToggleStatus(c *gin.Context) {
 	case "enable":
 		taskType = executor.TaskEnableSite
 	default:
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("无效操作"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Invalid operation"))
 		return
 	}
 
@@ -512,13 +512,13 @@ func (h *WebsiteHandler) ToggleStatus(c *gin.Context) {
 func (h *WebsiteHandler) EnableSSL(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("无效的网站ID"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Invalid website ID"))
 		return
 	}
 
 	site := getWebsiteByID(id)
 	if site == nil {
-		c.JSON(http.StatusNotFound, models.ErrorResponse("网站不存在"))
+		c.JSON(http.StatusNotFound, models.ErrorResponse("Website not found"))
 		return
 	}
 
@@ -528,12 +528,12 @@ func (h *WebsiteHandler) EnableSSL(c *gin.Context) {
 		PrivateKey  string `json:"private_key"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("参数错误"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Invalid parameters"))
 		return
 	}
 
 	if req.Mode == "manual" && (strings.TrimSpace(req.Certificate) == "" || strings.TrimSpace(req.PrivateKey) == "") {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("手动模式需要填写证书内容和私钥"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Manual mode requires certificate content and private key"))
 		return
 	}
 
@@ -551,18 +551,18 @@ func (h *WebsiteHandler) EnableSSL(c *gin.Context) {
 func (h *WebsiteHandler) RemoveSSL(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("无效的网站ID"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Invalid website ID"))
 		return
 	}
 
 	site := getWebsiteByID(id)
 	if site == nil {
-		c.JSON(http.StatusNotFound, models.ErrorResponse("网站不存在"))
+		c.JSON(http.StatusNotFound, models.ErrorResponse("Website not found"))
 		return
 	}
 
 	if !site.SSLEnabled {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("该网站未启用SSL"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("This siteSSL not enabled"))
 		return
 	}
 
@@ -578,17 +578,17 @@ func (h *WebsiteHandler) RemoveSSL(c *gin.Context) {
 func (h *WebsiteHandler) DownloadSSLPackage(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("无效的网站ID"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Invalid website ID"))
 		return
 	}
 
 	site := getWebsiteByID(id)
 	if site == nil {
-		c.JSON(http.StatusNotFound, models.ErrorResponse("网站不存在"))
+		c.JSON(http.StatusNotFound, models.ErrorResponse("Website not found"))
 		return
 	}
 	if !site.SSLEnabled {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("该网站未启用SSL"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("This siteSSL not enabled"))
 		return
 	}
 
@@ -607,13 +607,13 @@ func (h *WebsiteHandler) DownloadSSLPackage(c *gin.Context) {
 func (h *WebsiteHandler) SetSSLExport(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("无效的网站ID"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Invalid website ID"))
 		return
 	}
 
 	site := getWebsiteByID(id)
 	if site == nil {
-		c.JSON(http.StatusNotFound, models.ErrorResponse("网站不存在"))
+		c.JSON(http.StatusNotFound, models.ErrorResponse("Website not found"))
 		return
 	}
 
@@ -621,7 +621,7 @@ func (h *WebsiteHandler) SetSSLExport(c *gin.Context) {
 		Enabled bool `json:"enabled"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("参数错误"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Invalid parameters"))
 		return
 	}
 
@@ -633,11 +633,11 @@ func (h *WebsiteHandler) SetSSLExport(c *gin.Context) {
 		`UPDATE websites SET ssl_export_enabled = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
 		enabled, site.ID,
 	); err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse("保存 SSL 证书导出权限失败"))
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse("Failed to save SSL certificate export permissions"))
 		return
 	}
 
-	c.JSON(http.StatusOK, models.SuccessResponse(gin.H{"message": "SSL 证书导出权限已保存"}))
+	c.JSON(http.StatusOK, models.SuccessResponse(gin.H{"message": "SSL certificate export permissions saved"}))
 }
 
 type sslDownloadError struct {
@@ -662,13 +662,13 @@ func newSSLDownloadError(status int, message string) error {
 
 func buildSSLCertificatePackage(site *models.Website) ([]byte, string, error) {
 	if site == nil {
-		return nil, "", newSSLDownloadError(http.StatusNotFound, "网站不存在")
+		return nil, "", newSSLDownloadError(http.StatusNotFound, "Website not found")
 	}
 	if config.AppConfig == nil || strings.TrimSpace(config.AppConfig.Paths.Certificates) == "" {
-		return nil, "", fmt.Errorf("证书目录未配置")
+		return nil, "", fmt.Errorf("Certificate directory not configured")
 	}
 	if !executor.IsValidDomain(site.Domain) {
-		return nil, "", newSSLDownloadError(http.StatusBadRequest, "网站域名格式不合法")
+		return nil, "", newSSLDownloadError(http.StatusBadRequest, "Invalid website domain format")
 	}
 
 	certDir := filepath.Join(config.AppConfig.Paths.Certificates, site.Domain)
@@ -676,7 +676,7 @@ func buildSSLCertificatePackage(site *models.Website) ([]byte, string, error) {
 	keyPath := filepath.Join(certDir, "privkey.pem")
 	if !sslPathWithin(config.AppConfig.Paths.Certificates, certPath) ||
 		!sslPathWithin(config.AppConfig.Paths.Certificates, keyPath) {
-		return nil, "", newSSLDownloadError(http.StatusForbidden, "证书路径无效")
+		return nil, "", newSSLDownloadError(http.StatusForbidden, "Invalid certificate path")
 	}
 
 	certData, err := readSSLDownloadFile(certPath)
@@ -713,11 +713,11 @@ func buildSSLCertificatePackage(site *models.Website) ([]byte, string, error) {
 func readSSLDownloadFile(path string) ([]byte, error) {
 	info, err := os.Stat(path)
 	if err != nil || info.IsDir() || !info.Mode().IsRegular() {
-		return nil, newSSLDownloadError(http.StatusNotFound, "证书文件不存在，请重新申请证书")
+		return nil, newSSLDownloadError(http.StatusNotFound, "Certificate File not found, please re-applyCertificate ")
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, newSSLDownloadError(http.StatusNotFound, "证书文件不存在，请重新申请证书")
+		return nil, newSSLDownloadError(http.StatusNotFound, "Certificate File not found, please re-applyCertificate ")
 	}
 	return data, nil
 }
@@ -752,47 +752,47 @@ func addZipFile(zw *zip.Writer, name string, data []byte) error {
 func sslCertificatePackageReadme(site *models.Website) string {
 	aliases := strings.TrimSpace(site.Aliases)
 	if aliases == "" {
-		aliases = "无"
+		aliases = "None"
 	}
-	expiresAt := "未知"
+	expiresAt := "Unknown"
 	if site.SSLExpiresAt != nil {
 		expiresAt = site.SSLExpiresAt.Format("2006-01-02")
 	}
 
-	return fmt.Sprintf(`WP Panel SSL 证书包
+	return fmt.Sprintf(`WP Panel SSL Certificate Package
 
-站点域名：%s
-附加域名：
+Site domain: %s
+Additional domains: 
 %s
-证书到期：%s
+Certificate expires: %s
 
-文件说明：
-- fullchain.pem：完整证书链。上传到 CDN 后台的“证书”或“公钥”字段。
-- privkey.pem：私钥。上传到 CDN 后台的“私钥”字段。
+File descriptions: 
+- fullchain.pem: Full certificate chain. Upload to the CDN dashboard "Certificate" or "Public Key" field.
+- privkey.pem: Private key. Upload to the CDN dashboard "Private Key" field.
 
-阿里云 CDN 自定义上传时，通常选择“自定义上传（证书+私钥）”：
-- 证书（公钥）：填写 fullchain.pem 内容。
-- 私钥：填写 privkey.pem 内容。
+For Alibaba Cloud CDN custom upload, usually select "Custom Upload (Certificate + Private Key)":
+- Certificate (Public Key): Fill in fullchain.pem content.
+- Private Key: Fill in privkey.pem content.
 
-注意事项：
-- 私钥是敏感信息，请勿发送给无关人员，也不要上传到不可信位置。
-- CDN 侧不会自动同步源站证书。面板续期后，需要重新下载证书包并上传到 CDN。
-- 如果同一站点有多个 CDN 加速域名，例如主域名和 www 域名，需要在 CDN 后台分别更新。
+Notes:
+- Private keys are sensitive, do not share withNoneunrelated parties or upload to untrusted locations. 
+- CDN does not auto-sync source certificate. After panel renewal, re-download the certificate package and upload to CDN.
+- If a site has multiple CDN acceleration domains (e.g. main domain and www), update each in the CDN dashboard separately.
 `, site.Domain, aliases, expiresAt)
 }
 
 func sslCertificateExportPayload(site *models.Website) (gin.H, error) {
 	if site == nil {
-		return nil, newSSLDownloadError(http.StatusNotFound, "网站不存在")
+		return nil, newSSLDownloadError(http.StatusNotFound, "Website not found")
 	}
 	if !site.SSLEnabled {
-		return nil, newSSLDownloadError(http.StatusBadRequest, "该网站未启用SSL")
+		return nil, newSSLDownloadError(http.StatusBadRequest, "This siteSSL not enabled")
 	}
 	if config.AppConfig == nil || strings.TrimSpace(config.AppConfig.Paths.Certificates) == "" {
-		return nil, fmt.Errorf("证书目录未配置")
+		return nil, fmt.Errorf("Certificate directory not configured")
 	}
 	if !executor.IsValidDomain(site.Domain) {
-		return nil, newSSLDownloadError(http.StatusBadRequest, "网站域名格式不合法")
+		return nil, newSSLDownloadError(http.StatusBadRequest, "Invalid website domain format")
 	}
 
 	certDir := filepath.Join(config.AppConfig.Paths.Certificates, site.Domain)
@@ -800,7 +800,7 @@ func sslCertificateExportPayload(site *models.Website) (gin.H, error) {
 	keyPath := filepath.Join(certDir, "privkey.pem")
 	if !sslPathWithin(config.AppConfig.Paths.Certificates, certPath) ||
 		!sslPathWithin(config.AppConfig.Paths.Certificates, keyPath) {
-		return nil, newSSLDownloadError(http.StatusForbidden, "证书路径无效")
+		return nil, newSSLDownloadError(http.StatusForbidden, "Invalid certificate path")
 	}
 	certData, err := readSSLDownloadFile(certPath)
 	if err != nil {
@@ -831,13 +831,13 @@ func sslCertificateExportPayload(site *models.Website) (gin.H, error) {
 func (h *WebsiteHandler) UpdateDomains(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("无效的网站ID"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Invalid website ID"))
 		return
 	}
 
 	site := getWebsiteByID(id)
 	if site == nil {
-		c.JSON(http.StatusNotFound, models.ErrorResponse("网站不存在"))
+		c.JSON(http.StatusNotFound, models.ErrorResponse("Website not found"))
 		return
 	}
 
@@ -846,7 +846,7 @@ func (h *WebsiteHandler) UpdateDomains(c *gin.Context) {
 		Aliases   []string `json:"aliases"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("参数错误"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Invalid parameters"))
 		return
 	}
 
@@ -857,7 +857,7 @@ func (h *WebsiteHandler) UpdateDomains(c *gin.Context) {
 
 	if targetDomain != site.Domain {
 		if conflict, existing := isAliasConflicting(targetDomain, site.ID); conflict {
-			c.JSON(http.StatusBadRequest, models.ErrorResponse("域名 "+targetDomain+" 已被站点 "+existing+" 使用"))
+			c.JSON(http.StatusBadRequest, models.ErrorResponse("Domain  "+targetDomain+"  is already used by site  "+existing+" "))
 			return
 		}
 	}
@@ -868,11 +868,11 @@ func (h *WebsiteHandler) UpdateDomains(c *gin.Context) {
 			continue
 		}
 		if alias == targetDomain {
-			c.JSON(http.StatusBadRequest, models.ErrorResponse("别名不能与主域名相同"))
+			c.JSON(http.StatusBadRequest, models.ErrorResponse("Alias cannot be the same as the primary domain"))
 			return
 		}
 		if conflict, target := isAliasConflicting(alias, site.ID); conflict {
-			c.JSON(http.StatusBadRequest, models.ErrorResponse("别名 "+alias+" 已被站点 "+target+" 使用"))
+			c.JSON(http.StatusBadRequest, models.ErrorResponse("Alias  "+alias+"  is already used by site  "+target+" "))
 			return
 		}
 	}
@@ -891,13 +891,13 @@ func (h *WebsiteHandler) UpdateDomains(c *gin.Context) {
 func (h *WebsiteHandler) ChangeDBPassword(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("无效的网站ID"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Invalid website ID"))
 		return
 	}
 
 	site := getWebsiteByID(id)
 	if site == nil {
-		c.JSON(http.StatusNotFound, models.ErrorResponse("网站不存在"))
+		c.JSON(http.StatusNotFound, models.ErrorResponse("Website not found"))
 		return
 	}
 
@@ -905,7 +905,7 @@ func (h *WebsiteHandler) ChangeDBPassword(c *gin.Context) {
 		NewPassword string `json:"new_password"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("参数错误"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Invalid parameters"))
 		return
 	}
 
@@ -923,13 +923,13 @@ func (h *WebsiteHandler) ChangeDBPassword(c *gin.Context) {
 func (h *WebsiteHandler) FixWPConfig(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("无效的网站ID"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Invalid website ID"))
 		return
 	}
 
 	site := getWebsiteByID(id)
 	if site == nil {
-		c.JSON(http.StatusNotFound, models.ErrorResponse("网站不存在"))
+		c.JSON(http.StatusNotFound, models.ErrorResponse("Website not found"))
 		return
 	}
 
@@ -939,7 +939,7 @@ func (h *WebsiteHandler) FixWPConfig(c *gin.Context) {
 	c.ShouldBindJSON(&req)
 	req.TablePrefix = strings.TrimSpace(req.TablePrefix)
 	if req.TablePrefix != "" && !executor.IsValidWPTablePrefix(req.TablePrefix) {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("表前缀只能包含字母、数字和下划线，且长度不能超过 56 个字符"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Table prefix can only contain letters, numbers, and underscores, and must not exceed 56 characters"))
 		return
 	}
 
@@ -948,9 +948,9 @@ func (h *WebsiteHandler) FixWPConfig(c *gin.Context) {
 		return
 	}
 
-	msg := "wp-config.php 数据库名和用户名已更新"
+	msg := "wp-config.php database name and username updated"
 	if req.TablePrefix != "" {
-		msg = "wp-config.php 数据库名、用户名和表前缀已更新"
+		msg = "wp-config.php database name, username, and table prefix updated"
 	}
 
 	c.JSON(http.StatusOK, models.SuccessResponse(gin.H{"message": msg}))
@@ -959,29 +959,29 @@ func (h *WebsiteHandler) FixWPConfig(c *gin.Context) {
 func (h *WebsiteHandler) DetectDBTablePrefix(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("无效的网站ID"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Invalid website ID"))
 		return
 	}
 
 	site := getWebsiteByID(id)
 	if site == nil {
-		c.JSON(http.StatusNotFound, models.ErrorResponse("网站不存在"))
+		c.JSON(http.StatusNotFound, models.ErrorResponse("Website not found"))
 		return
 	}
 
 	if site.SiteType != "wordpress" {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("仅 WordPress 站点支持此功能"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Only WordPress sites support this feature"))
 		return
 	}
 
 	cfg := config.AppConfig
 	prefix, candidates, err := executor.DetectDBTablePrefix(site.DBName, cfg)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse("检测失败: "+err.Error()))
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse("Detection failed: "+err.Error()))
 		return
 	}
 
-	// 如果 wp-config.php 中的前缀存在于候选列表中，优先推荐
+	// If the prefix in wp-config.php exists in the candidate list, prioritize it
 	if site.WebRoot != "" {
 		if configPrefix, err := executor.ReadWPTablePrefix(site.WebRoot); err == nil {
 			for _, c := range candidates {
@@ -1002,18 +1002,18 @@ func (h *WebsiteHandler) DetectDBTablePrefix(c *gin.Context) {
 func (h *WebsiteHandler) GetWPSiteURLs(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("无效的网站ID"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Invalid website ID"))
 		return
 	}
 
 	site := getWebsiteByID(id)
 	if site == nil {
-		c.JSON(http.StatusNotFound, models.ErrorResponse("网站不存在"))
+		c.JSON(http.StatusNotFound, models.ErrorResponse("Website not found"))
 		return
 	}
 
 	if site.SiteType != "wordpress" {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("仅 WordPress 站点支持此功能"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Only WordPress sites support this feature"))
 		return
 	}
 
@@ -1023,14 +1023,14 @@ func (h *WebsiteHandler) GetWPSiteURLs(c *gin.Context) {
 		}
 	}
 	if site.TablePrefix == "" {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("未检测到表前缀，请先同步数据库信息"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Table prefix not detected, please sync database info first"))
 		return
 	}
 
 	cfg := config.AppConfig
 	siteURL, homeURL, err := executor.ReadWPSiteURLs(site.DBName, site.TablePrefix, cfg)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse("读取失败: "+err.Error()))
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse("Read failed: "+err.Error()))
 		return
 	}
 
@@ -1043,18 +1043,18 @@ func (h *WebsiteHandler) GetWPSiteURLs(c *gin.Context) {
 func (h *WebsiteHandler) UpdateWPSiteURLs(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("无效的网站ID"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Invalid website ID"))
 		return
 	}
 
 	site := getWebsiteByID(id)
 	if site == nil {
-		c.JSON(http.StatusNotFound, models.ErrorResponse("网站不存在"))
+		c.JSON(http.StatusNotFound, models.ErrorResponse("Website not found"))
 		return
 	}
 
 	if site.SiteType != "wordpress" {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("仅 WordPress 站点支持此功能"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Only WordPress sites support this feature"))
 		return
 	}
 
@@ -1063,21 +1063,21 @@ func (h *WebsiteHandler) UpdateWPSiteURLs(c *gin.Context) {
 		HomeURL string `json:"home"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("参数错误"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Invalid parameters"))
 		return
 	}
 	req.SiteURL, err = normalizeWPSiteURL(req.SiteURL)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("siteurl 格式不正确，请使用 http:// 或 https:// 开头的完整 URL"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("siteurl format is invalid, please  http://  or  https://  starting with full  URL"))
 		return
 	}
 	req.HomeURL, err = normalizeWPSiteURL(req.HomeURL)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("home 格式不正确，请使用 http:// 或 https:// 开头的完整 URL"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("home format is invalid, please  http://  or  https://  starting with full  URL"))
 		return
 	}
 	if req.SiteURL == "" && req.HomeURL == "" {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("至少填写一个 URL"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Please fill in at least one URL"))
 		return
 	}
 
@@ -1087,42 +1087,42 @@ func (h *WebsiteHandler) UpdateWPSiteURLs(c *gin.Context) {
 		}
 	}
 	if site.TablePrefix == "" {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("未检测到表前缀，请先同步数据库信息"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Table prefix not detected, please sync database info first"))
 		return
 	}
 
 	cfg := config.AppConfig
 	if err := executor.UpdateWPSiteURLs(site.DBName, site.TablePrefix, req.SiteURL, req.HomeURL, cfg); err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse("更新失败: "+err.Error()))
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse("Update failed: "+err.Error()))
 		return
 	}
 
-	// 异步清理 FastCGI 和 Redis Object Cache，避免旧缓存继续返回旧站点 URL。
+	// Asynchronously clear FastCGI and Redis Object Cache to prevent old cache from returning stale site URLs.
 	executor.GoSafe(func() { executor.ClearWPSiteRuntimeCaches(site.ID, site.Domain, site.WebRoot) })
 
-	c.JSON(http.StatusOK, models.SuccessResponse(gin.H{"message": "站点 URL 已更新"}))
+	c.JSON(http.StatusOK, models.SuccessResponse(gin.H{"message": "Site URL updated"}))
 }
 
 func (h *WebsiteHandler) ViewLogs(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("无效的网站ID"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Invalid website ID"))
 		return
 	}
 
 	site := getWebsiteByID(id)
 	if site == nil {
-		c.JSON(http.StatusNotFound, models.ErrorResponse("网站不存在"))
+		c.JSON(http.StatusNotFound, models.ErrorResponse("Website not found"))
 		return
 	}
 
 	logType := c.Query("type")
 	if logType != "error" && logType != "access" && logType != "security" {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("日志类型无效，仅支持 error、access 或 security"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Log typeNonevalid, only  error, access  or  security"))
 		return
 	}
 	if logType == "security" && site.SiteType != "wordpress" {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("仅 WordPress 站点支持安全日志"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Only WordPress sites support security logs"))
 		return
 	}
 
@@ -1143,18 +1143,18 @@ func (h *WebsiteHandler) ViewLogs(c *gin.Context) {
 
 	cleanPath := filepath.Clean(logFile)
 	if !strings.HasPrefix(cleanPath, filepath.Clean(site.LogDir)) {
-		c.JSON(http.StatusForbidden, models.ErrorResponse("禁止访问该路径"))
+		c.JSON(http.StatusForbidden, models.ErrorResponse("Access to this path is forbidden"))
 		return
 	}
 
 	content := tailFile(cleanPath, lines)
 	if content == "" {
 		if logType == "access" {
-			content = "（暂无异常访问日志；默认仅记录 4xx/5xx 请求，正常访问不会写入 access.log）"
+			content = "(No abnormal access logs; by default only 4xx/5xx requests are logged, normal access is not written to access.log)"
 		} else if logType == "security" {
-			content = "（暂无 WordPress 安全日志，暂未发现异常路径访问）"
+			content = "(NoNone WordPress  security logs, no abnormal path access detected)"
 		} else {
-			content = "（暂无错误日志，网站运行正常）"
+			content = "(NoNone error logs, website is running normally)"
 		}
 	}
 
@@ -1164,23 +1164,23 @@ func (h *WebsiteHandler) ViewLogs(c *gin.Context) {
 func (h *WebsiteHandler) ClearLogs(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("无效的网站ID"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Invalid website ID"))
 		return
 	}
 
 	site := getWebsiteByID(id)
 	if site == nil {
-		c.JSON(http.StatusNotFound, models.ErrorResponse("网站不存在"))
+		c.JSON(http.StatusNotFound, models.ErrorResponse("Website not found"))
 		return
 	}
 
 	logType := c.Query("type")
 	if logType != "error" && logType != "access" && logType != "security" {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("日志类型无效，仅支持 error、access 或 security"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Log typeNonevalid, only  error, access  or  security"))
 		return
 	}
 	if logType == "security" && site.SiteType != "wordpress" {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("仅 WordPress 站点支持安全日志"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Only WordPress sites support security logs"))
 		return
 	}
 
@@ -1195,17 +1195,17 @@ func (h *WebsiteHandler) ClearLogs(c *gin.Context) {
 
 	cleanPath := filepath.Clean(logFile)
 	if !strings.HasPrefix(cleanPath, filepath.Clean(site.LogDir)) {
-		c.JSON(http.StatusForbidden, models.ErrorResponse("禁止访问该路径"))
+		c.JSON(http.StatusForbidden, models.ErrorResponse("Access to this path is forbidden"))
 		return
 	}
 
 	if err := os.WriteFile(cleanPath, []byte{}, 0644); err != nil {
-		log.Printf("清空日志失败 path=%s: %v", cleanPath, err)
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse("清空日志失败"))
+		log.Printf("Failed to clear logs path=%s: %v", cleanPath, err)
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse("Failed to clear logs"))
 		return
 	}
 
-	c.JSON(http.StatusOK, models.SuccessResponse(gin.H{"message": "日志已清空"}))
+	c.JSON(http.StatusOK, models.SuccessResponse(gin.H{"message": "Logs cleared"}))
 }
 
 func tailFile(path string, n int) string {
@@ -1245,13 +1245,13 @@ func tailFile(path string, n int) string {
 func (h *WebsiteHandler) GetNginxCustom(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("无效的网站ID"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Invalid website ID"))
 		return
 	}
 
 	site := getWebsiteByID(id)
 	if site == nil {
-		c.JSON(http.StatusNotFound, models.ErrorResponse("网站不存在"))
+		c.JSON(http.StatusNotFound, models.ErrorResponse("Website not found"))
 		return
 	}
 
@@ -1273,13 +1273,13 @@ func (h *WebsiteHandler) GetNginxCustom(c *gin.Context) {
 func (h *WebsiteHandler) SaveNginxCustom(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("无效的网站ID"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Invalid website ID"))
 		return
 	}
 
 	site := getWebsiteByID(id)
 	if site == nil {
-		c.JSON(http.StatusNotFound, models.ErrorResponse("网站不存在"))
+		c.JSON(http.StatusNotFound, models.ErrorResponse("Website not found"))
 		return
 	}
 
@@ -1288,7 +1288,7 @@ func (h *WebsiteHandler) SaveNginxCustom(c *gin.Context) {
 		Content    string `json:"content"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("参数错误"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Invalid parameters"))
 		return
 	}
 
@@ -1306,13 +1306,13 @@ func (h *WebsiteHandler) SaveNginxCustom(c *gin.Context) {
 func (h *WebsiteHandler) SetAccessLogMode(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("无效的网站ID"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Invalid website ID"))
 		return
 	}
 
 	site := getWebsiteByID(id)
 	if site == nil {
-		c.JSON(http.StatusNotFound, models.ErrorResponse("网站不存在"))
+		c.JSON(http.StatusNotFound, models.ErrorResponse("Website not found"))
 		return
 	}
 
@@ -1320,11 +1320,11 @@ func (h *WebsiteHandler) SetAccessLogMode(c *gin.Context) {
 		Mode string `json:"mode"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("参数错误"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Invalid parameters"))
 		return
 	}
 	if req.Mode != "off" && req.Mode != "error_only" && req.Mode != "full" {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("无效的日志模式"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("NoneInvalid log mode"))
 		return
 	}
 
@@ -1342,12 +1342,12 @@ func (h *WebsiteHandler) SetAccessLogMode(c *gin.Context) {
 func (h *WebsiteHandler) SetCDNRealIP(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("无效的网站ID"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Invalid website ID"))
 		return
 	}
 	site := getWebsiteByID(id)
 	if site == nil {
-		c.JSON(http.StatusNotFound, models.ErrorResponse("网站不存在"))
+		c.JSON(http.StatusNotFound, models.ErrorResponse("Website not found"))
 		return
 	}
 
@@ -1356,11 +1356,11 @@ func (h *WebsiteHandler) SetCDNRealIP(c *gin.Context) {
 		GroupIDs []int `json:"group_ids"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("参数错误"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Invalid parameters"))
 		return
 	}
 	if req.Enabled && len(req.GroupIDs) == 0 {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("启用 CDN 真实 IP 时至少选择一个配置组"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("At least one config group must be selected when enabling CDN real IP"))
 		return
 	}
 
@@ -1389,14 +1389,14 @@ func getWebsiteByID(id int) *models.Website {
 func (h *WebsiteHandler) InstallPlugin(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("无效的网站ID"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Invalid website ID"))
 		return
 	}
 
 	var domain, webRoot, systemUser string
 	err = database.GetDB().QueryRow("SELECT domain, web_root, system_user FROM websites WHERE id = ?", id).Scan(&domain, &webRoot, &systemUser)
 	if err != nil {
-		c.JSON(http.StatusNotFound, models.ErrorResponse("网站不存在"))
+		c.JSON(http.StatusNotFound, models.ErrorResponse("Website not found"))
 		return
 	}
 
@@ -1404,23 +1404,23 @@ func (h *WebsiteHandler) InstallPlugin(c *gin.Context) {
 	pluginDir := filepath.Join(webRoot, "wp-content", "plugins", "wp-panel-optimizer")
 	dst := filepath.Join(pluginDir, "wp-panel-optimizer.php")
 	if err := os.MkdirAll(pluginDir, 0755); err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse("创建插件目录失败"))
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse("Failed to create plugin directory"))
 		return
 	}
 
 	srcData, err := os.ReadFile(src)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse("插件源文件不存在，请先升级面板"))
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse("Plugin Source file not found, please upgrade panel first"))
 		return
 	}
 	if err := os.WriteFile(dst, srcData, 0644); err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse("写入插件文件失败"))
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse("Failed to write plugin file"))
 		return
 	}
 
 	apiKey := executor.NewAPIKey()
 	if _, err := database.GetDB().Exec("UPDATE websites SET plugin_api_key = ? WHERE id = ?", apiKey, id); err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse("保存插件密钥失败"))
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse("Failed to save plugin API key"))
 		return
 	}
 
@@ -1433,30 +1433,30 @@ func (h *WebsiteHandler) InstallPlugin(c *gin.Context) {
 	baseSecretsDir := "/var/wp-panel/site-secrets"
 	secretsDir := filepath.Join(baseSecretsDir, domain)
 	if err := os.MkdirAll(baseSecretsDir, 0711); err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse("创建密钥目录失败"))
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse("Failed to create secrets directory"))
 		return
 	}
 	if err := os.Chmod(baseSecretsDir, 0711); err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse("设置密钥目录权限失败"))
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse("Failed to set secrets directory permissions"))
 		return
 	}
 	if err := os.MkdirAll(secretsDir, 0700); err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse("创建站点密钥目录失败"))
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse("Failed to create site secrets directory"))
 		return
 	}
 
-	// 清理旧路径下的配置文件（迁移到 Web 目录外之前的位置）
+	// Clean up old config file (from before migration to outside web directory)
 	os.Remove(filepath.Join(pluginDir, "wp-panel-config.json"))
 
 	if err := os.WriteFile(filepath.Join(secretsDir, "wp-panel-config.json"), cfgJSON, 0600); err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse("写入插件密钥失败"))
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse("Failed to write plugin key"))
 		return
 	}
 
 	executor.InstallPluginPermissions(domain, systemUser, pluginDir)
 
 	c.JSON(http.StatusOK, models.SuccessResponse(gin.H{
-		"message":   "插件已安装",
+		"message":   "Plugin installed",
 		"path":      "wp-content/plugins/wp-panel-optimizer/",
 		"panel_url": panelURL,
 	}))
@@ -1465,14 +1465,14 @@ func (h *WebsiteHandler) InstallPlugin(c *gin.Context) {
 func (h *WebsiteHandler) InstallPluginStatus(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("无效的网站ID"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Invalid website ID"))
 		return
 	}
 
 	var domain, webRoot string
 	err = database.GetDB().QueryRow("SELECT domain, web_root FROM websites WHERE id = ?", id).Scan(&domain, &webRoot)
 	if err != nil {
-		c.JSON(http.StatusNotFound, models.ErrorResponse("网站不存在"))
+		c.JSON(http.StatusNotFound, models.ErrorResponse("Website not found"))
 		return
 	}
 
@@ -1497,7 +1497,7 @@ func (h *WebsiteHandler) InstallPluginStatus(c *gin.Context) {
 func (h *WebsiteHandler) UpdateCache(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("无效的网站ID"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Invalid website ID"))
 		return
 	}
 
@@ -1506,7 +1506,7 @@ func (h *WebsiteHandler) UpdateCache(c *gin.Context) {
 		TTL     int  `json:"ttl"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("参数错误"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Invalid parameters"))
 		return
 	}
 	if req.TTL < 10 {
@@ -1524,17 +1524,17 @@ func (h *WebsiteHandler) UpdateCache(c *gin.Context) {
 
 	executor.GoSafe(func() {
 		if err := executor.RegenerateSiteNginx(id); err != nil {
-			log.Printf("刷新站点 Nginx 配置失败 site=%d: %v", id, err)
+			log.Printf("Failed to refresh site Nginx config site=%d: %v", id, err)
 		}
 	})
 
-	c.JSON(http.StatusOK, models.SuccessResponse(gin.H{"message": "缓存设置已更新"}))
+	c.JSON(http.StatusOK, models.SuccessResponse(gin.H{"message": "Cache settings updated"}))
 }
 
 func (h *WebsiteHandler) SaveWPOptimizations(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("无效的网站ID"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Invalid website ID"))
 		return
 	}
 
@@ -1549,7 +1549,7 @@ func (h *WebsiteHandler) SaveWPOptimizations(c *gin.Context) {
 		WPMemoryLimit      string `json:"wp_memory_limit"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("参数错误"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Invalid parameters"))
 		return
 	}
 	if req.FCacheTTL < 10 {
@@ -1561,7 +1561,7 @@ func (h *WebsiteHandler) SaveWPOptimizations(c *gin.Context) {
 
 	db := database.GetDB()
 
-	// 检查 FastCGI / XML-RPC 配置是否变化，决定是否重载 Nginx
+	// Check if FastCGI / XML-RPC config changed, to decide whether to reload Nginx
 	var domain string
 	var oldFCacheEnabled, oldFCacheTTL, oldXMLRPCEnabled int
 	db.QueryRow("SELECT domain, fastcgi_cache_enabled, fastcgi_cache_ttl, xmlrpc_enabled FROM websites WHERE id = ?", id).
@@ -1597,11 +1597,11 @@ func (h *WebsiteHandler) SaveWPOptimizations(c *gin.Context) {
 		fcEnabled, req.FCacheTTL, disableUpdates, disableEditing, xmlrpcEnabled,
 		wpDebug, req.WPPostRevisions, req.WPMemoryLimit, id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse("保存失败"))
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse("Save failed"))
 		return
 	}
 
-	// 更新 wp-config.php
+	// Update wp-config.php
 	var webRoot string
 	db.QueryRow("SELECT web_root FROM websites WHERE id = ?", id).Scan(&webRoot)
 	if webRoot != "" {
@@ -1613,15 +1613,15 @@ func (h *WebsiteHandler) SaveWPOptimizations(c *gin.Context) {
 			WPMemoryLimit:      req.WPMemoryLimit,
 		}
 		if err := executor.ApplyWPOptimizations(webRoot, opts); err != nil {
-			log.Printf("ApplyWPOptimizations 失败 (site %d): %v", id, err)
+			log.Printf("ApplyWPOptimizations failed (site %d): %v", id, err)
 		}
 	}
 
-	// FastCGI / XML-RPC 配置变化时重载 Nginx
+	// Reload Nginx when FastCGI / XML-RPC config changes
 	if oldFCacheEnabled != fcEnabled || oldFCacheTTL != req.FCacheTTL || oldXMLRPCEnabled != xmlrpcEnabled {
 		executor.GoSafe(func() {
 			if err := executor.RegenerateSiteNginx(id); err != nil {
-				log.Printf("刷新站点 Nginx 配置失败 site=%d: %v", id, err)
+				log.Printf("Failed to refresh site Nginx config site=%d: %v", id, err)
 			}
 		})
 	}
@@ -1629,13 +1629,13 @@ func (h *WebsiteHandler) SaveWPOptimizations(c *gin.Context) {
 		recordHandlerOperationLog("wp_optimizations", domain, "success", wpOptimizationsLogMessage(req.FCacheEnabled, req.FCacheTTL, req.DisableWPUpdates, req.DisableFileEditing, req.XMLRPCEnabled, req.WPDebugEnabled, req.WPPostRevisions, req.WPMemoryLimit))
 	}
 
-	c.JSON(http.StatusOK, models.SuccessResponse(gin.H{"message": "已保存"}))
+	c.JSON(http.StatusOK, models.SuccessResponse(gin.H{"message": "Saved"}))
 }
 
 func (h *WebsiteHandler) SaveMonitoring(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("无效的网站ID"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Invalid website ID"))
 		return
 	}
 
@@ -1644,7 +1644,7 @@ func (h *WebsiteHandler) SaveMonitoring(c *gin.Context) {
 		Interval int  `json:"interval"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("参数错误"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Invalid parameters"))
 		return
 	}
 	if req.Interval < 1 {
@@ -1655,25 +1655,25 @@ func (h *WebsiteHandler) SaveMonitoring(c *gin.Context) {
 		enabled = 1
 	}
 	database.GetDB().Exec("UPDATE websites SET monitoring_enabled = ?, monitoring_interval = ? WHERE id = ?", enabled, req.Interval, id)
-	c.JSON(http.StatusOK, models.SuccessResponse(gin.H{"message": "已保存"}))
+	c.JSON(http.StatusOK, models.SuccessResponse(gin.H{"message": "Saved"}))
 }
 
 func (h *WebsiteHandler) ClearCache(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("无效的网站ID"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Invalid website ID"))
 		return
 	}
 
 	executor.GoSafe(func() { executor.ClearSiteCache(id) })
 
-	c.JSON(http.StatusOK, models.SuccessResponse(gin.H{"message": "缓存已清除，旧缓存将在60分钟内自动回收"}))
+	c.JSON(http.StatusOK, models.SuccessResponse(gin.H{"message": "Cache cleared, stale cache will be automatically reclaimed within 60 minutes"}))
 }
 
 func (h *WebsiteHandler) ReinstallWordPress(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("无效的网站ID"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Invalid website ID"))
 		return
 	}
 
@@ -1682,12 +1682,12 @@ func (h *WebsiteHandler) ReinstallWordPress(c *gin.Context) {
 		"SELECT domain, web_root, system_user, db_name, db_user, site_type FROM websites WHERE id = ?", id,
 	).Scan(&domain, &webRoot, &systemUser, &dbName, &dbUser, &siteType)
 	if err != nil {
-		c.JSON(http.StatusNotFound, models.ErrorResponse("网站不存在"))
+		c.JSON(http.StatusNotFound, models.ErrorResponse("Website not found"))
 		return
 	}
 
 	if siteType != "wordpress" {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("仅 WordPress 站点支持重装功能"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Only WordPress sites support reinstallation"))
 		return
 	}
 
@@ -1703,44 +1703,44 @@ func (h *WebsiteHandler) ReinstallWordPress(c *gin.Context) {
 
 	if err := executor.ReinstallWordPress(cfg.Paths.WordPressPackage, webRoot, dbName, dbUser, systemUser, cfg,
 		req.CleanDefaults, req.RemoveUnusedThemes, req.InstallThemes, req.InstallPlugins); err != nil {
-		log.Printf("WordPress 重装失败 site=%d: %v", id, err)
+		log.Printf("WordPress reinstallation failed site=%d: %v", id, err)
 		c.JSON(http.StatusInternalServerError, models.ErrorResponse(reinstallWordPressErrorMessage(err)))
 		return
 	}
 
 	c.JSON(http.StatusOK, models.SuccessResponse(gin.H{
-		"message": "WordPress 已重装完成，数据库和文件均已恢复为全新状态",
+		"message": "WordPress reinstallation complete, database and files have been restored to a fresh state",
 	}))
 }
 
 func reinstallWordPressErrorMessage(err error) string {
-	const prefix = "WordPress 重装失败"
+	const prefix = "WordPress reinstallation failed"
 	if err == nil {
 		return prefix
 	}
 	stage := strings.TrimSpace(err.Error())
-	if idx := strings.IndexAny(stage, ":："); idx >= 0 {
+	if idx := strings.Index(stage, ": "); idx >= 0 {
 		stage = strings.TrimSpace(stage[:idx])
 	}
 	switch stage {
-	case "网站目录路径为空",
-		"网站目录路径校验失败",
-		"网站目录路径不在允许目录内",
-		"创建临时网站目录失败",
-		"WordPress 部署失败",
-		"删除旧数据库失败",
-		"重建数据库失败",
-		"生成 wp-config.php 失败",
-		"清理旧网站目录失败",
-		"替换网站目录失败":
-		return prefix + "：" + stage
+	case "Site directory path is empty",
+		"Site directory path validation failed",
+		"Site directory path is outside allowed directory",
+		"Failed to create temporary site directory",
+		"WordPress deployment failed",
+		"Failed to drop old database",
+		"Failed to recreate database",
+		"Failed to generate wp-config.php",
+		"Failed to clean up old site directory",
+		"Failed to replace site directory":
+		return prefix + ": " + stage
 	default:
 		return prefix
 	}
 }
 
 // ============================================================
-// CacheHelperHandler — WordPress 插件 API
+// CacheHelperHandler — WordPress Plugin API
 // ============================================================
 
 func escapeLike(s string) string {
@@ -1818,11 +1818,11 @@ func (h *CacheHelperHandler) UpdateCacheSettings(c *gin.Context) {
 		TTL    int    `json:"ttl"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil || req.Domain == "" {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("参数错误"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Invalid parameters"))
 		return
 	}
 	if !h.checkAPIKey(req.Domain, c) {
-		c.JSON(http.StatusUnauthorized, models.ErrorResponse("API Key 无效"))
+		c.JSON(http.StatusUnauthorized, models.ErrorResponse("API Key None"))
 		return
 	}
 	if req.TTL < 10 {
@@ -1835,7 +1835,7 @@ func (h *CacheHelperHandler) UpdateCacheSettings(c *gin.Context) {
 	db := database.GetDB()
 	_, err := db.Exec("UPDATE websites SET fastcgi_cache_ttl = ? WHERE (domain = ? OR (char(10) || aliases || char(10)) LIKE ('%' || char(10) || ? || char(10) || '%') ESCAPE '\\')", req.TTL, req.Domain, escapeLike(req.Domain))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse("更新失败"))
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse("Update failed"))
 		return
 	}
 
@@ -1844,12 +1844,12 @@ func (h *CacheHelperHandler) UpdateCacheSettings(c *gin.Context) {
 	if siteID > 0 {
 		executor.GoSafe(func() {
 			if err := executor.RegenerateSiteNginx(siteID); err != nil {
-				log.Printf("刷新站点 Nginx 配置失败 site=%d: %v", siteID, err)
+				log.Printf("Failed to refresh site Nginx config site=%d: %v", siteID, err)
 			}
 		})
 	}
 
-	c.JSON(http.StatusOK, models.SuccessResponse(gin.H{"message": "TTL 已更新", "ttl": req.TTL}))
+	c.JSON(http.StatusOK, models.SuccessResponse(gin.H{"message": "TTL updated", "ttl": req.TTL}))
 }
 
 func (h *CacheHelperHandler) ClearByDomain(c *gin.Context) {
@@ -1857,11 +1857,11 @@ func (h *CacheHelperHandler) ClearByDomain(c *gin.Context) {
 		Domain string `json:"domain"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil || req.Domain == "" {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("参数错误"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Invalid parameters"))
 		return
 	}
 	if !h.checkAPIKey(req.Domain, c) {
-		c.JSON(http.StatusUnauthorized, models.ErrorResponse("API Key 无效"))
+		c.JSON(http.StatusUnauthorized, models.ErrorResponse("API Key None"))
 		return
 	}
 
@@ -1871,22 +1871,22 @@ func (h *CacheHelperHandler) ClearByDomain(c *gin.Context) {
 		req.Domain, escapeLike(req.Domain),
 	).Scan(&siteID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, models.ErrorResponse("网站不存在"))
+		c.JSON(http.StatusNotFound, models.ErrorResponse("Website not found"))
 		return
 	}
 
 	executor.GoSafe(func() { executor.ClearSiteCache(siteID) })
-	c.JSON(http.StatusOK, models.SuccessResponse(gin.H{"message": "缓存已清除"}))
+	c.JSON(http.StatusOK, models.SuccessResponse(gin.H{"message": "Cache cleared"}))
 }
 
 func (h *CacheHelperHandler) FindByDomain(c *gin.Context) {
 	domain := c.Query("domain")
 	if domain == "" {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("参数错误"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Invalid parameters"))
 		return
 	}
 	if !h.checkAPIKey(domain, c) {
-		c.JSON(http.StatusUnauthorized, models.ErrorResponse("API Key 无效"))
+		c.JSON(http.StatusUnauthorized, models.ErrorResponse("API Key None"))
 		return
 	}
 
@@ -1897,7 +1897,7 @@ func (h *CacheHelperHandler) FindByDomain(c *gin.Context) {
 		domain, escapeLike(domain),
 	).Scan(&siteID, &fcacheEnabled, &fcacheTTL, &disableUpdates, &disableEditing, &xmlrpcEnabled, &wpDebugEnabled, &wpPostRevisions, &wpMemoryLimit)
 	if err != nil {
-		c.JSON(http.StatusNotFound, models.ErrorResponse("网站不存在"))
+		c.JSON(http.StatusNotFound, models.ErrorResponse("Website not found"))
 		return
 	}
 
@@ -1918,18 +1918,18 @@ func (h *CacheHelperHandler) FindByDomain(c *gin.Context) {
 func (h *CacheHelperHandler) ExportSSLCertificate(c *gin.Context) {
 	domain := strings.ToLower(strings.TrimSpace(c.Query("domain")))
 	if domain == "" || !executor.IsValidDomain(domain) {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("参数错误"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Invalid parameters"))
 		return
 	}
 
 	site, ok := h.pluginSiteByDomain(domain, c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, models.ErrorResponse("API Key 无效"))
+		c.JSON(http.StatusUnauthorized, models.ErrorResponse("API Key None"))
 		return
 	}
 	if !site.SSLExportEnabled {
-		recordHandlerOperationLog("ssl_certificate_export", site.Domain, "failed", "插件证书导出权限未开启")
-		c.JSON(http.StatusForbidden, models.ErrorResponse("SSL 证书导出权限未开启"))
+		recordHandlerOperationLog("ssl_certificate_export", site.Domain, "failed", "Plugin certificate export permissions not enabled")
+		c.JSON(http.StatusForbidden, models.ErrorResponse("SSL certificate export permissions not enabled"))
 		return
 	}
 
@@ -1940,7 +1940,7 @@ func (h *CacheHelperHandler) ExportSSLCertificate(c *gin.Context) {
 		return
 	}
 
-	recordHandlerOperationLog("ssl_certificate_export", site.Domain, "success", "插件已读取 SSL 证书")
+	recordHandlerOperationLog("ssl_certificate_export", site.Domain, "success", "Plugin has read SSL certificate")
 	c.Header("Cache-Control", "no-store")
 	c.Header("Pragma", "no-cache")
 	c.JSON(http.StatusOK, models.SuccessResponse(payload))
@@ -1958,11 +1958,11 @@ func (h *CacheHelperHandler) UpdateOptimizerSettings(c *gin.Context) {
 		WPMemoryLimit      string `json:"wp_memory_limit"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil || req.Domain == "" {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("参数错误"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Invalid parameters"))
 		return
 	}
 	if !h.checkAPIKey(req.Domain, c) {
-		c.JSON(http.StatusUnauthorized, models.ErrorResponse("API Key 无效"))
+		c.JSON(http.StatusUnauthorized, models.ErrorResponse("API Key None"))
 		return
 	}
 	if req.TTL < 10 {
@@ -2003,12 +2003,12 @@ func (h *CacheHelperHandler) UpdateOptimizerSettings(c *gin.Context) {
 		WHERE domain = ? OR (char(10) || aliases || char(10)) LIKE ('%' || char(10) || ? || char(10) || '%') ESCAPE '\'`,
 		fcEnabled, req.TTL, disableUpdates, disableEditing, wpDebug2, req.WPPostRevisions, req.WPMemoryLimit, req.Domain, escapeLike(req.Domain))
 	if err != nil {
-		log.Printf("UpdateOptimizerSettings DB 更新失败 (site %s): %v", req.Domain, err)
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse("保存失败: "+err.Error()))
+		log.Printf("UpdateOptimizerSettings DB Update failed (site %s): %v", req.Domain, err)
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse("Save failed: "+err.Error()))
 		return
 	}
 
-	// 更新 wp-config.php
+	// Update wp-config.php
 	var webRoot string
 	db.QueryRow("SELECT web_root FROM websites WHERE domain = ? OR (char(10) || aliases || char(10)) LIKE ('%' || char(10) || ? || char(10) || '%') ESCAPE '\\'", req.Domain, escapeLike(req.Domain)).Scan(&webRoot)
 	if webRoot != "" {
@@ -2020,59 +2020,59 @@ func (h *CacheHelperHandler) UpdateOptimizerSettings(c *gin.Context) {
 			WPMemoryLimit:      req.WPMemoryLimit,
 		}
 		if err := executor.ApplyWPOptimizations(webRoot, opts); err != nil {
-			log.Printf("ApplyWPOptimizations 失败 (site %s): %v", req.Domain, err)
+			log.Printf("ApplyWPOptimizations failed (site %s): %v", req.Domain, err)
 		}
 	}
 
-	// FastCGI 配置变化时重载 Nginx
+	// Reload Nginx when FastCGI config changes
 	if oldFCacheEnabled != fcEnabled || oldFCacheTTL != req.TTL {
 		var siteID int
 		db.QueryRow("SELECT id FROM websites WHERE domain = ? OR (char(10) || aliases || char(10)) LIKE ('%' || char(10) || ? || char(10) || '%') ESCAPE '\\'", req.Domain, escapeLike(req.Domain)).Scan(&siteID)
 		if siteID > 0 {
 			executor.GoSafe(func() {
 				if err := executor.RegenerateSiteNginx(siteID); err != nil {
-					log.Printf("刷新站点 Nginx 配置失败 site=%d: %v", siteID, err)
+					log.Printf("Failed to refresh site Nginx config site=%d: %v", siteID, err)
 				}
 			})
 		}
 	}
 	recordHandlerOperationLog("wp_optimizations", req.Domain, "success", wpOptimizationsLogMessage(req.Enabled, req.TTL, req.DisableWPUpdates, req.DisableFileEditing, false, req.WPDebugEnabled, req.WPPostRevisions, req.WPMemoryLimit))
 
-	c.JSON(http.StatusOK, models.SuccessResponse(gin.H{"message": "已保存"}))
+	c.JSON(http.StatusOK, models.SuccessResponse(gin.H{"message": "Saved"}))
 }
 
 func wpOptimizationsLogMessage(fcacheEnabled bool, fcacheTTL int, disableUpdates, disableEditing, xmlrpcEnabled, wpDebugEnabled bool, postRevisions int, memoryLimit string) string {
 	state := func(enabled bool) string {
 		if enabled {
-			return "开启"
+			return "enabled"
 		}
-		return "关闭"
+		return "disabled"
 	}
 	parts := []string{
-		"FastCGI缓存=" + state(fcacheEnabled),
-		fmt.Sprintf("缓存TTL=%d", fcacheTTL),
-		"禁止更新=" + state(disableUpdates),
-		"禁止文件编辑=" + state(disableEditing),
+		"FastCGI cache=" + state(fcacheEnabled),
+		fmt.Sprintf("cache TTL=%d", fcacheTTL),
+		"disable updates=" + state(disableUpdates),
+		"disable file editing=" + state(disableEditing),
 		"XML-RPC=" + state(xmlrpcEnabled),
 		"WP_DEBUG=" + state(wpDebugEnabled),
-		fmt.Sprintf("文章修订=%d", postRevisions),
+		fmt.Sprintf("post revisions=%d", postRevisions),
 	}
 	if strings.TrimSpace(memoryLimit) != "" {
-		parts = append(parts, "PHP内存限制="+strings.TrimSpace(memoryLimit))
+		parts = append(parts, "PHP memory limit="+strings.TrimSpace(memoryLimit))
 	}
-	return strings.Join(parts, "；")
+	return strings.Join(parts, "; ")
 }
 
 func (h *WebsiteHandler) SetLogRetention(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("无效的网站ID"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Invalid website ID"))
 		return
 	}
 
 	site := getWebsiteByID(id)
 	if site == nil {
-		c.JSON(http.StatusNotFound, models.ErrorResponse("网站不存在"))
+		c.JSON(http.StatusNotFound, models.ErrorResponse("Website not found"))
 		return
 	}
 
@@ -2080,7 +2080,7 @@ func (h *WebsiteHandler) SetLogRetention(c *gin.Context) {
 		RetentionDays int `json:"retention_days"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("参数错误"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Invalid parameters"))
 		return
 	}
 	if req.RetentionDays < 0 {
@@ -2088,30 +2088,30 @@ func (h *WebsiteHandler) SetLogRetention(c *gin.Context) {
 	}
 
 	if err := executor.WriteSiteLogrotateConfig(site.Domain, site.LogDir, req.RetentionDays); err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse("日志轮转配置应用失败"))
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse("Failed to apply log rotation config"))
 		return
 	}
 
 	db := database.GetDB()
 	if _, err := db.Exec("UPDATE websites SET log_retention_days = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", req.RetentionDays, id); err != nil {
 		_ = executor.WriteSiteLogrotateConfig(site.Domain, site.LogDir, site.LogRetentionDays)
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse("保存失败"))
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse("Save failed"))
 		return
 	}
 
-	c.JSON(http.StatusOK, models.SuccessResponse(gin.H{"message": "已保存"}))
+	c.JSON(http.StatusOK, models.SuccessResponse(gin.H{"message": "Saved"}))
 }
 
 func (h *WebsiteHandler) UpdateExpiry(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("无效的网站ID"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Invalid website ID"))
 		return
 	}
 
 	site := getWebsiteByID(id)
 	if site == nil {
-		c.JSON(http.StatusNotFound, models.ErrorResponse("网站不存在"))
+		c.JSON(http.StatusNotFound, models.ErrorResponse("Website not found"))
 		return
 	}
 
@@ -2119,7 +2119,7 @@ func (h *WebsiteHandler) UpdateExpiry(c *gin.Context) {
 		ExpiresAt string `json:"expires_at"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("参数错误"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Invalid parameters"))
 		return
 	}
 
@@ -2130,15 +2130,15 @@ func (h *WebsiteHandler) UpdateExpiry(c *gin.Context) {
 		_, dbErr = db.Exec("UPDATE websites SET expires_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?", id)
 	} else {
 		if _, err := time.Parse("2006-01-02", req.ExpiresAt); err != nil {
-			c.JSON(http.StatusBadRequest, models.ErrorResponse("日期格式不正确，请使用 YYYY-MM-DD"))
+			c.JSON(http.StatusBadRequest, models.ErrorResponse("Invalid date format, please use YYYY-MM-DD"))
 			return
 		}
 		_, dbErr = db.Exec("UPDATE websites SET expires_at = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", req.ExpiresAt, id)
 	}
 	if dbErr != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse("保存失败"))
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse("Save failed"))
 		return
 	}
 
-	c.JSON(http.StatusOK, models.SuccessResponse(gin.H{"message": "已保存"}))
+	c.JSON(http.StatusOK, models.SuccessResponse(gin.H{"message": "Saved"}))
 }

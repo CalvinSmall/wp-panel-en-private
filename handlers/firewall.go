@@ -56,7 +56,7 @@ func (h *FirewallHandler) ListBans(c *gin.Context) {
 
 	rows, err := db.Query(query, args...)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse("查询失败"))
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse("Query failed"))
 		return
 	}
 	defer rows.Close()
@@ -94,7 +94,7 @@ func (h *FirewallHandler) WPSecurityReport(c *gin.Context) {
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "30"))
 	items, err := executor.BuildWPSecurityReport(limit)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse("读取 WordPress 安全日志失败"))
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse("Failed to read WordPress security logs"))
 		return
 	}
 	c.JSON(http.StatusOK, models.SuccessResponse(gin.H{
@@ -106,7 +106,7 @@ func (h *FirewallHandler) WPSecurityReport(c *gin.Context) {
 func (h *FirewallHandler) Unban(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("无效的记录ID"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Invalid record ID"))
 		return
 	}
 
@@ -114,12 +114,12 @@ func (h *FirewallHandler) Unban(c *gin.Context) {
 	var ip, jail string
 	err = db.QueryRow("SELECT ip_address, source_jail FROM firewall_bans WHERE id = ? AND unbanned_at IS NULL", id).Scan(&ip, &jail)
 	if err != nil {
-		c.JSON(http.StatusNotFound, models.ErrorResponse("封禁记录不存在或已解封"))
+		c.JSON(http.StatusNotFound, models.ErrorResponse("Ban record not found or already unbanned"))
 		return
 	}
 
 	if _, err := db.Exec("UPDATE firewall_bans SET unbanned_at = datetime('now') WHERE id = ?", id); err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse("解封失败"))
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse("Unban failed"))
 		return
 	}
 
@@ -134,7 +134,7 @@ func (h *FirewallHandler) Unban(c *gin.Context) {
 		executor.RemovePersistBan(ip)
 	})
 
-	c.JSON(http.StatusOK, models.SuccessResponse(gin.H{"message": "IP " + ip + " 已解除封禁"}))
+	c.JSON(http.StatusOK, models.SuccessResponse(gin.H{"message": "IP " + ip + " has been unbanned"}))
 }
 
 func (h *FirewallHandler) ManualBan(c *gin.Context) {
@@ -143,7 +143,7 @@ func (h *FirewallHandler) ManualBan(c *gin.Context) {
 		Duration int    `json:"duration"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil || req.IP == "" {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("请输入有效的IP地址"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Please enter a valid IP address"))
 		return
 	}
 
@@ -161,7 +161,7 @@ func (h *FirewallHandler) ManualBan(c *gin.Context) {
 func (h *FirewallHandler) PermanentBan(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("无效的记录ID"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Invalid record ID"))
 		return
 	}
 
@@ -169,14 +169,14 @@ func (h *FirewallHandler) PermanentBan(c *gin.Context) {
 	var ip, jail string
 	err = db.QueryRow("SELECT ip_address, source_jail FROM firewall_bans WHERE id = ?", id).Scan(&ip, &jail)
 	if err != nil {
-		c.JSON(http.StatusNotFound, models.ErrorResponse("封禁记录不存在"))
+		c.JSON(http.StatusNotFound, models.ErrorResponse("Ban record not found"))
 		return
 	}
 
 	if _, err := db.Exec(
 		`UPDATE firewall_bans SET ban_level = 5, expires_at = NULL, is_manual = 1 WHERE id = ?`, id,
 	); err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse("永久封禁失败"))
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse("Permanent ban failed"))
 		return
 	}
 
@@ -185,5 +185,5 @@ func (h *FirewallHandler) PermanentBan(c *gin.Context) {
 		executor.GoSafe(func() { executor.AddNginxBan(ip) })
 	}
 
-	c.JSON(http.StatusOK, models.SuccessResponse(gin.H{"message": "IP " + ip + " 已加入永久黑名单"}))
+	c.JSON(http.StatusOK, models.SuccessResponse(gin.H{"message": "IP " + ip + " has been added to permanent blacklist"}))
 }

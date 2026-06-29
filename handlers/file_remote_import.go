@@ -57,11 +57,11 @@ func (h *FileHandler) RemoteImport(c *gin.Context) {
 		AllowInsecureTLS bool   `json:"allow_insecure_tls"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("参数无效"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Invalid parameters"))
 		return
 	}
 	if req.SiteID == nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("请选择网站或备份目录"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Please select a website or backup directory"))
 		return
 	}
 	if req.Path == "" {
@@ -77,33 +77,33 @@ func (h *FileHandler) RemoteImport(c *gin.Context) {
 		filename = remoteImportFilename(u)
 	}
 	if filename == "" {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("无法从URL识别文件名，请手动填写文件名"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Cannot determine filename from URL, please enter filename manually"))
 		return
 	}
 
 	basePath, err := fileBasePath(*req.SiteID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, models.ErrorResponse("网站不存在"))
+		c.JSON(http.StatusNotFound, models.ErrorResponse("Website not found"))
 		return
 	}
 	destPath := filepath.Clean(filepath.Join(basePath, req.Path, filename))
 	if !isPathWithin(basePath, destPath) {
-		c.JSON(http.StatusForbidden, models.ErrorResponse("路径越权"))
+		c.JSON(http.StatusForbidden, models.ErrorResponse("Path access denied"))
 		return
 	}
 	if info, err := os.Stat(filepath.Dir(destPath)); err != nil || !info.IsDir() {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("目标目录不存在"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Target directory does not exist"))
 		return
 	}
 	if info, err := os.Stat(destPath); err == nil && info.IsDir() {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse("目标路径已存在且是目录"))
+		c.JSON(http.StatusBadRequest, models.ErrorResponse("Target path already exists and is a directory"))
 		return
 	}
 	var siteRoot, systemUser string
 	if *req.SiteID != 0 {
 		site := getWebsiteByID(*req.SiteID)
 		if site == nil {
-			c.JSON(http.StatusNotFound, models.ErrorResponse("网站不存在"))
+			c.JSON(http.StatusNotFound, models.ErrorResponse("Website not found"))
 			return
 		}
 		siteRoot = site.WebRoot
@@ -120,7 +120,7 @@ func (h *FileHandler) RemoteImportStatus(c *gin.Context) {
 	id := strings.TrimSpace(c.Param("id"))
 	task := taskSnapshot(id)
 	if task == nil {
-		c.JSON(http.StatusNotFound, models.ErrorResponse("远程导入任务不存在"))
+		c.JSON(http.StatusNotFound, models.ErrorResponse("Remote import task not found"))
 		return
 	}
 	c.JSON(http.StatusOK, models.SuccessResponse(task))
@@ -132,7 +132,7 @@ func createRemoteImportTask(filename string) *remoteImportTask {
 	task := &remoteImportTask{
 		ID:        uuid.NewString(),
 		Status:    "queued",
-		Message:   "等待下载",
+		Message:   "Waiting to download",
 		Filename:  filename,
 		Total:     -1,
 		CreatedAt: now,
@@ -206,14 +206,14 @@ func runRemoteImport(taskID, rawURL string, allowInsecureTLS bool, destPath, sit
 
 	updateRemoteImportTask(taskID, func(t *remoteImportTask) {
 		t.Status = "downloading"
-		t.Message = "正在下载"
+		t.Message = "Downloading"
 	})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Hour)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
-		failRemoteImportTask(taskID, "创建下载请求失败")
+		failRemoteImportTask(taskID, "Failed to create download request")
 		return
 	}
 	req.Header.Set("User-Agent", "WP-Panel-Remote-Import/1.0")
@@ -221,13 +221,13 @@ func runRemoteImport(taskID, rawURL string, allowInsecureTLS bool, destPath, sit
 	client := remoteImportHTTPClient(allowInsecureTLS)
 	resp, err := client.Do(req)
 	if err != nil {
-		failRemoteImportTask(taskID, "远程下载失败: "+err.Error())
+		failRemoteImportTask(taskID, "Remote download failed: "+err.Error())
 		return
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		failRemoteImportTask(taskID, "远程服务器返回状态码 "+strconv.Itoa(resp.StatusCode))
+		failRemoteImportTask(taskID, "Remote server returned status code  "+strconv.Itoa(resp.StatusCode))
 		return
 	}
 	total := resp.ContentLength
@@ -235,7 +235,7 @@ func runRemoteImport(taskID, rawURL string, allowInsecureTLS bool, destPath, sit
 		t.Total = total
 	})
 	if total > maxRemoteImportSize {
-		failRemoteImportTask(taskID, "远程文件超过5GB限制")
+		failRemoteImportTask(taskID, "Remote file exceeds 5GB limit")
 		return
 	}
 	if free, ok := diskAvailableBytes(filepath.Dir(destPath)); ok {
@@ -244,14 +244,14 @@ func runRemoteImport(taskID, rawURL string, allowInsecureTLS bool, destPath, sit
 			required = total + minRemoteImportFreeSpace
 		}
 		if free < required {
-			failRemoteImportTask(taskID, "目标磁盘空间不足")
+			failRemoteImportTask(taskID, "Target disk space insufficient")
 			return
 		}
 	}
 
 	out, err := os.OpenFile(tmpPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
 	if err != nil {
-		failRemoteImportTask(taskID, uploadSaveErrorMessage("创建远程导入文件", err))
+		failRemoteImportTask(taskID, uploadSaveErrorMessage("Create remote import file", err))
 		return
 	}
 	defer out.Close()
@@ -263,16 +263,16 @@ func runRemoteImport(taskID, rawURL string, allowInsecureTLS bool, destPath, sit
 		if n > 0 {
 			downloaded += int64(n)
 			if downloaded > maxRemoteImportSize {
-				failRemoteImportTask(taskID, "远程文件超过5GB限制")
+				failRemoteImportTask(taskID, "Remote file exceeds 5GB limit")
 				return
 			}
 			if _, err := out.Write(buf[:n]); err != nil {
-				failRemoteImportTask(taskID, uploadSaveErrorMessage("保存远程文件", err))
+				failRemoteImportTask(taskID, uploadSaveErrorMessage("Save remote file", err))
 				return
 			}
 			if downloaded%(16*1024*1024) < int64(n) {
 				if free, ok := diskAvailableBytes(filepath.Dir(destPath)); ok && free < minRemoteImportFreeSpace {
-					failRemoteImportTask(taskID, "目标磁盘剩余空间不足1GB，已停止下载")
+					failRemoteImportTask(taskID, "Target disk has less than 1GB free space, download stopped")
 					return
 				}
 			}
@@ -284,28 +284,28 @@ func runRemoteImport(taskID, rawURL string, allowInsecureTLS bool, destPath, sit
 			break
 		}
 		if readErr != nil {
-			failRemoteImportTask(taskID, "读取远程文件失败: "+readErr.Error())
+			failRemoteImportTask(taskID, "Failed to read remote file: "+readErr.Error())
 			return
 		}
 	}
 	if err := out.Close(); err != nil {
-		failRemoteImportTask(taskID, uploadSaveErrorMessage("保存远程文件", err))
+		failRemoteImportTask(taskID, uploadSaveErrorMessage("Save remote file", err))
 		return
 	}
 	if err := os.Chmod(tmpPath, 0644); err != nil {
-		failRemoteImportTask(taskID, "设置文件权限失败")
+		failRemoteImportTask(taskID, "Failed to set file permissions")
 		return
 	}
 	if err := os.Rename(tmpPath, destPath); err != nil {
-		failRemoteImportTask(taskID, "保存远程文件失败")
+		failRemoteImportTask(taskID, "Save remote file failed")
 		return
 	}
 	copyOK = true
-	message := "远程导入完成"
+	message := "Remote import complete"
 	if siteRoot != "" && systemUser != "" {
 		if err := executor.ChownSitePath(destPath, siteRoot, systemUser); err != nil {
-			log.Printf("远程导入权限设置失败 path=%s user=%s: %v", destPath, systemUser, err)
-			message = "远程导入完成，权限设置失败，请点击修复权限"
+			log.Printf("Remote import permission setting failed path=%s user=%s: %v", destPath, systemUser, err)
+			message = "Remote import complete, permission setting failed, please click fix permissions"
 		}
 	}
 	updateRemoteImportTask(taskID, func(t *remoteImportTask) {
@@ -318,7 +318,7 @@ func runRemoteImport(taskID, rawURL string, allowInsecureTLS bool, destPath, sit
 }
 
 func failRemoteImportTask(taskID, message string) {
-	log.Printf("远程导入失败 task=%s: %s", taskID, message)
+	log.Printf("Remote import failed task=%s: %s", taskID, message)
 	updateRemoteImportTask(taskID, func(t *remoteImportTask) {
 		t.Status = "failed"
 		t.Message = message
@@ -341,7 +341,7 @@ func remoteImportHTTPClient(allowInsecureTLS bool) *http.Client {
 		Transport: transport,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if len(via) >= 5 {
-				return fmt.Errorf("远程地址重定向次数过多")
+				return fmt.Errorf("Too many redirects from remote address")
 			}
 			_, err := validateRemoteImportURL(req.URL.String())
 			return err
@@ -364,17 +364,17 @@ func validatingRemoteImportDialContext(ctx context.Context, network, address str
 func validateRemoteImportURL(raw string) (*url.URL, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
-		return nil, fmt.Errorf("远程URL不能为空")
+		return nil, fmt.Errorf("Remote URL cannot be empty")
 	}
 	u, err := url.Parse(raw)
 	if err != nil || u.Scheme == "" || u.Host == "" {
-		return nil, fmt.Errorf("远程URL格式无效")
+		return nil, fmt.Errorf("Invalid remote URL format")
 	}
 	if strings.ToLower(u.Scheme) != "https" {
-		return nil, fmt.Errorf("仅支持 HTTPS 远程导入")
+		return nil, fmt.Errorf("Only HTTPS remote import is supported")
 	}
 	if u.User != nil {
-		return nil, fmt.Errorf("远程URL不能包含用户名或密码")
+		return nil, fmt.Errorf("Remote URL cannot contain username or password")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -387,25 +387,25 @@ func validateRemoteImportURL(raw string) (*url.URL, error) {
 func validateRemoteImportHost(ctx context.Context, host string) error {
 	host = strings.TrimSpace(strings.Trim(host, "[]"))
 	if host == "" {
-		return fmt.Errorf("远程URL主机无效")
+		return fmt.Errorf("Invalid remote URL host")
 	}
 	lowerHost := strings.ToLower(host)
 	if lowerHost == "localhost" || strings.HasSuffix(lowerHost, ".localhost") {
-		return fmt.Errorf("远程URL不能指向本机地址")
+		return fmt.Errorf("Remote URL cannot point to localhost address")
 	}
 	if ip := net.ParseIP(host); ip != nil {
 		if isBlockedRemoteImportIP(ip) {
-			return fmt.Errorf("远程URL不能指向内网或本机地址")
+			return fmt.Errorf("Remote URL cannot point to internal or localhost address")
 		}
 		return nil
 	}
 	ips, err := net.DefaultResolver.LookupIPAddr(ctx, host)
 	if err != nil || len(ips) == 0 {
-		return fmt.Errorf("远程URL主机解析失败")
+		return fmt.Errorf("Failed to resolve remote URL host")
 	}
 	for _, resolved := range ips {
 		if isBlockedRemoteImportIP(resolved.IP) {
-			return fmt.Errorf("远程URL不能解析到内网或本机地址")
+			return fmt.Errorf("Remote URL cannot resolve to internal or localhost address")
 		}
 	}
 	return nil

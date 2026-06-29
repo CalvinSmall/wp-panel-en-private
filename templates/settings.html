@@ -1,59 +1,59 @@
 {{template "base" .}}
 {{define "settings_content"}}
 <div x-data="panelSettings()" x-init="fetchSettings()">
-    <h2 class="text-xl font-bold text-white mb-6">面板设置</h2>
+    <h2 class="text-xl font-bold text-white mb-6">Panel Settings</h2>
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-6">
         <div class="card">
-            <h3 class="text-lg font-semibold text-white mb-4">账户安全</h3>
+            <h3 class="text-lg font-semibold text-white mb-4">Account Security</h3>
 
             <div class="mb-4 p-3 rounded" style="background-color: #0f172a;">
-                <p class="text-xs text-blue-400 font-medium mb-2">BasicAuth 认证</p>
-                <p class="text-xs text-gray-500 mb-3">随机路径入口的第一层认证，浏览器弹窗式登录</p>
+                <p class="text-xs text-blue-400 font-medium mb-2">BasicAuth Authentication</p>
+                <p class="text-xs text-gray-500 mb-3">First-layer authentication for the random path entry; browser pop-up style login</p>
                 <div class="mb-3">
-                    <label class="text-xs text-gray-400">用户名</label>
+                    <label class="text-xs text-gray-400">Username</label>
                     <input type="text" x-model="basicAuthUser" class="input-field text-sm py-1.5 mt-1">
                 </div>
                 <div>
-                    <label class="text-xs text-gray-400">密码（至少8位，留空不修改）</label>
-                    <input type="password" x-model="pw.basic" class="input-field text-sm py-1.5 mt-1" placeholder="留空则不修改" autocomplete="new-password">
+                    <label class="text-xs text-gray-400">Password (min 8 chars; leave blank to keep unchanged)</label>
+                    <input type="password" x-model="pw.basic" class="input-field text-sm py-1.5 mt-1" placeholder="Leave blank to keep unchanged" autocomplete="new-password">
                 </div>
             </div>
 
             <div class="mb-4 p-3 rounded" style="background-color: #0f172a;">
-                <p class="text-xs text-green-400 font-medium mb-2">面板 Web 登录</p>
-                <p class="text-xs text-gray-500 mb-3">BasicAuth 通过后显示的 Web 表单登录</p>
+                <p class="text-xs text-green-400 font-medium mb-2">Panel Web Login</p>
+                <p class="text-xs text-gray-500 mb-3">Web form login shown after BasicAuth passes</p>
                 <div class="mb-3">
-                    <label class="text-xs text-gray-400">用户名</label>
+                    <label class="text-xs text-gray-400">Username</label>
                     <input type="text" x-model="username" class="input-field text-sm py-1.5 mt-1">
                 </div>
                 <div>
-                    <label class="text-xs text-gray-400">密码（至少8位，留空不修改）</label>
-                    <input type="password" x-model="pw.old" class="input-field text-sm py-1.5 mt-1" placeholder="当前密码（修改密码时必填）" autocomplete="current-password">
+                    <label class="text-xs text-gray-400">Password (min 8 chars; leave blank to keep unchanged)</label>
+                    <input type="password" x-model="pw.old" class="input-field text-sm py-1.5 mt-1" placeholder="Current password (required to change password)" autocomplete="current-password">
                     <div class="flex space-x-2 mt-2">
-                        <input type="password" x-model="pw.new1" class="input-field flex-1 text-sm py-1.5" placeholder="新密码（至少8位）" autocomplete="new-password">
-                        <input type="password" x-model="pw.new2" class="input-field flex-1 text-sm py-1.5" placeholder="确认新密码">
+                        <input type="password" x-model="pw.new1" class="input-field flex-1 text-sm py-1.5" placeholder="New password (min 8 chars)" autocomplete="new-password">
+                        <input type="password" x-model="pw.new2" class="input-field flex-1 text-sm py-1.5" placeholder="Confirm new password">
                     </div>
                 </div>
             </div>
 
-            <button @click="saveAccount" :disabled="accountSaving" class="btn-primary w-full" x-text="accountSaving ? '保存中...' : '保存账户设置'"></button>
-            <p class="text-xs text-yellow-400 mt-2" x-show="accountSaved">已保存，正在退出登录...</p>
+            <button @click="saveAccount" :disabled="accountSaving" class="btn-primary w-full" x-text="accountSaving ? 'Saving...' : 'Save Account Settings'"></button>
+            <p class="text-xs text-yellow-400 mt-2" x-show="accountSaved">Saved, signing out...</p>
         </div>
 
         <div class="card">
-            <h3 class="text-lg font-semibold text-white mb-4">服务器设置</h3>
+            <h3 class="text-lg font-semibold text-white mb-4">Server Settings</h3>
 
             <div class="mb-4">
-                <label class="label">面板标题</label>
+                <label class="label">Panel Title</label>
                 <div class="flex space-x-2">
                     <input type="text" x-model="panelTitle" class="input-field flex-1">
-                    <button @click="saveBasic" class="btn-primary text-sm">保存</button>
+                    <button @click="saveBasic" class="btn-primary text-sm">Save</button>
                 </div>
             </div>
 
             <div class="mb-4">
-                <label class="label">时区</label>
+                <label class="label">Timezone</label>
                 <select x-model="timezone" @change="saveServerSetting('timezone', timezone)" class="input-field">
                     <option value="Asia/Shanghai">Asia/Shanghai (UTC+8)</option>
                     <option value="Asia/Tokyo">Asia/Tokyo (UTC+9)</option>
@@ -69,29 +69,29 @@
                     <option value="UTC">UTC</option>
                 </select>
                 <div class="flex items-center justify-between mt-1">
-                    <p class="text-xs text-gray-400">服务器时间：<span x-text="serverTime" class="text-white font-mono"></span></p>
+                    <p class="text-xs text-gray-400">Server time: <span x-text="serverTime" class="text-white font-mono"></span></p>
                     <div class="flex items-center space-x-2">
-                        <span class="text-xs" :class="ntpSynced ? 'text-green-400' : 'text-yellow-400'" x-text="ntpSynced ? 'NTP 已同步' : 'NTP 未同步'"></span>
-                        <button @click="syncNTP()" class="text-xs py-0.5 px-2 rounded" style="background-color: #1e3a5f; color: #93c5fd;">同步</button>
+                        <span class="text-xs" :class="ntpSynced ? 'text-green-400' : 'text-yellow-400'" x-text="ntpSynced ? 'NTP Synced' : 'NTP Not Synced'"></span>
+                        <button @click="syncNTP()" class="text-xs py-0.5 px-2 rounded" style="background-color: #1e3a5f; color: #93c5fd;">Sync</button>
                     </div>
                 </div>
             </div>
 
             <div class="mb-4">
-                <label class="label">主机名</label>
+                <label class="label">Hostname</label>
                 <div class="flex space-x-2">
                     <input type="text" x-model="hostname" class="input-field flex-1">
-                    <button @click="saveServerSetting('hostname', hostname)" :disabled="!hostname" class="btn-primary text-sm">保存</button>
+                    <button @click="saveServerSetting('hostname', hostname)" :disabled="!hostname" class="btn-primary text-sm">Save</button>
                 </div>
             </div>
 
             <div class="mb-4">
-                <label class="label">GitHub 反代地址</label>
-                <p class="text-xs text-gray-500 mb-2">国内服务器无法访问 GitHub 时填写。留空则直连 GitHub。</p>
+                <label class="label">GitHub Proxy URL</label>
+                <p class="text-xs text-gray-500 mb-2">Fill in when GitHub is inaccessible from your server. Leave blank to connect directly.</p>
                 <div class="flex space-x-2">
                     <input type="text" x-model="githubProxy" placeholder="https://gh.wp-panel.org" class="input-field flex-1">
-                    <button @click="testProxy()" :disabled="proxyTesting" class="btn-secondary text-sm" x-text="proxyTesting ? '测试中...' : '测试'"></button>
-                    <button @click="saveServerSetting('github_proxy', githubProxy)" class="btn-primary text-sm">保存</button>
+                    <button @click="testProxy()" :disabled="proxyTesting" class="btn-secondary text-sm" x-text="proxyTesting ? 'Test...' : 'Test'"></button>
+                    <button @click="saveServerSetting('github_proxy', githubProxy)" class="btn-primary text-sm">Save</button>
                 </div>
                 <p x-show="proxyResult" class="text-xs mt-2" :class="proxyOk ? 'text-green-400' : 'text-red-400'" x-text="proxyResult"></p>
             </div>
@@ -100,16 +100,16 @@
 
             <div x-data="versionCheck()" x-init="fetchVersion()">
                 <div class="flex items-center justify-between mb-2">
-                    <span class="text-sm text-gray-400">面板版本</span>
+                    <span class="text-sm text-gray-400">Panel Version</span>
                     <span class="text-sm text-white font-mono" x-text="currentVersion"></span>
                 </div>
                 <div x-show="hasUpdate" class="mb-3 p-3 rounded" style="background-color: #064e3b; border: 1px solid #059669;">
-                    <p class="text-sm text-green-300">新版本 <span x-text="latestVersion" class="font-bold"></span> 可用</p>
+                    <p class="text-sm text-green-300">New version <span x-text="latestVersion" class="font-bold"></span> available</p>
                     <pre x-text="releaseNotes" class="text-xs text-gray-400 mt-2 max-h-32 overflow-y-auto whitespace-pre-wrap"></pre>
                 </div>
                 <div class="flex items-center space-x-3">
-                    <button @click="checkUpdate()" :disabled="checking" class="btn-secondary text-xs" x-text="checking ? '检查中...' : '检查更新'"></button>
-                    <button @click="doUpdate()" x-show="hasUpdate" :disabled="updating" class="btn-primary text-xs" x-text="updating ? '更新中...' : '立即更新'"></button>
+                    <button @click="checkUpdate()" :disabled="checking" class="btn-secondary text-xs" x-text="checking ? 'Checking...' : 'Check for Updates'"></button>
+                    <button @click="doUpdate()" x-show="hasUpdate" :disabled="updating" class="btn-primary text-xs" x-text="updating ? 'Updating...' : 'Update Now'"></button>
                 </div>
                 <div x-show="updating || updateStatus.running || updateStatus.completed || updateStatus.error" class="mt-3 p-3 rounded" style="background-color: #0f172a; border: 1px solid #1e293b;">
                     <div class="flex items-center justify-between mb-2">
@@ -123,7 +123,7 @@
                         <span x-text="formatBytes(updateStatus.downloaded_bytes || 0)"></span>
                         <span x-text="formatBytes(updateStatus.total_bytes || 0)"></span>
                     </div>
-                    <p x-show="updating && !updateStatus.error && !updateStatus.completed" class="text-xs text-yellow-500 mt-2">更新期间请勿关闭或刷新页面。</p>
+                    <p x-show="updating && !updateStatus.error && !updateStatus.completed" class="text-xs text-yellow-500 mt-2">Do not close or refresh the page during update.</p>
                 </div>
                 <p x-show="updateError" class="text-xs text-red-400 mt-2" x-text="updateError"></p>
             </div>
@@ -131,40 +131,40 @@
             <div class="mt-4 p-3 rounded" style="background-color: #0f172a; border: 1px solid #1e293b;">
                 <div class="flex items-center justify-between mb-3">
                     <div>
-                        <p class="text-sm text-gray-300">自动更新</p>
-                        <p class="text-xs text-gray-500">默认关闭；开启后按窗口、发布延迟和签名校验执行</p>
+                        <p class="text-sm text-gray-300">Auto Update</p>
+                        <p class="text-xs text-gray-500">Off by default; when enabled, follows the time window, release delay, and signature verification</p>
                     </div>
                     <label class="flex items-center space-x-2 text-sm text-gray-300 cursor-pointer">
                         <input type="checkbox" x-model="autoUpdate.enabled" @change="saveAutoUpdate">
-                        <span x-text="autoUpdate.enabled ? '已开启' : '已关闭'"></span>
+                        <span x-text="autoUpdate.enabled ? 'Enabled' : 'Disabled'"></span>
                     </label>
                 </div>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div>
-                        <label class="label">更新模式</label>
+                        <label class="label">Update Mode</label>
                         <select x-model="autoUpdate.mode" @change="saveAutoUpdate" class="input-field text-sm">
-                            <option value="patch_only">仅 patch 版本</option>
-                            <option value="all_stable">所有正式版</option>
+                            <option value="patch_only">Patch versions only</option>
+                            <option value="all_stable">All stable releases</option>
                         </select>
                     </div>
                     <div>
-                        <label class="label">更新时间窗口</label>
+                        <label class="label">Update Time Window</label>
                         <input type="text" x-model="autoUpdate.window" @change="saveAutoUpdate" class="input-field text-sm" placeholder="03:00-05:00">
                     </div>
                     <div>
-                        <label class="label">发布延迟（分钟）</label>
+                        <label class="label">Release Delay (minutes)</label>
                         <input type="number" x-model="autoUpdate.delay" @change="saveAutoUpdate" min="1" max="1440" class="input-field text-sm">
                     </div>
                     <div>
-                        <label class="label">等待签名超时（分钟）</label>
+                        <label class="label">Signature Timeout (minutes)</label>
                         <input type="number" x-model="autoUpdate.signatureTimeout" @change="saveAutoUpdate" min="5" max="1440" class="input-field text-sm">
                     </div>
                 </div>
                 <div class="mt-3 text-xs text-gray-500 space-y-1">
-                    <p>最近状态：<span class="text-gray-300" x-text="autoUpdate.lastStatus || '暂无'"></span> <span x-text="autoUpdate.lastStage ? '(' + autoUpdate.lastStage + ')' : ''"></span></p>
-                    <p x-show="autoUpdate.lastTarget">目标版本：<span class="text-gray-300" x-text="autoUpdate.lastTarget"></span></p>
+                    <p>Last status: <span class="text-gray-300" x-text="autoUpdate.lastStatus || 'None'"></span> <span x-text="autoUpdate.lastStage ? '(' + autoUpdate.lastStage + ')' : ''"></span></p>
+                    <p x-show="autoUpdate.lastTarget">Target version: <span class="text-gray-300" x-text="autoUpdate.lastTarget"></span></p>
                     <p x-show="autoUpdate.lastError" class="text-red-400" x-text="autoUpdate.lastError"></p>
-                    <p x-show="autoUpdate.lastSuccess">最近成功：<span x-text="autoUpdate.lastSuccess"></span> <span x-text="autoUpdate.lastSuccessVersion"></span></p>
+                    <p x-show="autoUpdate.lastSuccess">Last success: <span x-text="autoUpdate.lastSuccess"></span> <span x-text="autoUpdate.lastSuccessVersion"></span></p>
                 </div>
             </div>
 
@@ -172,9 +172,9 @@
 
             <div x-data="systemUpdate()" x-init="check()">
                 <div class="flex items-center justify-between mb-2">
-                    <span class="text-sm text-gray-400">系统更新</span>
-                    <span class="text-sm text-white font-mono" x-show="count > 0" x-text="count + ' 个可用'"></span>
-                    <span class="text-xs text-gray-500" x-show="count === 0">已是最新</span>
+                    <span class="text-sm text-gray-400">System Update</span>
+                    <span class="text-sm text-white font-mono" x-show="count > 0" x-text="count + ' available'"></span>
+                    <span class="text-xs text-gray-500" x-show="count === 0">Up to date</span>
                 </div>
                 <div x-show="count > 0" class="mb-3 space-y-2">
                     <template x-for="pkg in packages" :key="pkg.name">
@@ -185,17 +185,17 @@
                             </div>
                             <div class="flex items-center space-x-3">
                                 <span class="text-xs text-gray-400" x-text="pkg.version"></span>
-                                <a :href="'https://packages.debian.org/trixie/' + pkg.name" target="_blank" class="text-xs text-blue-400 hover:text-blue-300" title="在 packages.debian.org 查看包详情">查询</a>
+                                <a :href="'https://packages.debian.org/trixie/' + pkg.name" target="_blank" class="text-xs text-blue-400 hover:text-blue-300" title="at packages.debian.org View package details">View</a>
                             </div>
                         </div>
                     </template>
-                    <p class="text-xs text-gray-500 mt-2">不了解某个包的作用？点击「查询」链接可查看 Debian 官方包说明，或复制包名通过搜索引擎/AI 工具了解详情。</p>
+                    <p class="text-xs text-gray-500 mt-2">Not sure what a package does?click「View」link to view Debian official package description，or copy the package name and search/AI to learn more。</p>
                 </div>
                 <div class="flex items-center space-x-3">
-                    <button @click="check()" :disabled="checking" class="btn-secondary text-xs" x-text="checking ? '检查中...' : '刷新'"></button>
-                    <button @click="doUpdate()" x-show="count > 0" :disabled="updating" class="btn-primary text-xs" x-text="updating ? '更新中...' : '一键更新'"></button>
+                    <button @click="check()" :disabled="checking" class="btn-secondary text-xs" x-text="checking ? 'Checking...' : 'Refresh'"></button>
+                    <button @click="doUpdate()" x-show="count > 0" :disabled="updating" class="btn-primary text-xs" x-text="updating ? 'Updating...' : 'Update All'"></button>
                 </div>
-                <p x-show="count > 0" class="text-xs text-yellow-500 mt-2">更新过程可能持续数分钟，期间请勿关闭或刷新页面。</p>
+                <p x-show="count > 0" class="text-xs text-yellow-500 mt-2">Updates may take several minutes. Do not close or refresh the page during the process.</p>
                 <pre x-show="output" class="text-xs text-gray-400 mt-3 p-3 rounded max-h-48 overflow-y-auto" style="background-color: #020617;" x-text="output"></pre>
                 <p x-show="msg" class="text-sm mt-2" :class="ok ? 'text-green-400' : 'text-red-400'" x-text="msg"></p>
             </div>
@@ -205,21 +205,21 @@
     <div class="card mb-6">
         <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-4">
             <div>
-                <h3 class="text-lg font-semibold text-white">AI 诊断设置</h3>
-                <p class="text-xs text-gray-500 mt-1">配置网站故障和性能诊断使用的 AI 服务商；诊断操作在「AI 诊断」页面进行。</p>
+                <h3 class="text-lg font-semibold text-white">AI Diagnostics Settings</h3>
+                <p class="text-xs text-gray-500 mt-1">Configure the AI provider used for site fault and performance diagnostics; diagnosis is performed on the AI Diagnostics page.</p>
             </div>
             <div class="flex items-center gap-3">
-                <a href="/{{.RandomSuffix}}/ai-diagnostics" class="btn-secondary text-sm">前往 AI 诊断</a>
+                <a href="/{{.RandomSuffix}}/ai-diagnostics" class="btn-secondary text-sm">Go to AI Diagnostics</a>
                 <label class="flex items-center space-x-2 text-sm text-gray-300 cursor-pointer">
                     <input type="checkbox" x-model="ai.enabled">
-                    <span x-text="ai.enabled ? '已启用' : '已关闭'"></span>
+                    <span x-text="ai.enabled ? 'Enabled' : 'Disabled'"></span>
                 </label>
             </div>
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-                <label class="label">服务商</label>
+                <label class="label">Provider</label>
                 <select x-model="ai.provider" @change="applyAIProviderDefaults()" class="input-field text-sm">
                     <option value="deepseek">DeepSeek</option>
                     <option value="openai">OpenAI</option>
@@ -227,7 +227,7 @@
                 </select>
             </div>
             <div>
-                <label class="label">模型</label>
+                <label class="label">Model</label>
                 <input type="text" x-model="ai.model" class="input-field text-sm" placeholder="deepseek-v4-pro">
             </div>
             <div>
@@ -236,122 +236,122 @@
             </div>
             <div>
                 <label class="label">API Key</label>
-                <input type="password" x-model="ai.api_key" class="input-field text-sm" :placeholder="ai.api_key_masked || '输入 API Key'">
+                <input type="password" x-model="ai.api_key" class="input-field text-sm" :placeholder="ai.api_key_masked || 'Enter API Key'">
             </div>
             <div>
-                <label class="label">超时（秒）</label>
+                <label class="label">Timeout (seconds)</label>
                 <input type="number" x-model.number="ai.timeout_seconds" min="15" max="180" class="input-field text-sm">
-                <p class="text-xs text-gray-500 mt-1">建议 60-120 秒；较慢模型可临时调高到 180 秒。</p>
+                <p class="text-xs text-gray-500 mt-1">Recommended 60-120 seconds; slower Model 180 seconds。</p>
             </div>
         </div>
 
         <div class="mt-4 p-3 rounded text-xs text-yellow-200" style="background-color: #422006; border: 1px solid #854d0e;">
-            AI 诊断会把站点域名、日志摘要、配置摘要和检查结果发送给所选服务商；不会发送数据库密码、AI Key、SSL 私钥、面板密码或面板数据库内容。
+            AI diagnosdiagnostics send the site domain, log summary, config summary, and check results to the selectedProvider；WILL NOT send databasePassword、AI Key、SSL private key、panelPasswordor panel database content.。
         </div>
         <div class="flex items-center space-x-3 mt-4">
-            <button @click="testAI()" :disabled="aiTesting" class="btn-secondary text-sm" x-text="aiTesting ? '测试中...' : '测试连接'"></button>
-            <button @click="saveAI()" :disabled="aiSaving" class="btn-primary text-sm" x-text="aiSaving ? '保存中...' : '保存 AI 设置'"></button>
+            <button @click="testAI()" :disabled="aiTesting" class="btn-secondary text-sm" x-text="aiTesting ? 'Test...' : 'TestConnection'"></button>
+            <button @click="saveAI()" :disabled="aiSaving" class="btn-primary text-sm" x-text="aiSaving ? 'Saving...' : 'Save AI Settings'"></button>
         </div>
         <p x-show="aiTestResult" class="text-xs mt-2" :class="aiTestOK ? 'text-green-400' : 'text-red-400'" x-text="aiTestResult"></p>
     </div>
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-6">
         <div class="card" x-data="wpPackage()" x-init="fetchStatus()">
-            <h3 class="text-lg font-semibold text-white mb-4">WordPress 安装包</h3>
-            <p class="text-xs text-gray-500 mb-4">创建 WordPress 网站时优先使用本地安装包。国内服务器如果无法在线下载，可在此手动上传。</p>
+            <h3 class="text-lg font-semibold text-white mb-4">WordPress Installation Package</h3>
+            <p class="text-xs text-gray-500 mb-4">When creating WordPress sites, the local package is preferred. If your server cannot download online, you can upload manually here.</p>
 
             <div>
                 <div class="p-3 rounded mb-4" style="background-color: #0f172a;">
                     <div class="flex items-center justify-between mb-2">
-                        <span class="text-xs text-gray-400">本地安装包状态</span>
-                        <span class="text-xs font-medium" :class="pkg.available ? 'text-green-400' : 'text-yellow-400'" x-text="pkg.available ? '已就绪' : '未安装'"></span>
+                        <span class="text-xs text-gray-400">Local Package Status</span>
+                        <span class="text-xs font-medium" :class="pkg.available ? 'text-green-400' : 'text-yellow-400'" x-text="pkg.available ? 'Ready' : 'Not Installed'"></span>
                     </div>
                     <template x-if="pkg.available">
                         <div class="space-y-1">
                             <div class="flex items-center justify-between">
-                                <span class="text-xs text-gray-500">文件大小</span>
+                                <span class="text-xs text-gray-500">File Size</span>
                                 <span class="text-xs text-white" x-text="pkg.size_text"></span>
                             </div>
                             <div class="flex items-center justify-between">
-                                <span class="text-xs text-gray-500">更新时间</span>
+                                <span class="text-xs text-gray-500">Updated</span>
                                 <span class="text-xs text-white" x-text="pkg.updated_at"></span>
                             </div>
                         </div>
                     </template>
                     <template x-if="!pkg.available">
-                        <p class="text-xs text-yellow-400">本地无安装包，建站时将尝试在线下载（可能因网络问题失败）</p>
+                        <p class="text-xs text-yellow-400">No local package. Will attempt online download during site creation (may fail due to network issues).</p>
                     </template>
                 </div>
 
                 <div class="flex items-center space-x-3">
-                    <button @click="downloadPkg()" :disabled="downloading" class="btn-secondary text-sm" x-text="downloading ? '下载中...' : '在线下载'"></button>
+                    <button @click="downloadPkg()" :disabled="downloading" class="btn-secondary text-sm" x-text="downloading ? 'Downloading...' : 'Online Download'"></button>
                     <label class="btn-primary text-sm cursor-pointer" :class="uploading ? 'opacity-50 cursor-not-allowed' : ''">
-                        <span x-text="uploading ? '上传中...' : '上传安装包'"></span>
+                        <span x-text="uploading ? 'Uploading...' : 'Upload Package'"></span>
                         <input type="file" accept=".zip" class="hidden" @change="uploadPkg($event)" :disabled="uploading">
                     </label>
-                    <button x-show="pkg.available" @click="deletePkg()" :disabled="deleting" class="text-sm py-1.5 px-3 rounded" style="background-color: #7f1d1d; color: #fca5a5;" x-text="deleting ? '删除中...' : '删除'"></button>
-                    <button @click="fetchStatus()" class="text-xs py-1 px-2 rounded" style="background-color: #1e3a5f; color: #93c5fd;">刷新</button>
+                    <button x-show="pkg.available" @click="deletePkg()" :disabled="deleting" class="text-sm py-1.5 px-3 rounded" style="background-color: #7f1d1d; color: #fca5a5;" x-text="deleting ? 'Delete...' : 'Delete'"></button>
+                    <button @click="fetchStatus()" class="text-xs py-1 px-2 rounded" style="background-color: #1e3a5f; color: #93c5fd;">Refresh</button>
                 </div>
                 <p x-show="msg" class="text-xs mt-2" :class="msgOk ? 'text-green-400' : 'text-red-400'" x-text="msg"></p>
             </div>
         </div>
 
         <div class="card" x-data="remoteBackup()" x-init="fetchRemote()">
-            <div class="flex items-center justify-between mb-4"><h3 class="text-lg font-semibold text-white">远程备份</h3><button @click="showHelp = true" class="text-xs py-1 px-2 rounded" style="background-color: #1e3a5f; color: #93c5fd;">使用说明</button></div>
+            <div class="flex items-center justify-between mb-4"><h3 class="text-lg font-semibold text-white">Remote Backup</h3><button @click="showHelp = true" class="text-xs py-1 px-2 rounded" style="background-color: #1e3a5f; color: #93c5fd;">Usage Guide</button></div>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <!-- 左侧：备份设置 -->
+            <!-- Left：Backup Settings -->
             <div>
                 <div class="flex items-center space-x-3 mb-4">
                     <label class="flex items-center space-x-2 text-sm text-gray-300 cursor-pointer">
                         <input type="checkbox" x-model="cfg.enabled">
-                        <span>启用远程备份</span>
+                        <span>EnableRemote Backup</span>
                     </label>
                 </div>
 
                 <div x-show="cfg.enabled" class="space-y-3">
                     <div>
-                        <label class="label">备份目标</label>
+                        <label class="label">Backup Target</label>
                         <select x-model="cfg.backup_type" class="input-field text-sm">
-                            <option value="rsync">SSH / rsync 远程服务器</option>
-                            <option value="s3">S3 兼容对象存储</option>
+                            <option value="rsync">SSH / rsync Remote Server</option>
+                            <option value="s3">S3-Compatible Object Storage</option>
                         </select>
                     </div>
 
                     <div x-show="cfg.backup_type === 'rsync'" class="space-y-3">
                     <div>
-                        <label class="label">远程服务器地址</label>
-                        <input type="text" x-model="cfg.host" class="input-field text-sm" placeholder="192.168.1.100 或域名">
+                        <label class="label">Remote Server Address</label>
+                        <input type="text" x-model="cfg.host" class="input-field text-sm" placeholder="192.168.1.100 or domain">
                     </div>
                     <div class="grid grid-cols-2 gap-3">
                         <div>
-                            <label class="label">SSH 端口</label>
+                            <label class="label">SSH Port</label>
                             <input type="number" x-model="cfg.port" class="input-field text-sm" placeholder="22">
                         </div>
                         <div>
-                            <label class="label">用户名</label>
+                            <label class="label">Username</label>
                             <input type="text" x-model="cfg.username" class="input-field text-sm" placeholder="wpbackup">
                         </div>
                     </div>
                     <div>
-                        <label class="label">认证方式</label>
+                        <label class="label">Auth Method</label>
                         <select x-model="cfg.auth_type" class="input-field text-sm">
-                            <option value="key">SSH 密钥（推荐）</option>
-                            <option value="password">密码</option>
+                            <option value="key">SSH Key (Recommended)</option>
+                            <option value="password">Password</option>
                         </select>
                     </div>
                     <div x-show="cfg.auth_type === 'password'">
-                        <label class="label">SSH 密码</label>
+                        <label class="label">SSH Password</label>
                         <div class="flex space-x-1">
-                            <input type="password" x-model="cfg.password" class="input-field text-sm flex-1" placeholder="远程服务器密码">
-                            <button @click="genPassword()" class="text-xs py-1 px-2 rounded flex-shrink-0" style="background-color: #1e3a5f; color: #93c5fd;" title="随机生成备份账号密码">随机</button>
+                            <input type="password" x-model="cfg.password" class="input-field text-sm flex-1" placeholder="Remote ServerPassword">
+                            <button @click="genPassword()" class="text-xs py-1 px-2 rounded flex-shrink-0" style="background-color: #1e3a5f; color: #93c5fd;" title="RandomGenerate backup accountPassword">Random</button>
                         </div>
                     </div>
                     <div x-show="cfg.auth_type === 'key'" class="text-xs text-gray-400">
-                        <p>面板已自动生成 ed25519 密钥对，公钥将嵌入下方的一键命令中。</p>
+                        <p>Panel has auto-generated an ed25519 keypair; the public key will be embedded in the one-liner command below.</p>
                     </div>
                     <div>
-                        <label class="label">远程备份路径</label>
+                        <label class="label">Remote BackupPath</label>
                         <input type="text" x-model="cfg.remote_path" class="input-field text-sm" :placeholder="'/home/' + cfg.username + '/backup'">
                     </div>
                     </div>
@@ -359,7 +359,7 @@
                     <div x-show="cfg.backup_type === 's3'" class="space-y-3">
                     <div>
                         <label class="label">S3 Endpoint</label>
-                        <input type="text" x-model="cfg.s3_endpoint" class="input-field text-sm" placeholder="https://账号ID.r2.cloudflarestorage.com">
+                        <input type="text" x-model="cfg.s3_endpoint" class="input-field text-sm" placeholder="https://accountID.r2.cloudflarestorage.com">
                     </div>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <div>
@@ -380,112 +380,112 @@
                         <input type="password" x-model="cfg.s3_secret_key" class="input-field text-sm" placeholder="Secret Access Key">
                     </div>
                     <div>
-                        <label class="label">备份路径前缀</label>
+                        <label class="label">Backup Path Prefix</label>
                         <input type="text" x-model="cfg.s3_path_prefix" class="input-field text-sm" placeholder="wp-panel">
                     </div>
                     </div>
 
                     <label class="flex items-center space-x-2 text-sm text-gray-300 cursor-pointer">
                         <input type="checkbox" x-model="cfg.keep_local">
-                        <span>保留本地备份</span>
+                        <span>Keep Local Backup</span>
                     </label>
 
                 </div>
 
                 <div class="flex items-center space-x-3 pt-2">
-                    <button @click="testConnection()" :disabled="testing || !cfg.enabled" class="btn-secondary text-sm" x-text="testing ? '测试中...' : '测试连接'"></button>
-                    <button @click="saveRemote()" :disabled="saving" class="btn-primary text-sm" x-text="saving ? '保存中...' : '保存设置'"></button>
+                    <button @click="testConnection()" :disabled="testing || !cfg.enabled" class="btn-secondary text-sm" x-text="testing ? 'Test...' : 'TestConnection'"></button>
+                    <button @click="saveRemote()" :disabled="saving" class="btn-primary text-sm" x-text="saving ? 'Saving...' : 'SaveSettings'"></button>
                 </div>
                 <p x-show="saveMsg" class="text-sm" :class="saveOK ? 'text-green-400' : 'text-red-400'" x-text="saveMsg"></p>
                 <p x-show="testResult" class="text-sm" :class="testOK ? 'text-green-400' : 'text-red-400'" x-text="testResult"></p>
 
                 <div x-show="!cfg.enabled" class="text-xs text-gray-600 py-4 text-center">
-                    开启后，每次备份完成自动同步到远程位置
+                    When enabled, each backup is auto-synced to the remote location
                 </div>
             </div>
 
-            <!-- 右侧：设置助手 -->
+            <!-- Right: Setup Assistant -->
             <div x-show="cfg.backup_type === 'rsync'" class="p-4 rounded" style="background-color: #0f172a; border: 1px solid #1e293b;">
                 <div class="flex items-center justify-between mb-3">
-                    <h4 class="text-sm font-medium text-gray-300">远程服务器一键设置</h4>
+                    <h4 class="text-sm font-medium text-gray-300">Remote Server One-Click Setup</h4>
                     <div class="flex rounded overflow-hidden" style="border: 1px solid #334155;">
-                        <button @click="helperMode = 'create'" :class="helperMode === 'create' ? 'text-white' : 'text-gray-500'" class="text-xs py-1 px-2" :style="helperMode === 'create' ? 'backgroundColor: #1e3a5f' : 'backgroundColor: #0f172a'">创建</button>
-                        <button @click="helperMode = 'delete'" :class="helperMode === 'delete' ? 'text-white' : 'text-gray-500'" class="text-xs py-1 px-2" :style="helperMode === 'delete' ? 'backgroundColor: #b91c1c' : 'backgroundColor: #0f172a'">删除</button>
+                        <button @click="helperMode = 'create'" :class="helperMode === 'create' ? 'text-white' : 'text-gray-500'" class="text-xs py-1 px-2" :style="helperMode === 'create' ? 'backgroundColor: #1e3a5f' : 'backgroundColor: #0f172a'">Create</button>
+                        <button @click="helperMode = 'delete'" :class="helperMode === 'delete' ? 'text-white' : 'text-gray-500'" class="text-xs py-1 px-2" :style="helperMode === 'delete' ? 'backgroundColor: #b91c1c' : 'backgroundColor: #0f172a'">Delete</button>
                     </div>
                 </div>
-                <p x-show="helperMode === 'create'" class="text-xs text-gray-500 mb-3">在远程服务器以 root 执行以下命令，自动创建备份账号和目录：</p>
-                <p x-show="helperMode === 'delete'" class="text-xs text-red-400 mb-3"><strong>删除后无法恢复。</strong>在远程服务器以 root 执行，将删除账号和备份目录：</p>
+                <p x-show="helperMode === 'create'" class="text-xs text-gray-500 mb-3">On the remote server, run the following command as root to auto-create the backup account and directory：</p>
+                <p x-show="helperMode === 'delete'" class="text-xs text-red-400 mb-3"><strong>DeleteRestore。</strong>On remote server, run as root, will delete the account and backup directory:</p>
 
                 <div class="p-3 rounded" style="background-color: #020617; border: 1px solid #1e293b;">
                     <div class="flex items-center justify-between mb-2">
-                        <span class="text-gray-500 text-xs">复制到远程服务器执行：</span>
-                        <button @click="copyCmd()" class="text-xs py-0.5 px-2 rounded" :style="helperMode === 'delete' ? 'background-color: #7f1d1d; color: #fca5a5' : 'background-color: #1e3a5f; color: #93c5fd'">复制命令</button>
+                        <span class="text-gray-500 text-xs">Copy and run on remote server:</span>
+                        <button @click="copyCmd()" class="text-xs py-0.5 px-2 rounded" :style="helperMode === 'delete' ? 'background-color: #7f1d1d; color: #fca5a5' : 'background-color: #1e3a5f; color: #93c5fd'">Copy Command</button>
                     </div>
                     <pre class="font-mono text-gray-300 whitespace-pre-wrap text-xs leading-relaxed" x-text="genCmd()" style="word-break: break-all;"></pre>
                 </div>
 
                 <ul class="space-y-1 text-gray-500 text-xs mt-3">
-                    <li>· 密钥认证模式：命令已包含公钥，一条搞定</li>
-                    <li>· 密码认证模式：面板已自动安装 sshpass，无需手动操作</li>
-                    <li>· 建议使用<span class="text-yellow-300">专用备份账号</span>，勿用 root</li>
-                    <li>· 备份账号无需管理员权限，仅需写入目标目录</li>
+                    <li>· Key auth mode: command includes public key; one line does it all</li>
+                    <li>· Password auth mode: panel auto-installs sshpass. </li>
+                    <li>· We recommend using a <span class="text-yellow-300">dedicated backup account</span>; do not use root</li>
+                    <li>· Backup account does not need admin privileges; only write access to the target directory is required</li>
                 </ul>
             </div>
             <div x-show="cfg.backup_type === 's3'" class="p-4 rounded text-xs text-gray-400" style="background-color: #0f172a; border: 1px solid #1e293b;">
-                <h4 class="text-sm font-medium text-gray-300 mb-3">S3 兼容对象存储配置提示</h4>
+                <h4 class="text-sm font-medium text-gray-300 mb-3">S3-Compatible Object StorageConfiguration Tips</h4>
                 <ul class="space-y-2">
-                    <li>· 支持 Cloudflare R2、AWS S3、MinIO、Backblaze B2 等 S3 兼容服务。</li>
-                    <li>· 在对象存储中创建 Bucket，并创建具有对象读写权限的 Access Key。</li>
-                    <li>· Cloudflare R2 Endpoint 示例：<code class="text-gray-300">https://账号ID.r2.cloudflarestorage.com</code>。</li>
-                    <li>· Cloudflare R2 的 Region 通常填写 <code class="text-gray-300">auto</code>，其他服务按服务商要求填写。</li>
-                    <li>· 路径前缀用于区分不同面板，例如 <code class="text-gray-300">wp-panel/server-1</code>。</li>
-                    <li>· 大备份文件会自动使用 S3 分片上传，恢复时仍是一个完整备份对象。</li>
+                    <li>· Supports Cloudflare R2, AWS S3, MinIO, Backblaze B2, and other S3-compatible services.</li>
+                    <li>· In the object storage, create a Bucket and create an Access Key with object read/write permissions. Access Key。</li>
+                    <li>· Cloudflare R2 Endpoint example: <code class="text-gray-300">https://accountID.r2.cloudflarestorage.com</code>。</li>
+                    <li>· Cloudflare R2 Region is typically  <code class="text-gray-300">auto</code>，other services: perProvider。</li>
+                    <li>· Path prefix distinguishes different panels, e.g.,  <code class="text-gray-300">wp-panel/server-1</code>。</li>
+                    <li>· Large backup files automatically use S3 multipart upload; restoration is still a single complete backup object.</li>
                 </ul>
             </div>
         </div>
 
-            <!-- 使用说明弹窗 -->
+            <!-- Usage GuideModal -->
             <div x-show="showHelp" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50" @click.self="showHelp = false">
                 <div class="rounded-lg shadow-xl w-full max-w-xl p-6 max-h-80vh overflow-y-auto" style="background-color: #1e293b; border: 1px solid #334155;">
                     <div class="flex items-center justify-between mb-4">
-                        <h3 class="text-lg font-semibold text-white">远程备份使用说明</h3>
+                        <h3 class="text-lg font-semibold text-white">Remote BackupUsage Guide</h3>
                         <button @click="showHelp = false" class="text-gray-400 hover:text-white text-xl">&times;</button>
                     </div>
                     <div class="text-sm text-gray-300 space-y-4">
                         <div>
-                            <p class="font-medium text-blue-400 mb-1">工作流程</p>
+                            <p class="font-medium text-blue-400 mb-1">Workflow</p>
                             <ol class="text-gray-400 list-decimal list-inside space-y-1">
-                                <li>面板在本地完成数据库或文件备份</li>
-                                <li>自动通过 SSH + rsync 或 S3 兼容 API 将备份文件传送到远程位置</li>
-                                <li>如果关闭「保留本地备份」，传送成功后自动删除本地文件以节省空间</li>
+                                <li>Panel completes local database or file backup</li>
+                                <li>Automatically transfers backup files to remote location via SSH + rsync or S3-compatible API</li>
+                                <li>If "Keep Local Backup" is off, after successful transfer, delete local files to save space</li>
                             </ol>
                         </div>
                         <div>
-                            <p class="font-medium text-blue-400 mb-1">远程服务器要求</p>
+                            <p class="font-medium text-blue-400 mb-1">Remote Server Requirements</p>
                             <ul class="text-gray-400 list-disc list-inside space-y-1">
-                                <li>已开启 SSH 服务并能从本机连接</li>
-                                <li>目标目录存在且备份账号有写入权限</li>
-                                <li>防火墙放行 SSH 端口（默认 22）</li>
+                                <li>SSH service enabled and reachable from this server</li>
+                                <li>Target directory exists and backup account has write permission</li>
+                                <li>Firewall allows SSH port (default 22)</li>
                             </ul>
                         </div>
                         <div>
-                            <p class="font-medium text-blue-400 mb-1">认证方式</p>
+                            <p class="font-medium text-blue-400 mb-1">Auth Method</p>
                             <ul class="text-gray-400 list-disc list-inside space-y-1">
-                                <li><span class="text-yellow-300">SSH 密钥（推荐）</span>：面板自动生成密钥对，右侧助手生成的一键命令已包含公钥，远程粘贴执行即可。无需安装额外软件。</li>
-                                <li><span class="text-gray-500">密码</span>：面板保存设置时自动安装 sshpass，无需手动操作。</li>
-                                <li><span class="text-yellow-300">S3 兼容对象存储</span>：使用 Access Key 和 Secret Key 签名上传，不需要远程 SSH 账号；大文件会自动分片上传。</li>
+                                <li><span class="text-yellow-300">SSH Key (Recommended)</span>：The panel auto-generates a keypair; the one-liner from the assistant on the right includes the public key. Just paste and run on the remote server. No extra software needed.</li>
+                                <li><span class="text-gray-500">Password</span>：panel auto-installs sshpass when saving settings. n。</li>
+                                <li><span class="text-yellow-300">S3-Compatible Object Storage</span>：Uses Access Key and Secret Key for signed uploads; no remote SSH account needed. Large files use automatic multipart upload.</li>
                             </ul>
                         </div>
                         <div>
-                            <p class="font-medium text-blue-400 mb-1">安全建议</p>
+                            <p class="font-medium text-blue-400 mb-1">Security Recommendations</p>
                             <ul class="text-gray-400 list-disc list-inside space-y-1">
-                                <li>在远程服务器创建<span class="text-yellow-300">专用备份账号</span>，不要使用 root，权限最小化更安全</li>
-                                <li>远程备份目录不会自动清理旧文件，建议定期手动检查</li>
-                                <li>密钥文件位于 <code class="text-gray-500">/www/server/panel/remote_backup_key</code>，妥善保管</li>
+                                <li>atRemote ServerCreate<span class="text-yellow-300">dedicated backup account</span>on the remote server; do not use root. Least privilege is safer.</li>
+                                <li>Remote Backupdirectory does not auto-purge old files，periodic manual checks recommended</li>
+                                <li>Key file located at  <code class="text-gray-500">/www/server/panel/remote_backup_key</code>; keep it secure.</li>
                             </ul>
                         </div>
                         <div class="p-3 rounded" style="background-color: #0f172a; border: 1px solid #334155;">
-                            <p class="text-gray-400 text-xs">提示：右侧「一键设置」助手生成的命令可直接复制到远程服务器 SSH 终端粘贴执行，回车即完成全部配置。</p>
+                            <p class="text-gray-400 text-xs">Tip: The one-liner generated by the assistant on the right can be copied and pasted directly into the remote server SSH terminal. Press Enter to complete all configuration.</p>
                         </div>
                     </div>
                 </div>
@@ -495,21 +495,21 @@
 
     <div class="card mb-6" x-data="dbBackup()" x-init="fetchBackups()">
         <div class="flex items-center justify-between mb-4">
-            <h3 class="text-lg font-semibold text-white">面板数据库备份</h3>
+            <h3 class="text-lg font-semibold text-white">Panel Database Backup</h3>
             <div class="flex items-center space-x-2">
-                <button @click="doBackup()" :disabled="backingUp" class="btn-primary text-sm" x-text="backingUp ? '备份中...' : '立即备份'"></button>
+                <button @click="doBackup()" :disabled="backingUp" class="btn-primary text-sm" x-text="backingUp ? 'Backing up...' : 'Backup Now'"></button>
             </div>
         </div>
-        <p class="text-gray-400 text-xs mb-2">每天凌晨 2:30 自动备份面板数据库，保留最近 7 份。恢复后面板将自动重启。</p>
-        <p class="text-yellow-500/80 text-xs mb-4">⚠ 备份包含敏感数据（密码哈希、数据库凭证等），请勿分享给他人。面板无法启动时，可通过 SSH 从 /www/server/panel/backups/panel-db/ 获取备份文件。</p>
+        <p class="text-gray-400 text-xs mb-2">Auto-backups daily at 2:30 AM; keeps the latest 7 copies. Panel will auto-restart after restore.</p>
+        <p class="text-yellow-500/80 text-xs mb-4">⚠ Backups contain sensitive data(password hash, database credentials, etc.), do not share with others. If the panel fails to start, retrieve via SSH from /www/server/panel/backups/panel-db/ retrieve backup files。</p>
         <div class="overflow-x-auto">
             <table class="w-full">
                 <thead class="border-b border-gray-700">
                     <tr>
-                        <th class="table-header">备份时间</th>
-                        <th class="table-header">文件名</th>
-                        <th class="table-header">大小</th>
-                        <th class="table-header">操作</th>
+                        <th class="table-header">Backup Time</th>
+                        <th class="table-header">Filename</th>
+                        <th class="table-header">Size</th>
+                        <th class="table-header">Action</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -519,14 +519,14 @@
                             <td class="table-cell text-xs font-mono" x-text="b.filename"></td>
                             <td class="table-cell text-sm" x-text="b.size_text"></td>
                             <td class="table-cell">
-                                <button @click="doDownload(b.filename)" class="btn-primary text-xs py-1 px-2">下载</button>
-                                <button @click="doRestore(b.filename)" class="btn-warning text-xs py-1 px-2 ml-1">恢复</button>
-                                <button @click="doDelete(b.filename)" class="btn-danger text-xs py-1 px-2 ml-1">删除</button>
+                                <button @click="doDownload(b.filename)" class="btn-primary text-xs py-1 px-2">Download</button>
+                                <button @click="doRestore(b.filename)" class="btn-warning text-xs py-1 px-2 ml-1">Restore</button>
+                                <button @click="doDelete(b.filename)" class="btn-danger text-xs py-1 px-2 ml-1">Delete</button>
                             </td>
                         </tr>
                     </template>
                     <tr x-show="backups.length === 0">
-                        <td colspan="4" class="table-cell text-center text-gray-500 py-6">暂无备份记录</td>
+                        <td colspan="4" class="table-cell text-center text-gray-500 py-6">Nonebackup records</td>
                     </tr>
                 </tbody>
             </table>
@@ -534,15 +534,15 @@
     </div>
 
     <div class="card" x-data="operationLogs()" x-init="fetchLogs()">
-        <h3 class="text-lg font-semibold text-white mb-4">最近操作日志</h3>
+        <h3 class="text-lg font-semibold text-white mb-4">Recent Operation Logs</h3>
         <div class="overflow-x-auto">
             <table class="w-full">
                 <thead class="border-b border-gray-700">
                     <tr>
-                        <th class="table-header">时间</th>
-                        <th class="table-header">操作</th>
-                        <th class="table-header">目标</th>
-                        <th class="table-header">状态</th>
+                        <th class="table-header">Time</th>
+                        <th class="table-header">Action</th>
+                        <th class="table-header">Target</th>
+                        <th class="table-header">Status</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -553,24 +553,24 @@
                             <td class="table-cell text-sm" x-text="log.target || '--'"></td>
                             <td class="table-cell">
                                 <span :class="log.status === 'success' ? 'badge-success' : 'badge-danger'"
-                                      x-text="log.status === 'success' ? '成功' : '失败'"></span>
+                                      x-text="log.status === 'success' ? 'Success' : 'Failed'"></span>
                             </td>
                         </tr>
                     </template>
                     <tr x-show="logs.length === 0">
-                        <td colspan="4" class="table-cell text-center text-gray-500 py-8">暂无操作日志</td>
+                        <td colspan="4" class="table-cell text-center text-gray-500 py-8">NoneActionlogs</td>
                     </tr>
                 </tbody>
             </table>
         </div>
         <div x-show="logTotal > 0" class="flex items-center justify-between mt-4 pt-3 border-t border-gray-700/50">
-            <span class="text-sm text-gray-400" x-text="`共 ${logTotal} 条记录`"></span>
+            <span class="text-sm text-gray-400" x-text="`Total ${logTotal} records`"></span>
             <div class="flex items-center space-x-1" x-show="logTotalPages > 1">
-                <button @click="logGoPage(logPage-1)" :disabled="logPage <= 1" class="px-3 py-1 text-sm rounded bg-gray-700 hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed">上一页</button>
+                <button @click="logGoPage(logPage-1)" :disabled="logPage <= 1" class="px-3 py-1 text-sm rounded bg-gray-700 hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed">Previous</button>
                 <template x-for="p in logPageNumbers" :key="p">
                     <button @click="logGoPage(p)" :class="p === logPage ? 'bg-blue-600 text-white' : 'bg-gray-700 hover:bg-gray-600'" class="px-3 py-1 text-sm rounded" x-text="p"></button>
                 </template>
-                <button @click="logGoPage(logPage+1)" :disabled="logPage >= logTotalPages" class="px-3 py-1 text-sm rounded bg-gray-700 hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed">下一页</button>
+                <button @click="logGoPage(logPage+1)" :disabled="logPage >= logTotalPages" class="px-3 py-1 text-sm rounded bg-gray-700 hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed">Next</button>
             </div>
         </div>
     </div>
@@ -597,19 +597,19 @@ function wpPackage() {
             try {
                 const r = await api('/settings/wp-package/download', { method: 'POST' });
                 this.msgOk = r.success;
-                this.msg = r.data?.message || '下载完成';
+                this.msg = r.data?.message || 'Downloadcomplete';
                 if (r.success) this.fetchStatus();
             } catch(e) { this.msgOk = false; this.msg = e.message; }
             this.downloading = false;
         },
         async deletePkg() {
-            if (!await confirmModal('确认删除本地 WordPress 安装包？删除后建站时将自动在线下载。')) return;
+            if (!await confirmModal('ConfirmDeletelocal WordPress Installation Package？Deletesite creation will auto-Online Download。')) return;
             this.deleting = true;
             this.msg = '';
             try {
                 const r = await api('/settings/wp-package', { method: 'DELETE' });
                 this.msgOk = r.success;
-                this.msg = r.data?.message || '已删除';
+                this.msg = r.data?.message || 'Deleted';
                 if (r.success) this.fetchStatus();
             } catch(e) { this.msgOk = false; this.msg = e.message; }
             this.deleting = false;
@@ -618,7 +618,7 @@ function wpPackage() {
             const file = event.target.files[0];
             if (!file) return;
             if (!file.name.toLowerCase().endsWith('.zip')) {
-                showToast('仅支持 .zip 格式', 'error');
+                showToast('Only .zip format supported', 'error');
                 event.target.value = '';
                 return;
             }
@@ -636,13 +636,13 @@ function wpPackage() {
                 const r = await resp.json();
                 if (r.success) {
                     this.msgOk = true;
-                    this.msg = r.data?.message || '上传成功';
+                    this.msg = r.data?.message || 'Upload successful';
                     this.fetchStatus();
                 } else {
                     this.msgOk = false;
-                    this.msg = r.message || '上传失败';
+                    this.msg = r.message || 'Upload failed';
                 }
-            } catch(e) { this.msgOk = false; this.msg = '上传失败: ' + e.message; }
+            } catch(e) { this.msgOk = false; this.msg = 'Upload failed: ' + e.message; }
             this.uploading = false;
             event.target.value = '';
         }
@@ -738,25 +738,25 @@ function panelSettings() {
 
             if (this.basicAuthUser) body.basic_auth_user = this.basicAuthUser;
             if (this.pw.basic && this.pw.basic.length >= 8) body.basic_auth_password = this.pw.basic;
-            else if (this.pw.basic && this.pw.basic.length < 8) { showToast('BasicAuth 密码至少8位', 'error'); return; }
+            else if (this.pw.basic && this.pw.basic.length < 8) { showToast('BasicAuth Passwordat least8', 'error'); return; }
 
             if (this.username) body.username = this.username;
             if (this.pw.new1 || this.pw.new2) {
-                if (!this.pw.old) { showToast('修改 Web 密码需输入当前密码', 'error'); return; }
-                if (this.pw.new1 !== this.pw.new2) { showToast('两次密码不一致', 'error'); return; }
-                if (this.pw.new1.length < 8) { showToast('新密码至少8位', 'error'); return; }
+                if (!this.pw.old) { showToast('change Web Passwordrequires currentPassword', 'error'); return; }
+                if (this.pw.new1 !== this.pw.new2) { showToast('PasswordsPassworddo not match', 'error'); return; }
+                if (this.pw.new1.length < 8) { showToast('newPasswordat least8', 'error'); return; }
                 body.old_password = this.pw.old;
                 body.new_password = this.pw.new1;
             }
 
-            if (Object.keys(body).length === 0) { showToast('无修改内容', 'info'); return; }
+            if (Object.keys(body).length === 0) { showToast('No changes to save', 'info'); return; }
 
             this.accountSaving = true;
             try {
                 await api('/settings', { method: 'PUT', body });
                 this.accountSaved = true;
                 this.pw = { old: '', new1: '', new2: '', basic: '' };
-                showToast('账户设置已保存，即将退出登录', 'success');
+                showToast('Account settings saved, signing out...', 'success');
                 setTimeout(async () => {
                     try { await api('/auth/logout', { method: 'POST' }); } catch(e) {}
                     window.location.href = (document.body.dataset.panelPrefix || '') + '/login';
@@ -766,14 +766,14 @@ function panelSettings() {
         async syncNTP() {
             try {
                 const r = await api('/settings', { method: 'PUT', body: { ntp_sync: true } });
-                showToast(r.data?.message || '时间同步已触发', 'success');
+                showToast(r.data?.message || 'Time sync triggered', 'success');
                 this.ntpSynced = true;
             } catch(e) { showToast(e.message, 'error'); }
         },
         async saveBasic() {
             try {
                 await api('/settings', { method: 'PUT', body: { panel_title: this.panelTitle } });
-                showToast('已保存', 'success');
+                showToast('Saved', 'success');
             } catch(e) { showToast(e.message, 'error'); }
         },
         async saveServerSetting(key, val) {
@@ -781,7 +781,7 @@ function panelSettings() {
                 const body = {};
                 body[key] = val;
                 await api('/settings', { method: 'PUT', body });
-                showToast('已更新', 'success');
+                showToast('Updated', 'success');
             } catch(e) { showToast(e.message, 'error'); }
         },
         async saveAutoUpdate() {
@@ -793,12 +793,12 @@ function panelSettings() {
                     panel_auto_update_release_delay_minutes: String(this.autoUpdate.delay || 15),
                     panel_auto_update_signature_timeout_minutes: String(this.autoUpdate.signatureTimeout || 120)
                 } });
-                showToast('自动更新设置已保存', 'success');
+                showToast('Auto UpdateSettingsSaved', 'success');
             } catch(e) { showToast(e.message, 'error'); }
         },
         async testProxy() {
             if (!this.githubProxy) {
-                showToast('请先填写反代地址', 'error');
+                showToast('Please enter a proxy URL first', 'error');
                 return;
             }
             this.proxyTesting = true;
@@ -809,11 +809,11 @@ function panelSettings() {
                     const d = r.data;
                     this.proxyOk = d.ok;
                     this.proxyResult = d.ok
-                        ? '连接成功，延迟 ' + d.latency + 'ms'
-                        : '连接失败: ' + (d.error || '未知错误');
+                        ? 'Connection OK, latency  ' + d.latency + 'ms'
+                        : 'Connection failed: ' + (d.error || 'Unknown error');
                 } else {
                     this.proxyOk = false;
-                    this.proxyResult = r.message || '测试失败';
+                    this.proxyResult = r.message || 'TestFailed';
                 }
             } catch(e) {
                 this.proxyOk = false;
@@ -862,7 +862,7 @@ function panelSettings() {
                     this.ai.api_key = '';
                     this.ai.api_key_masked = r.data.api_key_masked || this.ai.api_key_masked;
                 }
-                showToast('AI 设置已保存', 'success');
+                showToast('AI SettingsSaved', 'success');
             } catch(e) { showToast(e.message, 'error'); }
             this.aiSaving = false;
         },
@@ -874,7 +874,7 @@ function panelSettings() {
                 const r = await api('/ai/test', { method: 'POST', body: this.aiPayload(), timeout: timeoutMs });
                 const d = r.data || {};
                 this.aiTestOK = !!d.ok;
-                this.aiTestResult = d.ok ? ('连接成功，延迟 ' + d.latency_ms + 'ms') : (d.message || '连接失败');
+                this.aiTestResult = d.ok ? ('Connection OK, latency  ' + d.latency_ms + 'ms') : (d.message || 'Connection failed');
             } catch(e) {
                 this.aiTestOK = false;
                 this.aiTestResult = e.message;
@@ -913,7 +913,7 @@ function versionCheck() {
             this.checking = true;
             this.updateError = "";
             await this.fetchVersion();
-            if (!this.hasUpdate && !this.updateError) showToast("已是最新版本", "success");
+            if (!this.hasUpdate && !this.updateError) showToast("New version", "success");
             this.checking = false;
         },
         progressPercent() {
@@ -930,13 +930,13 @@ function versionCheck() {
             if (this.updateStatus.error) return this.updateStatus.error;
             if (this.updateStatus.stage === "download_binary") {
                 if (this.updateStatus.has_total) {
-                    return (this.updateStatus.message || "正在下载更新包...") + " " + (this.updateStatus.download_percent || 0) + "%";
+                    return (this.updateStatus.message || "Downloading update package...") + " " + (this.updateStatus.download_percent || 0) + "%";
                 }
                 if (this.updateStatus.downloaded_bytes > 0) {
-                    return (this.updateStatus.message || "正在下载更新包...") + " 已下载 " + formatBytes(this.updateStatus.downloaded_bytes);
+                    return (this.updateStatus.message || "Downloading update package...") + " Downloaded " + formatBytes(this.updateStatus.downloaded_bytes);
                 }
             }
-            return this.updateStatus.message || "正在准备更新...";
+            return this.updateStatus.message || "Preparing update...";
         },
         async fetchUpdateStatus() {
             const prefix = document.body.dataset.panelPrefix || "";
@@ -962,7 +962,7 @@ function versionCheck() {
                 if (this.updating) {
                     this.updateStatus = Object.assign({}, this.updateStatus, {
                         running: true,
-                        message: "面板正在重启或暂时无法连接...",
+                        message: "Panel is restarting or temporarily unreachable...",
                         percent: Math.max(this.progressPercent(), 98),
                     });
                 }
@@ -976,7 +976,7 @@ function versionCheck() {
                 this.updating = false;
                 this.updateStatus = Object.assign({}, this.updateStatus, {
                     running: false,
-                    error: "更新状态查询超时，请刷新页面确认面板状态。",
+                    error: "Update status query timed out. Please refresh to confirm panel status.",
                 });
             }
         },
@@ -988,20 +988,20 @@ function versionCheck() {
             this.pollTimer = setInterval(() => this.fetchUpdateStatus(), 1000);
         },
         async doUpdate() {
-            if (!await confirmModal("确认更新到 " + this.latestVersion + "？更新期间面板将短暂不可用。")) return;
+            if (!await confirmModal("Confirm update to " + this.latestVersion + "？The panel will be briefly unavailable during the update.")) return;
             this.updating = true;
             this.updateError = "";
-            this.updateStatus = { running: true, completed: false, stage: "fetch_release", message: "正在准备更新...", percent: 5, download_percent: 0, downloaded_bytes: 0, total_bytes: 0, has_total: false, error: "" };
+            this.updateStatus = { running: true, completed: false, stage: "fetch_release", message: "Preparing update...", percent: 5, download_percent: 0, downloaded_bytes: 0, total_bytes: 0, has_total: false, error: "" };
             this.startStatusPolling();
             try {
                 const r = await api("/update/do", { method: "POST" });
                 this.updateStarting = false;
                 await this.fetchUpdateStatus();
                 if (!this.updateStatus.completed) {
-                    this.updateStatus = Object.assign({}, this.updateStatus, { running: false, completed: true, message: this.updateStatus.message || "更新完成，面板正在重启...", percent: 100, error: "" });
+                    this.updateStatus = Object.assign({}, this.updateStatus, { running: false, completed: true, message: this.updateStatus.message || "Update complete; panel is restarting...", percent: 100, error: "" });
                 }
-                showToast(r.data?.message || "更新已启动", "success");
-                this.updateError = "更新完成，面板正在重启，3 秒后自动刷新...";
+                showToast(r.data?.message || "Update started", "success");
+                this.updateError = "Update complete. Panel is restarting; auto-refresh in 3 seconds...";
                 setTimeout(() => { location.reload(); }, 3000);
             } catch(e) {
                 this.updateStarting = false;
@@ -1027,7 +1027,7 @@ function dbBackup() {
             this.backingUp = true;
             try {
                 const r = await api('/settings/db-backup', { method: 'POST' });
-                showToast(r.data?.message || '备份完成', 'success');
+                showToast(r.data?.message || 'Backup complete', 'success');
                 await this.fetchBackups();
             } catch(e) { showToast(e.message, 'error'); }
             this.backingUp = false;
@@ -1037,18 +1037,18 @@ function dbBackup() {
             window.open(prefix + '/api/settings/db-backup/' + encodeURIComponent(filename) + '/download');
         },
         async doRestore(filename) {
-            if (!await confirmModal('确认使用此备份恢复数据库？\n\n恢复前面板会先做安全备份，恢复后面板将自动重启。\n如果恢复后面板无法启动，安全备份可用于回滚。')) return;
+            if (!await confirmModal('Confirm restoring database from this backup?\n\nRestoreA safety backup will be made first，Restorepanel will auto-restart afterward。\nIfRestorepanel fails to start afterward，safety backupavailablefor rollback。')) return;
             try {
                 const r = await api('/settings/db-backup/restore', { method: 'POST', body: { filename } });
-                showToast(r.data?.message || '恢复中...', 'success');
+                showToast(r.data?.message || 'Restore...', 'success');
                 setTimeout(() => { location.reload(); }, 5000);
             } catch(e) { showToast(e.message, 'error'); }
         },
         async doDelete(filename) {
-            if (!await confirmModal('确认删除此备份？')) return;
+            if (!await confirmModal('ConfirmDeletethis backup？')) return;
             try {
                 const r = await api('/settings/db-backup?filename=' + encodeURIComponent(filename), { method: 'DELETE' });
-                showToast(r.data?.message || '已删除', 'success');
+                showToast(r.data?.message || 'Deleted', 'success');
                 await this.fetchBackups();
             } catch(e) { showToast(e.message, 'error'); }
         }
@@ -1119,7 +1119,7 @@ function remoteBackup() {
             try {
                 const r = await api('/settings/remote-backup', { method: 'PUT', body: this.cfg });
                 this.saveOK = r.success;
-                this.saveMsg = r.data?.message || (r.success ? '设置已保存' : '保存失败');
+                this.saveMsg = r.data?.message || (r.success ? 'SettingsSaved' : 'SaveFailed');
                 if (r.success && this.cfg.backup_type === 'rsync' && this.cfg.auth_type === 'key') this.loadPublicKey();
             } catch(e) { this.saveOK = false; this.saveMsg = e.message; }
             this.saving = false;
@@ -1137,7 +1137,7 @@ function remoteBackup() {
             try {
                 const r = await api('/settings/remote-backup/test', { method: 'POST' });
                 this.testOK = r.success;
-                this.testResult = r.data?.message || (r.success ? '连接成功' : '连接失败');
+                this.testResult = r.data?.message || (r.success ? 'Connection OK' : 'Connection failed');
             } catch(e) { this.testResult = e.message; }
             this.testing = false;
         },
@@ -1192,7 +1192,7 @@ function remoteBackup() {
             if (!cmd) return;
             try {
                 await navigator.clipboard.writeText(cmd);
-                showToast('命令已复制，粘贴到远程服务器以 root 执行', 'success');
+                showToast('Command copied. Paste and run as root on the remote server', 'success');
             } catch(e) {
                 var ta = document.createElement('textarea');
                 ta.value = cmd;
@@ -1200,7 +1200,7 @@ function remoteBackup() {
                 ta.select();
                 document.execCommand('copy');
                 document.body.removeChild(ta);
-                showToast('命令已复制', 'success');
+                showToast('Command copied', 'success');
             }
         }
     }
@@ -1227,14 +1227,14 @@ function systemUpdate() {
             this.checking = false;
         },
         async doUpdate() {
-            if (!await confirmModal('确认执行系统更新？\n\n更新可能需要数分钟。如页面超时请不要重复点击——后台仍在执行，重复操作将导致 dpkg 锁冲突。')) return;
+            if (!await confirmModal('Confirm running system update?\n\nUpdates may take several minutes. If the page times out, do NOT click again — the backend is still running; repeated actions will cause dpkg lock conflicts.')) return;
             this.updating = true;
             this.msg = '';
             this.output = '';
             try {
                 const r = await api('/system/updates/do', { method: 'POST', timeout: 120000 });
                 this.ok = r.success;
-                this.msg = r.data?.message || (r.success ? '更新完成' : '更新失败');
+                this.msg = r.data?.message || (r.success ? 'Update complete' : 'Update failed');
                 this.output = r.data?.output || '';
                 if (r.success) { this.packages = []; this.count = 0; }
             } catch(e) { this.ok = false; this.msg = e.message; }

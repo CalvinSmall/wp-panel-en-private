@@ -1,27 +1,31 @@
-// Package database — 版本升级机制说明
+// Package database — version upgrade mechanism
 //
-// 两个文件的分工：
+// Division of roles between the two files:
 //
-//   - migrations.go   全量建表 + 种子数据，给全新安装用，始终代表数据库的最新状态。
-//                     每次启动都会完整执行一遍（依赖 IF NOT EXISTS / OR IGNORE 保证幂等）。
-//   - upgrades.go     增量升级步骤，给老版本升级用。仅在版本落后时顺序执行。
+//   - migrations.go   Full schema creation + seed data, used for fresh installs.
+//                      Always represents the latest database state.
+//                      Runs in full on every startup (idempotent via IF NOT EXISTS / OR IGNORE).
+//   - upgrades.go     Incremental upgrade steps, used for upgrading old versions.
+//                      Only executed sequentially when the version is behind.
 //
-// 数据库变更流程：
+// Database change workflow:
 //
-//   1. 在 migrations.go 对应位置添加 CREATE / INSERT 语句（新装用）。
-//   2. 在 upgrades.go 末尾追加 Upgrade 条目（升级用）。
-//   3. 升级条目永久保留，严禁删除。用户可能跨多个版本升级，删除升级条目会导致
-//      老版本跳过必要的 ALTER TABLE 等增量迁移。
+//   1. Add CREATE / INSERT statements to the corresponding section in migrations.go (for fresh installs).
+//   2. Append an Upgrade entry to the end of upgrades.go (for upgrades).
+//   3. Upgrade entries are permanent and must never be deleted. Users may upgrade across
+//      multiple versions; deleting upgrade entries would cause old versions to skip
+//      necessary incremental migrations such as ALTER TABLE.
 //
-// 运行时逻辑（main.go 启动 → database.Open → RunMigrations → RunUpgrades）：
+// Runtime logic (main.go startup → database.Open → RunMigrations → RunUpgrades):
 //
-//   新装：  migrations 创建全部表 + 种子 → upgrades 发现版本表为空 → 跳过所有升级 → 写入最新版本号
-//   升级：  migrations 幂等执行（无实际变化）→ upgrades 发现版本落后 → 逐条执行缺失的升级 → 更新版本号
-//   已最新：migrations 幂等执行 → upgrades 发现版本已是最新 → 跳过
+//   Fresh install:  migrations create all tables + seed → upgrades detect empty version table → skip all → write latest version
+//   Upgrade:        migrations run idempotently (no actual change) → upgrades detect version lag → execute missing upgrades sequentially → update version
+//   Already latest: migrations run idempotently → upgrades detect version is latest → skip
 //
-// 版本号约定：
-//   使用语义化版本号（如 "1.0.0"），与 Git tag 保持一致。LatestVersion() 返回 upgrades 列表中
-//   最后一条的版本号（列表为空时返回 "1.0.0"），即当前代码所代表的数据库版本。
+// Version convention:
+//   Uses semantic versioning (e.g. "1.0.0"), matching Git tags. LatestVersion() returns the version
+//   of the last entry in the upgrades list ("1.0.0" if the list is empty), i.e. the database version
+//   that the current code represents.
 
 package database
 
@@ -32,42 +36,45 @@ import (
 	"strings"
 )
 
-// Upgrade 定义一次版本升级需要执行的数据库变更。
-// SQL 中的语句应使用 IF NOT EXISTS / OR IGNORE 等幂等写法，确保重复执行安全。
-// Func 为可选的 Go 代码迁移，在 SQL 之后执行，用于文件系统清理等非数据库操作。
+// Upgrade defines the database changes for a single version upgrade.
+// SQL statements should use IF NOT EXISTS / OR IGNORE for idempotency.
+// Func is an optional Go code migration, executed after SQL, for non-DB operations such as filesystem cleanup.
 type Upgrade struct {
-	Version     string       // 目标版本号，如 "1.0.0"
-	Description string       // 本次升级做了什么
-	SQL         []string     // 要执行的 SQL 语句
-	Func        func() error // 可选的 Go 函数迁移
+	Version     string       // Target version, e.g. "1.0.0"
+	Description string       // What this upgrade does
+	SQL         []string     // SQL statements to execute
+	Func        func() error // Optional Go migration function
 }
 
-// registeredFuncs 存放外部包注册的升级函数，解决循环依赖问题（database 不能 import executor）。
+// registeredFuncs holds upgrade functions registered by external packages,
+// solving the circular dependency problem (database cannot import executor).
 var registeredFuncs = map[string]func() error{}
 
-// RegisterUpgrade 供外部包注册升级函数，version 必须与 upgrades 列表中的 Version 匹配。
+// RegisterUpgrade allows external packages to register an upgrade function.
+// The version must match a Version in the upgrades list.
 func RegisterUpgrade(version string, fn func() error) {
 	registeredFuncs[version] = fn
 }
 
-// upgrades 按版本顺序排列（旧→新），永久保留，严禁删除旧条目（跨版本升级依赖完整迁移链）。
-// v1.0.0 正式版发布时清空过一次历史，此后所有升级条目持续累积。
+// upgrades are ordered by version (old → new), permanently retained.
+// Never delete old entries — cross-version upgrades depend on the complete migration chain.
+// The history was cleared once at the v1.0.0 stable release; all upgrade entries accumulate from then on.
 var upgrades = []Upgrade{
 	{
 		Version:     "1.0.1",
-		Description: "迁移 wp-panel-config.json 到 Web 目录外，轮换 API Key",
+		Description: "Migrate wp-panel-config.json out of web root and rotate API keys",
 		Func:        migratePluginConfigs,
 	},
 	{
 		Version:     "1.0.2",
-		Description: "新增 XML-RPC 站点开关，默认禁用",
+		Description: "Add per-site XML-RPC toggle, disabled by default",
 		SQL: []string{
 			`ALTER TABLE websites ADD COLUMN xmlrpc_enabled INTEGER NOT NULL DEFAULT 0`,
 		},
 	},
 	{
 		Version:     "1.0.3",
-		Description: "cron_jobs 补充 running 列 + 默认插件新增 Redis Cache",
+		Description: "Add running column to cron_jobs and seed Redis Cache as a default plugin",
 		SQL: []string{
 			`ALTER TABLE cron_jobs ADD COLUMN running INTEGER NOT NULL DEFAULT 0`,
 			`INSERT OR IGNORE INTO wp_extension_config (etype, slug, name, enabled) VALUES ('plugin', 'redis-cache', 'Redis Cache', 1)`,
@@ -75,25 +82,25 @@ var upgrades = []Upgrade{
 	},
 	{
 		Version:     "1.0.4",
-		Description: "强化每站点 Unix 用户组隔离和敏感文件权限",
+		Description: "Strengthen per-site Unix user group isolation and sensitive file permissions",
 	},
 	{
 		Version:     "1.0.5",
-		Description: "新增系统可用更新告警开关",
+		Description: "Add system update alert toggle",
 		SQL: []string{
-			`INSERT OR IGNORE INTO security_settings (skey, svalue, description) VALUES ('alert_system_update', 'true', '系统可用更新告警')`,
+			`INSERT OR IGNORE INTO security_settings (skey, svalue, description) VALUES ('alert_system_update', 'true', 'System updates available alert')`,
 		},
 	},
 	{
 		Version:     "1.0.6",
-		Description: "新增面板新版本告警开关",
+		Description: "Add panel version alert toggle",
 		SQL: []string{
-			`INSERT OR IGNORE INTO security_settings (skey, svalue, description) VALUES ('alert_panel_update', 'true', '面板新版本告警')`,
+			`INSERT OR IGNORE INTO security_settings (skey, svalue, description) VALUES ('alert_panel_update', 'true', 'Panel new version alert')`,
 		},
 	},
 	{
 		Version:     "1.0.7",
-		Description: "新增 WP_DEBUG / 文章修订 / 内存限制 优化项",
+		Description: "Add WP_DEBUG / post revisions / memory limit optimization settings",
 		SQL: []string{
 			`ALTER TABLE websites ADD COLUMN wp_debug_enabled INTEGER NOT NULL DEFAULT 0`,
 			`ALTER TABLE websites ADD COLUMN wp_post_revisions INTEGER NOT NULL DEFAULT -1`,
@@ -102,17 +109,17 @@ var upgrades = []Upgrade{
 	},
 	{
 		Version:     "1.0.8",
-		Description: "新增匿名安装统计开关",
+		Description: "Add anonymous install analytics toggle",
 		SQL: []string{
-			`INSERT OR IGNORE INTO security_settings (skey, svalue, description) VALUES ('telemetry_enabled', 'true', '匿名安装统计（仅上报机器标识和版本号）')`,
-			`INSERT OR IGNORE INTO security_settings (skey, svalue, description) VALUES ('telemetry_url', '', '自定义统计上报地址（留空使用默认）')`,
+			`INSERT OR IGNORE INTO security_settings (skey, svalue, description) VALUES ('telemetry_enabled', 'true', 'Anonymous install analytics (reports only machine ID and version)')`,
+			`INSERT OR IGNORE INTO security_settings (skey, svalue, description) VALUES ('telemetry_url', '', 'Custom analytics report URL (leave empty to use default)')`,
 		},
 	},
 	{
 		Version:     "1.0.9",
-		Description: "新增 GitHub 反代地址设置",
+		Description: "Add GitHub proxy address setting",
 		SQL: []string{
-			`INSERT OR IGNORE INTO security_settings (skey, svalue, description) VALUES ('github_proxy', '', 'GitHub 反代地址，留空直连')`,
+			`INSERT OR IGNORE INTO security_settings (skey, svalue, description) VALUES ('github_proxy', '', 'GitHub proxy address; leave empty for direct connection')`,
 		},
 	},
 	{
@@ -121,14 +128,14 @@ var upgrades = []Upgrade{
 	},
 	{
 		Version:     "1.0.11",
-		Description: "新增 WordPress 安全日志路径白名单设置",
+		Description: "Add WordPress security log path allowlist setting",
 		SQL: []string{
-			`INSERT OR IGNORE INTO security_settings (skey, svalue, description) VALUES ('wp_security_log_whitelist', '', 'WordPress安全日志路径白名单')`,
+			`INSERT OR IGNORE INTO security_settings (skey, svalue, description) VALUES ('wp_security_log_whitelist', '', 'WordPress security log path allowlist')`,
 		},
 	},
 	{
 		Version:     "1.0.12",
-		Description: "新增网站级 CDN 真实 IP 配置组",
+		Description: "Add per-site CDN real IP configuration groups",
 		SQL: []string{
 			`CREATE TABLE IF NOT EXISTS cdn_realip_groups (
 				id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -152,63 +159,63 @@ var upgrades = []Upgrade{
 				FOREIGN KEY (group_id) REFERENCES cdn_realip_groups(id) ON DELETE CASCADE
 			)`,
 			`CREATE INDEX IF NOT EXISTS idx_website_cdn_realip_groups_group ON website_cdn_realip_groups(group_id)`,
-			`INSERT OR IGNORE INTO security_settings (skey, svalue, description) VALUES ('cloudflare_realip_ips', '', 'Cloudflare Real IP 专用官方IP段')`,
+			`INSERT OR IGNORE INTO security_settings (skey, svalue, description) VALUES ('cloudflare_realip_ips', '', 'Cloudflare Real IP official IP ranges')`,
 			`INSERT OR IGNORE INTO cdn_realip_groups (name, provider, header_name, ip_ranges, builtin, enabled, description) VALUES
-				('Cloudflare', 'cloudflare', 'CF-Connecting-IP', '', 1, 1, 'Cloudflare 官方 IP 段由面板自动拉取'),
-				('通用 CDN（兼容模式）', 'compatible', 'X-Forwarded-For', '', 1, 1, '不校验来源 IP，直接信任 X-Forwarded-For')`,
+				('Cloudflare', 'cloudflare', 'CF-Connecting-IP', '', 1, 1, 'Cloudflare official IP ranges auto-fetched by panel'),
+				('Generic CDN (Compatibility Mode)', 'compatible', 'X-Forwarded-For', '', 1, 1, 'Trusts X-Forwarded-For directly without origin IP verification')`,
 		},
 		Func: ensureCDNRealIPEnabledColumn,
 	},
 	{
 		Version:     "1.0.13",
-		Description: "新增 Bot UA 统一限速设置",
+		Description: "Add unified bot UA rate limiting settings",
 		SQL: []string{
-			`INSERT OR IGNORE INTO security_settings (skey, svalue, description) VALUES ('bot_limit_enabled', 'false', '是否开启Bot UA统一限速')`,
-			`INSERT OR IGNORE INTO security_settings (skey, svalue, description) VALUES ('bot_limit_rpm', '30', '每站点Bot每分钟最大请求数')`,
-			`INSERT OR IGNORE INTO security_settings (skey, svalue, description) VALUES ('bot_limit_burst', '20', 'Bot突发缓冲允许量')`,
-			`INSERT OR IGNORE INTO security_settings (skey, svalue, description) VALUES ('googlebot_ips', '', 'Googlebot官方IP段缓存')`,
-			`INSERT OR IGNORE INTO security_settings (skey, svalue, description) VALUES ('bingbot_ips', '', 'Bingbot官方IP段缓存')`,
+			`INSERT OR IGNORE INTO security_settings (skey, svalue, description) VALUES ('bot_limit_enabled', 'false', 'Enable unified bot UA rate limiting')`,
+			`INSERT OR IGNORE INTO security_settings (skey, svalue, description) VALUES ('bot_limit_rpm', '30', 'Max bot requests per site per minute')`,
+			`INSERT OR IGNORE INTO security_settings (skey, svalue, description) VALUES ('bot_limit_burst', '20', 'Bot burst allowance')`,
+			`INSERT OR IGNORE INTO security_settings (skey, svalue, description) VALUES ('googlebot_ips', '', 'Googlebot official IP range cache')`,
+			`INSERT OR IGNORE INTO security_settings (skey, svalue, description) VALUES ('bingbot_ips', '', 'Bingbot official IP range cache')`,
 		},
 	},
 	{
 		Version:     "1.0.14",
-		Description: "记录站点最近一次 SSL 申请失败原因",
+		Description: "Record last SSL application failure reason per site",
 		Func:        ensureSSLLastErrorColumn,
 	},
 	{
 		Version:     "1.0.15",
-		Description: "新增面板自动更新设置",
+		Description: "Add panel auto-update settings",
 		SQL: []string{
-			`INSERT OR IGNORE INTO security_settings (skey, svalue, description) VALUES ('panel_auto_update_enabled', 'false', '是否启用面板自动更新')`,
-			`INSERT OR IGNORE INTO security_settings (skey, svalue, description) VALUES ('panel_auto_update_mode', 'patch_only', '面板自动更新模式：patch_only/all_stable')`,
-			`INSERT OR IGNORE INTO security_settings (skey, svalue, description) VALUES ('panel_auto_update_window', '03:00-05:00', '面板自动更新时间窗口')`,
-			`INSERT OR IGNORE INTO security_settings (skey, svalue, description) VALUES ('panel_auto_update_release_delay_minutes', '15', '面板自动更新发布延迟分钟数')`,
-			`INSERT OR IGNORE INTO security_settings (skey, svalue, description) VALUES ('panel_auto_update_signature_timeout_minutes', '120', '面板自动更新等待签名超时分钟数')`,
-			`INSERT OR IGNORE INTO security_settings (skey, svalue, description) VALUES ('panel_auto_update_last_target_version', '', '面板自动更新最近目标版本')`,
-			`INSERT OR IGNORE INTO security_settings (skey, svalue, description) VALUES ('panel_auto_update_last_check_at', '', '面板自动更新最近检查时间')`,
-			`INSERT OR IGNORE INTO security_settings (skey, svalue, description) VALUES ('panel_auto_update_last_attempt_at', '', '面板自动更新最近尝试时间')`,
-			`INSERT OR IGNORE INTO security_settings (skey, svalue, description) VALUES ('panel_auto_update_last_status', '', '面板自动更新最近状态')`,
-			`INSERT OR IGNORE INTO security_settings (skey, svalue, description) VALUES ('panel_auto_update_last_stage', '', '面板自动更新最近阶段')`,
-			`INSERT OR IGNORE INTO security_settings (skey, svalue, description) VALUES ('panel_auto_update_last_error', '', '面板自动更新最近错误')`,
-			`INSERT OR IGNORE INTO security_settings (skey, svalue, description) VALUES ('panel_auto_update_last_success_at', '', '面板自动更新最近成功时间')`,
-			`INSERT OR IGNORE INTO security_settings (skey, svalue, description) VALUES ('panel_auto_update_last_success_version', '', '面板自动更新最近成功版本')`,
-			`INSERT OR IGNORE INTO security_settings (skey, svalue, description) VALUES ('panel_auto_update_signature_wait_version', '', '面板自动更新等待签名版本')`,
-			`INSERT OR IGNORE INTO security_settings (skey, svalue, description) VALUES ('panel_auto_update_signature_wait_at', '', '面板自动更新等待签名开始时间')`,
+			`INSERT OR IGNORE INTO security_settings (skey, svalue, description) VALUES ('panel_auto_update_enabled', 'false', 'Enable panel auto-update')`,
+			`INSERT OR IGNORE INTO security_settings (skey, svalue, description) VALUES ('panel_auto_update_mode', 'patch_only', 'Panel auto-update mode: patch_only/all_stable')`,
+			`INSERT OR IGNORE INTO security_settings (skey, svalue, description) VALUES ('panel_auto_update_window', '03:00-05:00', 'Panel auto-update time window')`,
+			`INSERT OR IGNORE INTO security_settings (skey, svalue, description) VALUES ('panel_auto_update_release_delay_minutes', '15', 'Panel auto-update release delay (minutes)')`,
+			`INSERT OR IGNORE INTO security_settings (skey, svalue, description) VALUES ('panel_auto_update_signature_timeout_minutes', '120', 'Panel auto-update signature wait timeout (minutes)')`,
+			`INSERT OR IGNORE INTO security_settings (skey, svalue, description) VALUES ('panel_auto_update_last_target_version', '', 'Panel auto-update last target version')`,
+			`INSERT OR IGNORE INTO security_settings (skey, svalue, description) VALUES ('panel_auto_update_last_check_at', '', 'Panel auto-update last check time')`,
+			`INSERT OR IGNORE INTO security_settings (skey, svalue, description) VALUES ('panel_auto_update_last_attempt_at', '', 'Panel auto-update last attempt time')`,
+			`INSERT OR IGNORE INTO security_settings (skey, svalue, description) VALUES ('panel_auto_update_last_status', '', 'Panel auto-update last status')`,
+			`INSERT OR IGNORE INTO security_settings (skey, svalue, description) VALUES ('panel_auto_update_last_stage', '', 'Panel auto-update last stage')`,
+			`INSERT OR IGNORE INTO security_settings (skey, svalue, description) VALUES ('panel_auto_update_last_error', '', 'Panel auto-update last error')`,
+			`INSERT OR IGNORE INTO security_settings (skey, svalue, description) VALUES ('panel_auto_update_last_success_at', '', 'Panel auto-update last success time')`,
+			`INSERT OR IGNORE INTO security_settings (skey, svalue, description) VALUES ('panel_auto_update_last_success_version', '', 'Panel auto-update last success version')`,
+			`INSERT OR IGNORE INTO security_settings (skey, svalue, description) VALUES ('panel_auto_update_signature_wait_version', '', 'Panel auto-update signature wait version')`,
+			`INSERT OR IGNORE INTO security_settings (skey, svalue, description) VALUES ('panel_auto_update_signature_wait_at', '', 'Panel auto-update signature wait start time')`,
 		},
 	},
 	{
 		Version:     "1.0.16",
-		Description: "新增站点级 SSL 证书导出开关",
+		Description: "Add per-site SSL certificate export toggle",
 		Func:        ensureSSLExportEnabledColumn,
 	},
 	{
 		Version:     "1.0.17",
-		Description: "新增 PHP 站点 Web 入口目录配置",
+		Description: "Add per-site PHP web document root subdirectory config",
 		Func:        ensureDocumentRootSubdirColumn,
 	},
 	{
 		Version:     "1.0.18",
-		Description: "新增站点 AI 只读诊断设置和会话记录",
+		Description: "Add per-site AI read-only diagnosis settings and session recording",
 		SQL: []string{
 			`CREATE TABLE IF NOT EXISTS ai_settings (
 				id              INTEGER PRIMARY KEY,
@@ -244,7 +251,7 @@ var upgrades = []Upgrade{
 	},
 	{
 		Version:     "1.0.19",
-		Description: "新增 AI 诊断会话追问消息记录",
+		Description: "Add AI diagnosis session follow-up message recording",
 		SQL: []string{
 			`CREATE TABLE IF NOT EXISTS ai_messages (
 				id             INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -262,7 +269,7 @@ var upgrades = []Upgrade{
 	},
 	{
 		Version:     "1.0.20",
-		Description: "远程备份新增 S3 兼容对象存储后端",
+		Description: "Add S3-compatible object storage backend for remote backups",
 		SQL: []string{
 			`CREATE TABLE IF NOT EXISTS remote_backup_settings (
 				id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -366,7 +373,7 @@ func ensureSSLExportEnabledColumn() error {
 	return err
 }
 
-// LatestVersion 返回 upgrades 列表中的最新版本号。
+// LatestVersion returns the latest version number in the upgrades list.
 func LatestVersion() string {
 	if len(upgrades) == 0 {
 		return "1.0.0"
@@ -374,8 +381,9 @@ func LatestVersion() string {
 	return upgrades[len(upgrades)-1].Version
 }
 
-// newInstallCanary 从 upgrades 列表中提取最后一条 ALTER TABLE ADD COLUMN 的表名和字段名，
-// 用于判断数据库是否已包含最新 schema（新装检测的 canary 列）。
+// newInstallCanary extracts the table and column name from the last ALTER TABLE ADD COLUMN
+// in the upgrades list, used as a canary column to detect whether the database already has
+// the latest schema (fresh install detection).
 func newInstallCanary() (table, column string) {
 	for i := len(upgrades) - 1; i >= 0; i-- {
 		for _, sql := range upgrades[i].SQL {
@@ -407,57 +415,60 @@ func isBetaVersion(v string) bool {
 	return strings.Contains(strings.ToLower(v), "beta")
 }
 
-// RunUpgrades 执行所有尚未应用的版本升级。新装数据库已是最新版本，跳过所有升级。
+// RunUpgrades executes all version upgrades that have not yet been applied.
+// A fresh install database is already at the latest version and skips all upgrades.
 func RunUpgrades() error {
 	if DB == nil {
-		return fmt.Errorf("数据库未初始化")
+		return fmt.Errorf("database not initialized")
 	}
 
-	// 确保版本追踪表存在
+	// Ensure the version tracking table exists
 	if _, err := DB.Exec(`CREATE TABLE IF NOT EXISTS schema_version (
 		version    TEXT NOT NULL,
 		updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 	)`); err != nil {
-		return fmt.Errorf("创建 schema_version 表失败: %w", err)
+		return fmt.Errorf("failed to create schema_version table: %w", err)
 	}
 
-	// 查询当前版本
+	// Query current version
 	var currentVersion string
 	if err := DB.QueryRow("SELECT version FROM schema_version ORDER BY updated_at DESC, rowid DESC LIMIT 1").Scan(&currentVersion); err != nil && err != sql.ErrNoRows {
-		return fmt.Errorf("查询当前版本失败: %w", err)
+		return fmt.Errorf("failed to query current version: %w", err)
 	}
 
-	// 新装检测：currentVersion 为空时，检查数据库是否已包含最新 schema。
-	// migrations.go 已全量建表，若最新升级中的字段已存在则说明是新装，无需执行任何升级。
+	// Fresh install detection: when currentVersion is empty, check whether the database
+	// already has the latest schema. migrations.go has already created all tables;
+	// if the canary column from the latest upgrade already exists, this is a fresh install
+	// and no upgrades need to be executed.
 	if currentVersion == "" {
 		if table, col := newInstallCanary(); col != "" {
 			var exists int
 			if err := DB.QueryRow("SELECT COUNT(*) FROM pragma_table_info(?) WHERE name=?", table, col).Scan(&exists); err != nil {
-				return fmt.Errorf("检测数据库结构失败: %w", err)
+				return fmt.Errorf("failed to inspect database schema: %w", err)
 			}
 			if exists > 0 {
-				log.Printf("[升级] 新装数据库，跳过所有升级步骤")
+				log.Printf("[upgrade] Fresh install database, skipping all upgrade steps")
 				if _, err := DB.Exec("INSERT INTO schema_version (version) VALUES (?)", LatestVersion()); err != nil {
-					return fmt.Errorf("记录新装版本失败: %w", err)
+					return fmt.Errorf("failed to record fresh install version: %w", err)
 				}
 				return nil
 			}
 		}
 	}
 
-	// Beta 版本归一化到 1.0.0 正式基线
+	// Normalize beta versions to the 1.0.0 stable baseline
 	if currentVersion != "" && isBetaVersion(currentVersion) {
-		log.Printf("[升级] beta 版本 %s 归一化到 1.0.0", currentVersion)
+		log.Printf("[upgrade] normalizing beta version %s to 1.0.0", currentVersion)
 		if _, err := DB.Exec("DELETE FROM schema_version"); err != nil {
-			log.Printf("[升级] 清理 beta 版本记录失败: %v", err)
+			log.Printf("[upgrade] failed to clean up beta version records: %v", err)
 		} else if _, err := DB.Exec("INSERT INTO schema_version (version) VALUES ('1.0.0')"); err != nil {
-			log.Printf("[升级] 写入归一化版本失败: %v", err)
+			log.Printf("[upgrade] failed to write normalized version: %v", err)
 		} else {
 			currentVersion = "1.0.0"
 		}
 	}
 
-	// 验证当前版本合法性：必须在 upgrades 列表中，或者是基线 1.0.0，或者是空（新装）
+	// Validate current version: must be in the upgrades list, baseline 1.0.0, or empty (fresh install)
 	if currentVersion != "" && currentVersion != "1.0.0" && currentVersion != LatestVersion() {
 		found := false
 		for _, u := range upgrades {
@@ -467,11 +478,11 @@ func RunUpgrades() error {
 			}
 		}
 		if !found {
-			return fmt.Errorf("未知数据库版本 %s，请先手动迁移到 1.0.0", currentVersion)
+			return fmt.Errorf("unknown database version %s, please manually migrate to 1.0.0 first", currentVersion)
 		}
 	}
 
-	// 基线 1.0.0 视为已应用所有旧升级，从 upgrades 第一条开始执行
+	// Baseline 1.0.0 is treated as having all old upgrades applied; start from the first entry
 	applied := currentVersion == "" || currentVersion == "1.0.0"
 
 	for _, u := range upgrades {
@@ -482,15 +493,15 @@ func RunUpgrades() error {
 			continue
 		}
 
-		log.Printf("[升级] 执行 %s: %s", u.Version, u.Description)
+		log.Printf("[upgrade] executing %s: %s", u.Version, u.Description)
 
 		for _, sql := range u.SQL {
 			if _, err := DB.Exec(sql); err != nil {
 				if strings.Contains(err.Error(), "duplicate column name") {
-					log.Printf("[升级] %s: 字段已存在，跳过 (%s)", u.Version, strings.TrimSpace(sql))
+					log.Printf("[upgrade] %s: column already exists, skipping (%s)", u.Version, strings.TrimSpace(sql))
 					continue
 				}
-				return fmt.Errorf("升级 %s 失败: %w\nSQL: %s", u.Version, err, sql)
+				return fmt.Errorf("upgrade %s failed: %w\nSQL: %s", u.Version, err, sql)
 			}
 		}
 
@@ -500,25 +511,26 @@ func RunUpgrades() error {
 		}
 		if fn != nil {
 			if err := fn(); err != nil {
-				return fmt.Errorf("升级 %s 函数迁移失败: %w", u.Version, err)
+				return fmt.Errorf("upgrade %s function migration failed: %w", u.Version, err)
 			}
 		}
 
 		if _, err := DB.Exec("INSERT INTO schema_version (version) VALUES (?)", u.Version); err != nil {
-			return fmt.Errorf("记录升级版本 %s 失败: %w", u.Version, err)
+			return fmt.Errorf("failed to record upgrade version %s: %w", u.Version, err)
 		}
 
-		log.Printf("[升级] %s 完成", u.Version)
+		log.Printf("[upgrade] %s complete", u.Version)
 	}
 
-	// 新装数据库：无任何版本记录，直接写入最新版本号，下次启动跳过所有升级
+	// Fresh install database: no version records; write the latest version directly
+	// so that the next startup skips all upgrades.
 	var count int
 	if err := DB.QueryRow("SELECT COUNT(*) FROM schema_version").Scan(&count); err != nil {
-		log.Printf("[升级] 查询版本记录失败: %v", err)
+		log.Printf("[upgrade] failed to query version records: %v", err)
 	}
 	if count == 0 {
 		if _, err := DB.Exec("INSERT INTO schema_version (version) VALUES (?)", LatestVersion()); err != nil {
-			return fmt.Errorf("记录新装版本失败: %w", err)
+			return fmt.Errorf("failed to record fresh install version: %w", err)
 		}
 	}
 

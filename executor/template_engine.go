@@ -68,9 +68,9 @@ func EnsureLogMap() error {
 	confDir := "/etc/nginx/conf.d"
 	confPath := confDir + "/wppanel-log.conf"
 	if err := os.MkdirAll(confDir, 0755); err != nil {
-		return fmt.Errorf("创建 Nginx 配置目录失败: %w", err)
+		return fmt.Errorf("Failed to create Nginx configuration directory: %w", err)
 	}
-	content := `# WP Panel — 日志条件变量 (勿手动修改)
+	content := `# WP Panel — Log condition variables (do not modify manually)
 map $status $wp_loggable {
     ~^[45]  1;
     default 0;
@@ -121,15 +121,15 @@ map $uri $wp_security_loggable {
 	oldExists := oldErr == nil
 
 	if err := os.WriteFile(confPath, []byte(content), 0644); err != nil {
-		return fmt.Errorf("写入 Nginx 日志 map 配置失败: %w", err)
+		return fmt.Errorf("Failed to write Nginx log map configuration: %w", err)
 	}
 	if out, err := exec.Command("nginx", "-t").CombinedOutput(); err != nil {
 		restoreLogMapConfig(confPath, oldContent, oldExists)
-		return fmt.Errorf("Nginx 日志 map 配置语法检查失败，已回滚: %s", strings.TrimSpace(string(out)))
+		return fmt.Errorf("Nginx log map configuration syntax check failed, rolled back: %s", strings.TrimSpace(string(out)))
 	}
 	if out, err := exec.Command("nginx", "-s", "reload").CombinedOutput(); err != nil {
 		restoreLogMapConfig(confPath, oldContent, oldExists)
-		return fmt.Errorf("Nginx 日志 map 配置重载失败，已回滚: %s", strings.TrimSpace(string(out)))
+		return fmt.Errorf("Nginx log map configuration reload failed, rolled back: %s", strings.TrimSpace(string(out)))
 	}
 	return nil
 }
@@ -180,7 +180,7 @@ func NormalizeWPSecurityLogWhitelist(raw string) ([]string, error) {
 	}
 	lines := strings.Split(raw, "\n")
 	if len(lines) > 200 {
-		return nil, fmt.Errorf("WordPress安全日志白名单最多200行")
+		return nil, fmt.Errorf("WordPress security log whitelist may have at most 200 lines")
 	}
 	patterns := make([]string, 0, len(lines))
 	seen := map[string]bool{}
@@ -190,16 +190,16 @@ func NormalizeWPSecurityLogWhitelist(raw string) ([]string, error) {
 			continue
 		}
 		if len(pattern) > 200 {
-			return nil, fmt.Errorf("白名单路径过长: %s", pattern)
+			return nil, fmt.Errorf("Whitelist path too long: %s", pattern)
 		}
 		if !strings.HasPrefix(pattern, "/") {
-			return nil, fmt.Errorf("白名单路径必须以 / 开头: %s", pattern)
+			return nil, fmt.Errorf("Whitelist path must start with /: %s", pattern)
 		}
 		if strings.ContainsAny(pattern, " \t\r\n;{}()[]^~\\\"'`$#") {
-			return nil, fmt.Errorf("白名单路径包含不允许的字符: %s", pattern)
+			return nil, fmt.Errorf("Whitelist path contains disallowed characters: %s", pattern)
 		}
 		if strings.Contains(pattern, "..") {
-			return nil, fmt.Errorf("白名单路径不能包含 ..: %s", pattern)
+			return nil, fmt.Errorf("Whitelist path cannot contain ..: %s", pattern)
 		}
 		if !seen[pattern] {
 			patterns = append(patterns, pattern)
@@ -234,12 +234,12 @@ func (e *TemplateEngine) RenderNginxConfig(data *NginxSiteData) (string, error) 
 
 	tmpl, err := template.New(tmplName).Parse(getNginxTemplate(data.UseSSL, data.SiteType))
 	if err != nil {
-		return "", fmt.Errorf("模板解析失败: %w", err)
+		return "", fmt.Errorf("Template parsing failed: %w", err)
 	}
 
 	var buf bytes.Buffer
 	if err := tmpl.Execute(&buf, data); err != nil {
-		return "", fmt.Errorf("模板渲染失败: %w", err)
+		return "", fmt.Errorf("Template rendering failed: %w", err)
 	}
 
 	return buf.String(), nil
@@ -270,12 +270,12 @@ func (e *TemplateEngine) RenderPHPFPMPool(data *PHPFPMPoolData) (string, error) 
 	}
 	tmpl, err := template.New("php_fpm_pool").Parse(phpFPMPoolTemplate)
 	if err != nil {
-		return "", fmt.Errorf("模板解析失败: %w", err)
+		return "", fmt.Errorf("Template parsing failed: %w", err)
 	}
 
 	var buf bytes.Buffer
 	if err := tmpl.Execute(&buf, data); err != nil {
-		return "", fmt.Errorf("模板渲染失败: %w", err)
+		return "", fmt.Errorf("Template rendering failed: %w", err)
 	}
 
 	return buf.String(), nil
@@ -287,7 +287,7 @@ func (e *TemplateEngine) ApplyNginxConfig(configContent string, targetPath strin
 	mainTmp := "/tmp/nginx_main_" + ts + ".conf"
 
 	if err := os.WriteFile(serverTmp, []byte(configContent), 0644); err != nil {
-		return fmt.Errorf("写入临时配置失败: %w", err)
+		return fmt.Errorf("Failed to write temporary configuration: %w", err)
 	}
 	defer os.Remove(serverTmp)
 
@@ -307,14 +307,14 @@ func (e *TemplateEngine) ApplyNginxConfig(configContent string, targetPath strin
 
 	wrapper := "events { worker_connections 1024; }\nhttp {\n    include /etc/nginx/mime.types;\n    include /etc/nginx/conf.d/*.conf;\n    include " + serverTmp + ";\n}\n"
 	if err := os.WriteFile(mainTmp, []byte(wrapper), 0644); err != nil {
-		return fmt.Errorf("写入临时主配置失败: %w", err)
+		return fmt.Errorf("Failed to write temporary main configuration: %w", err)
 	}
 	defer os.Remove(mainTmp)
 
 	preCheckCmd := exec.Command("nginx", "-t", "-c", mainTmp)
 	preCheckOut, err := preCheckCmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("Nginx 语法检查失败:\n%s", string(preCheckOut))
+		return fmt.Errorf("Nginx syntax check failed:\n%s", string(preCheckOut))
 	}
 
 	if _, err := os.Stat(targetPath); err == nil {
@@ -322,18 +322,18 @@ func (e *TemplateEngine) ApplyNginxConfig(configContent string, targetPath strin
 		os.MkdirAll(nginxBackupDir, 0755)
 		backupPath := nginxBackupDir + "/" + fmt.Sprintf("%s.bak.%d", getConfBaseName(targetPath), time.Now().Unix())
 		if err := os.Rename(targetPath, backupPath); err != nil {
-			return fmt.Errorf("备份旧配置失败: %w", err)
+			return fmt.Errorf("Failed to back up old configuration: %w", err)
 		}
 		cleanupNginxConfigBackups(nginxBackupDir, targetPath, nginxConfigBackupKeepCount)
 	}
 
 	if err := os.WriteFile(targetPath, []byte(configContent), 0644); err != nil {
-		return fmt.Errorf("写入配置文件失败: %w", err)
+		return fmt.Errorf("Failed to write configuration file: %w", err)
 	}
 
 	_ = os.Remove(enabledPath)
 	if err := os.Symlink(targetPath, enabledPath); err != nil {
-		return fmt.Errorf("创建软链接失败: %w", err)
+		return fmt.Errorf("Failed to create symlink: %w", err)
 	}
 
 	reloadCmd := exec.Command("nginx", "-s", "reload")
@@ -342,7 +342,7 @@ func (e *TemplateEngine) ApplyNginxConfig(configContent string, targetPath strin
 		// Reload failed — remove the config and symlink so Nginx can restart cleanly
 		_ = os.Remove(enabledPath)
 		_ = os.Remove(targetPath)
-		return fmt.Errorf("Nginx 重载失败: %s", string(reloadOut))
+		return fmt.Errorf("Nginx reload failed: %s", string(reloadOut))
 	}
 
 	return nil
@@ -355,7 +355,7 @@ func (e *TemplateEngine) ApplyPHPFPMPool(configContent string, targetPath string
 	hadOld := oldErr == nil
 
 	if err := os.WriteFile(targetPath, []byte(configContent), 0644); err != nil {
-		return fmt.Errorf("写入PHP-FPM配置失败: %w", err)
+		return fmt.Errorf("Failed to write PHP-FPM configuration: %w", err)
 	}
 
 	testCmd := exec.Command("php-fpm8.3", "-t")
@@ -366,10 +366,10 @@ func (e *TemplateEngine) ApplyPHPFPMPool(configContent string, targetPath string
 		} else {
 			_ = os.Remove(targetPath)
 		}
-		return fmt.Errorf("PHP-FPM 配置检查失败，已回滚\n%s", string(testOut))
+		return fmt.Errorf("PHP-FPM configuration check failed, rolled back\n%s", string(testOut))
 	}
 
-	// 尝试 reload，失败则 restart，再失败则 start
+	// Attempt reload; fall back to restart; fall back to start
 	reloadCmd := exec.Command("systemctl", "reload", "php8.3-fpm")
 	if _, err := reloadCmd.CombinedOutput(); err != nil {
 		restartCmd := exec.Command("systemctl", "restart", "php8.3-fpm")
@@ -382,10 +382,10 @@ func (e *TemplateEngine) ApplyPHPFPMPool(configContent string, targetPath string
 					_ = os.Remove(targetPath)
 				}
 				_ = exec.Command("systemctl", "restart", "php8.3-fpm").Run()
-				return fmt.Errorf("PHP-FPM 启动失败，请检查: systemctl status php8.3-fpm")
+				return fmt.Errorf("PHP-FPM failed to start, check: systemctl status php8.3-fpm")
 			}
 		}
-		// 重启后等待 socket 就绪
+		// Wait for socket to become available after restart
 		sockPath := "/run/php/php8.3-fpm.sock"
 		for i := 0; i < 30; i++ {
 			if _, err := os.Stat(sockPath); err == nil {
@@ -405,7 +405,7 @@ func (e *TemplateEngine) RemoveNginxConfig(targetPath string, enabledPath string
 	reloadCmd := exec.Command("nginx", "-s", "reload")
 	reloadOut, err := reloadCmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("Nginx 重载失败: %s", string(reloadOut))
+		return fmt.Errorf("Nginx reload failed: %s", string(reloadOut))
 	}
 	return nil
 }
@@ -573,7 +573,7 @@ server {
         add_header Cache-Control "public, immutable";
     }
 
-    # uploads 目录 zip 例外，必须在通用阻断规则之前
+    # uploads directory zip exception, must be before the generic block rules
     location ~* /wp-content/uploads/.*\.zip$ {
         try_files $uri =404;
     }
@@ -757,7 +757,7 @@ server {
         add_header Cache-Control "public, immutable";
     }
 
-    # uploads 目录 zip 例外，必须在通用阻断规则之前
+    # uploads directory zip exception, must be before the generic block rules
     location ~* /wp-content/uploads/.*\.zip$ {
         try_files $uri =404;
     }

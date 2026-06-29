@@ -2,29 +2,29 @@
 {{define "websites_content"}}
 <div x-data="websiteList()" x-init="fetchList()">
     <div class="flex items-center justify-between mb-6">
-        <h2 class="text-xl font-bold text-white">网站管理</h2>
-        <a href="/{{.RandomSuffix}}/websites/new" class="btn-primary">创建网站</a>
+        <h2 class="text-xl font-bold text-white">Site Management</h2>
+        <a href="/{{.RandomSuffix}}/websites/new" class="btn-primary">Create Site</a>
     </div>
 
-    <!-- 重装 WordPress 对话框 -->
+    <!-- Reinstall WordPress dialog -->
     <div x-show="reinstallModal.show" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60" @click.self="reinstallModal.show = false">
         <div class="bg-gray-800 border border-gray-700 rounded-lg p-6 w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
-            <h3 class="text-lg font-bold text-white mb-2" x-text="'重装 WordPress — ' + (reinstallModal.site?.domain || '')"></h3>
-            <p class="text-sm text-red-400 mb-4">⚠ 此操作将删除所有网站文件、清空数据库并重新部署全新 WordPress，所有数据不可恢复。</p>
+            <h3 class="text-lg font-bold text-white mb-2" x-text="'Reinstall WordPress — ' + (reinstallModal.site?.domain || '')"></h3>
+            <p class="text-sm text-red-400 mb-4">⚠️ This will delete all site files, empty the database, and deploy a fresh WordPress installation. All data is irrecoverable.</p>
 
             <label class="flex items-center space-x-2 cursor-pointer mb-3">
                 <input type="checkbox" x-model="reinstallModal.cleanDefaults" class="w-4 h-4 rounded border-gray-600 bg-gray-700 text-blue-600">
-                <span class="text-gray-300 text-sm">自动清理默认插件（Akismet + Hello Dolly）</span>
+                <span class="text-gray-300 text-sm">Auto-remove default plugins (Akismet + Hello Dolly)</span>
             </label>
 
             <label class="flex items-center space-x-2 cursor-pointer mb-4">
                 <input type="checkbox" x-model="reinstallModal.removeUnusedThemes" class="w-4 h-4 rounded border-gray-600 bg-gray-700 text-blue-600">
-                <span class="text-gray-300 text-sm">删除未使用的默认主题（Twenty Twenty-Four / Twenty Twenty-Three）</span>
+                <span class="text-gray-300 text-sm">Remove unused default themes (Twenty Twenty-Four / Twenty Twenty-Three)</span>
             </label>
 
             <div class="grid grid-cols-2 gap-4 mb-4">
                 <div>
-                    <p class="text-xs text-gray-500 mb-2">安装主题</p>
+                    <p class="text-xs text-gray-500 mb-2">Install Themes</p>
                     <template x-for="t in reinstallModal.extensions.filter(e => e.etype === 'theme' && e.enabled)" :key="t.id">
                         <label class="flex items-center space-x-2 cursor-pointer mb-1">
                             <input type="checkbox" :value="t.slug" x-model="reinstallModal.installThemes" class="w-3.5 h-3.5 rounded border-gray-600 bg-gray-700 text-blue-600">
@@ -33,7 +33,7 @@
                     </template>
                 </div>
                 <div>
-                    <p class="text-xs text-gray-500 mb-2">安装插件</p>
+                    <p class="text-xs text-gray-500 mb-2">Install Plugins</p>
                     <template x-for="p in reinstallModal.extensions.filter(e => e.etype === 'plugin' && e.enabled)" :key="p.id">
                         <label class="flex items-center space-x-2 cursor-pointer mb-1">
                             <input type="checkbox" :value="p.slug" x-model="reinstallModal.installPlugins" class="w-3.5 h-3.5 rounded border-gray-600 bg-gray-700 text-blue-600">
@@ -44,8 +44,8 @@
             </div>
 
             <div class="flex justify-end space-x-3">
-                <button @click="reinstallModal.show = false" class="btn-secondary text-sm">取消</button>
-                <button @click="doReinstallWP()" class="text-sm py-2 px-4 rounded text-white" style="background-color: #7f1d1d;">确认重装</button>
+                <button @click="reinstallModal.show = false" class="btn-secondary text-sm">Cancel</button>
+                <button @click="doReinstallWP()" class="text-sm py-2 px-4 rounded text-white" style="background-color: #7f1d1d;">Confirm Reinstall</button>
             </div>
         </div>
     </div>
@@ -55,16 +55,16 @@
             <table class="w-full">
                 <thead class="border-b border-gray-700">
                     <tr>
-                        <th class="table-header">域名</th>
-                        <th class="table-header">状态</th>
+                        <th class="table-header">Domain</th>
+                        <th class="table-header">Status</th>
                         <th class="table-header">SSL</th>
-                        <th class="table-header">监控</th>
-                        <th class="table-header">缓存</th>
-                        <th class="table-header">日志</th>
-                        <th class="table-header">DB备份</th>
-                        <th class="table-header">创建时间</th>
-                        <th class="table-header">到期时间</th>
-                        <th class="table-header">操作</th>
+                        <th class="table-header">Monitor</th>
+                        <th class="table-header">Cache</th>
+                        <th class="table-header">Logs</th>
+                        <th class="table-header">DB Backup</th>
+                        <th class="table-header">Created</th>
+                        <th class="table-header">Expires</th>
+                        <th class="table-header">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -75,48 +75,48 @@
                             </td>
                             <td class="table-cell">
                                 <span :class="site.status === 'active' ? 'badge-success' : 'badge-warning'"
-                                      x-text="site.status === 'active' ? '运行中' : '已暂停'"></span>
+                                      x-text="site.status === 'active' ? 'Running' : 'Paused'"></span>
                             </td>
                             <td class="table-cell">
                                 <div class="space-y-1">
                                     <span :class="site.ssl_enabled ? 'badge-success' : site.ssl_last_error ? 'badge-warning' : 'badge-info'"
-                                          x-text="site.ssl_enabled ? '已启用' : site.ssl_last_error ? '待处理' : '未启用'"></span>
+                                          x-text="site.ssl_enabled ? 'Enabled' : site.ssl_last_error ? 'Pending' : 'Disabled'"></span>
                                     <p x-show="!site.ssl_enabled && site.ssl_last_error" class="text-xs text-yellow-400 max-w-48 truncate" :title="site.ssl_last_error" x-text="site.ssl_last_error"></p>
                                 </div>
                             </td>
                             <td class="table-cell">
                                 <span :class="site.monitoring_enabled ? 'badge-success' : 'badge-info'"
-                                      x-text="site.monitoring_enabled ? '已开启' : '未开启'"></span>
+                                      x-text="site.monitoring_enabled ? 'On' : 'Off'"></span>
                             </td>
                             <td class="table-cell">
                                 <span :class="site.fastcgi_cache_enabled ? 'badge-success' : 'badge-info'"
-                                      x-text="site.fastcgi_cache_enabled ? '已开启' : '未开启'"></span>
+                                      x-text="site.fastcgi_cache_enabled ? 'On' : 'Off'"></span>
                             </td>
                             <td class="table-cell">
                                 <span :class="site.access_log_mode === 'full' ? 'badge-success' : site.access_log_mode === 'error_only' ? 'badge-warning' : 'badge-info'"
-                                      x-text="site.access_log_mode === 'full' ? '全部' : site.access_log_mode === 'error_only' ? '仅异常' : '关闭'"></span>
+                                      x-text="site.access_log_mode === 'full' ? 'Full' : site.access_log_mode === 'error_only' ? 'Errors Only' : 'Off'"></span>
                             </td>
                             <td class="table-cell">
                                 <span :class="site.backup_enabled ? 'badge-success' : 'badge-info'"
-                                      x-text="site.backup_enabled ? '已启用' : '未启用'"></span>
+                                      x-text="site.backup_enabled ? 'Enabled' : 'Disabled'"></span>
                             </td>
                             <td class="table-cell" x-text="new Date(site.created_at).toLocaleDateString('zh-CN')"></td>
-                            <td class="table-cell text-xs" x-text="site.expires_at ? new Date(site.expires_at).toLocaleDateString('zh-CN') : '永不到期'"></td>
+                            <td class="table-cell text-xs" x-text="site.expires_at ? new Date(site.expires_at).toLocaleDateString('zh-CN') : 'Never'"></td>
                             <td class="table-cell">
                                 <div class="flex space-x-2">
-                                    <a :href="'/{{$.RandomSuffix}}/websites/' + site.id" class="btn-secondary text-xs py-1 px-2">详情</a>
-                                    <a :href="'/{{$.RandomSuffix}}/files?site_id=' + site.id" class="text-xs py-1 px-2 rounded" style="background-color: #1e3a5f; color: #93c5fd;">文件</a>
+                                    <a :href="'/{{$.RandomSuffix}}/websites/' + site.id" class="btn-secondary text-xs py-1 px-2">Details</a>
+                                    <a :href="'/{{$.RandomSuffix}}/files?site_id=' + site.id" class="text-xs py-1 px-2 rounded" style="background-color: #1e3a5f; color: #93c5fd;">Files</a>
                                     <button @click="toggleStatus(site)" class="text-xs py-1 px-2 rounded"
                                             :class="site.status === 'active' ? 'btn-warning bg-yellow-700 hover:bg-yellow-600 text-white' : 'btn-success text-xs'"
-                                            x-text="site.status === 'active' ? '暂停' : '启用'"></button>
-                                    <button x-show="site.site_type === 'wordpress'" @click="reinstallWP(site)" :disabled="reinstallingId === site.id" class="text-xs py-1 px-2 rounded" style="background-color: #7f1d1d; color: #fca5a5;" x-text="reinstallingId === site.id ? '重装中...' : '重装'"></button>
-                                    <button @click="deleteSite(site)" class="btn-danger text-xs py-1 px-2">删除</button>
+                                            x-text="site.status === 'active' ? 'Pause' : 'Enable'"></button>
+                                    <button x-show="site.site_type === 'wordpress'" @click="reinstallWP(site)" :disabled="reinstallingId === site.id" class="text-xs py-1 px-2 rounded" style="background-color: #7f1d1d; color: #fca5a5;" x-text="reinstallingId === site.id ? 'Reinstalling...' : 'Reinstall'"></button>
+                                    <button @click="deleteSite(site)" class="btn-danger text-xs py-1 px-2">Delete</button>
                                 </div>
                             </td>
                         </tr>
                     </template>
                     <tr x-show="websites.length === 0">
-                        <td colspan="10" class="table-cell text-center text-gray-500 py-8">暂无网站</td>
+                        <td colspan="10" class="table-cell text-center text-gray-500 py-8">No sites</td>
                     </tr>
                 </tbody>
             </table>
@@ -150,7 +150,7 @@ function websiteList() {
                 const resp = await api('/websites/' + site.id + '/status', { method: 'PATCH', body: { action } });
                 if (resp.success) {
                     site.status = action === 'pause' ? 'paused' : 'active';
-                    showToast(resp.message || '操作成功', 'success');
+                    showToast(resp.message || 'Operation succeeded', 'success');
                 }
             } catch (e) { showToast(e.message, 'error'); }
         },
@@ -171,7 +171,7 @@ function websiteList() {
             const site = this.reinstallModal.site;
             this.reinstallModal.show = false;
             this.reinstallingId = site.id;
-            showToast('正在重装 ' + site.domain + '，请稍候...', 'info');
+            showToast('Reinstalling ' + site.domain + ', please wait...', 'info');
             try {
                 const body = {};
                 if (site.site_type === 'wordpress') {
@@ -182,18 +182,18 @@ function websiteList() {
                 }
                 const resp = await api('/websites/' + site.id + '/reinstall-wp', { method: 'POST', body });
                 if (resp.success) {
-                    showToast(resp.data?.message || 'WordPress 重装完成', 'success');
+                    showToast(resp.data?.message || 'WordPress reinstall complete', 'success');
                 }
             } catch (e) { showToast(e.message, 'error'); }
             this.reinstallingId = null;
         },
         async deleteSite(site) {
-            if (!await confirmModal('确认删除网站 ' + site.domain + '？此操作不可逆。')) return;
+            if (!await confirmModal('Confirm deletion of site ' + site.domain + '? This action is irreversible.')) return;
             try {
                 const resp = await api('/websites/' + site.id, { method: 'DELETE' });
                 if (resp.success) {
                     this.websites = this.websites.filter(s => s.id !== site.id);
-                    showToast('网站已删除', 'success');
+                    showToast('Site deleted', 'success');
                 }
             } catch (e) { showToast(e.message, 'error'); }
         }
