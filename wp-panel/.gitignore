@@ -4,6 +4,7 @@
 !/wp-panel-optimizer
 /bin/tailwindcss
 
+
 # Go
 .gocache/
 
@@ -15,7 +16,7 @@
 # Logs
 *.log
 
-# Environment
+# Environment variables
 .env
 .env.*
 
@@ -43,7 +44,7 @@ setup.sh
 stats-worker/.wrangler/
 stats-worker/wrangler.toml
 
-# Docs (local reference, not committed)
+# Docs (local reference, do not commit)
 docs/
 
 # Scratch
@@ -54,6 +55,3 @@ RELEASE_NOTES.md
 
 # Local signing script (contains local private key path)
 sign-release.sh
-
-# Graphify knowledge graph output
-graphify-out/

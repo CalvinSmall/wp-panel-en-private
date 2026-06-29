@@ -1,0 +1,319 @@
+{{template "base" .}}
+{{define "software_content"}}
+<div x-data="softwareManager()" x-init="fetchList()">
+    <div class="flex items-center justify-between mb-6">
+        <h2 class="text-xl font-bold text-white">Software Management</h2>
+        <button @click="showHelp = true" class="btn-secondary text-sm">WordPress Configuration Guide</button>
+    </div>
+
+    <div x-show="showHelp" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/60" @click.self="showHelp = false">
+        <div class="bg-gray-800 rounded-lg p-6 w-full mx-4 shadow-xl max-h-[85vh] overflow-y-auto" style="max-width:900px">
+            <h3 class="text-lg font-bold text-white mb-4">WordPress Configuration Guide（by VPS Config）</h3>
+            <p class="text-xs text-gray-500 mb-4">The following are conservative values to ensure system stability without OOM. Adjust in Software Managementas needed.。</p>
+
+            <div class="overflow-x-auto">
+                <table class="w-full text-xs">
+                    <thead class="border-b border-gray-600 text-gray-300">
+                        <tr>
+                            <th class="py-2 text-left sticky left-0 bg-gray-800">VPS Config</th>
+                            <th class="py-2 text-left">Scenario</th>
+                            <th class="py-2 text-left">PHP memory_limit</th>
+                            <th class="py-2 text-left">upload / post</th>
+                            <th class="py-2 text-left">max_input_vars</th>
+                            <th class="py-2 text-left">MariaDB pool</th>
+                            <th class="py-2 text-left">Redis maxmemory</th>
+                        </tr>
+                    </thead>
+                    <tbody class="text-gray-400">
+                        <tr class="border-b border-gray-700/50">
+                            <td class="py-2 text-white font-medium sticky left-0 bg-gray-800">1C 1G</td>
+                            <td class="py-2">1 simple blog</td>
+                            <td class="py-2 text-green-400">128M</td>
+                            <td class="py-2">32M / 32M</td>
+                            <td class="py-2">1000</td>
+                            <td class="py-2">128M</td>
+                            <td class="py-2">64mb</td>
+                        </tr>
+                        <tr class="border-b border-gray-700/50">
+                            <td class="py-2 text-white font-medium sticky left-0 bg-gray-800">1C 1G</td>
+                            <td class="py-2">1 multi-plugin site</td>
+                            <td class="py-2 text-blue-400">256M</td>
+                            <td class="py-2">64M / 64M</td>
+                            <td class="py-2">2000</td>
+                            <td class="py-2">128M</td>
+                            <td class="py-2">64mb</td>
+                        </tr>
+
+                        <tr class="border-b border-gray-700/50">
+                            <td class="py-2 text-white font-medium sticky left-0 bg-gray-800">1C 2G</td>
+                            <td class="py-2">1 e-commerce/Elementor site</td>
+                            <td class="py-2 text-blue-400">256M</td>
+                            <td class="py-2">64M / 64M</td>
+                            <td class="py-2">3000</td>
+                            <td class="py-2">256M</td>
+                            <td class="py-2">128mb</td>
+                        </tr>
+                        <tr class="border-b border-gray-700/50">
+                            <td class="py-2 text-white font-medium sticky left-0 bg-gray-800">1C 2G</td>
+                            <td class="py-2">2~3 simple blog</td>
+                            <td class="py-2 text-blue-400">256M</td>
+                            <td class="py-2">64M / 64M</td>
+                            <td class="py-2">2000</td>
+                            <td class="py-2">256M</td>
+                            <td class="py-2">128mb</td>
+                        </tr>
+
+                        <tr class="border-b border-gray-700/50">
+                            <td class="py-2 text-white font-medium sticky left-0 bg-gray-800">2C 2G</td>
+                            <td class="py-2">1 e-commerce + 2 showcase sites</td>
+                            <td class="py-2 text-blue-400">256M</td>
+                            <td class="py-2">64M / 64M</td>
+                            <td class="py-2">3000</td>
+                            <td class="py-2">256M</td>
+                            <td class="py-2">128mb</td>
+                        </tr>
+
+                        <tr class="border-b border-gray-700/50">
+                            <td class="py-2 text-white font-medium sticky left-0 bg-gray-800">2C 4G</td>
+                            <td class="py-2">3~5 sites (incl. e-commerce)</td>
+                            <td class="py-2 text-yellow-400">512M</td>
+                            <td class="py-2">128M / 128M</td>
+                            <td class="py-2">3000</td>
+                            <td class="py-2">512M</td>
+                            <td class="py-2">256mb</td>
+                        </tr>
+                        <tr class="border-b border-gray-700/50">
+                            <td class="py-2 text-white font-medium sticky left-0 bg-gray-800">2C 4G</td>
+                            <td class="py-2">5+ simple blog</td>
+                            <td class="py-2 text-blue-400">256M</td>
+                            <td class="py-2">64M / 64M</td>
+                            <td class="py-2">2000</td>
+                            <td class="py-2">512M</td>
+                            <td class="py-2">256mb</td>
+                        </tr>
+
+                        <tr class="border-b border-gray-700/50">
+                            <td class="py-2 text-white font-medium sticky left-0 bg-gray-800">2C 8G</td>
+                            <td class="py-2">multiple e-commerce / high-traffic multi-site</td>
+                            <td class="py-2 text-yellow-400">512M</td>
+                            <td class="py-2">128M / 128M</td>
+                            <td class="py-2">3000</td>
+                            <td class="py-2">1G</td>
+                            <td class="py-2">512mb</td>
+                        </tr>
+
+                        <tr class="border-b border-gray-700/50">
+                            <td class="py-2 text-white font-medium sticky left-0 bg-gray-800">4C 8G</td>
+                            <td class="py-2">10+ sites / high concurrency</td>
+                            <td class="py-2 text-yellow-400">512M</td>
+                            <td class="py-2">128M / 128M</td>
+                            <td class="py-2">5000</td>
+                            <td class="py-2">1G</td>
+                            <td class="py-2">512mb</td>
+                        </tr>
+
+                        <tr class="border-b border-gray-700/50">
+                            <td class="py-2 text-white font-medium sticky left-0 bg-gray-800">4C 16G</td>
+                            <td class="py-2">large multi-site / high load</td>
+                            <td class="py-2 text-yellow-400">512M</td>
+                            <td class="py-2">256M / 256M</td>
+                            <td class="py-2">5000</td>
+                            <td class="py-2">2G</td>
+                            <td class="py-2">1gb</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="mt-4 p-3 rounded text-xs" style="background-color: #0f172a;">
+                <p class="text-gray-300 font-medium mb-2">General Principles</p>
+                <ul class="text-gray-400 space-y-1 list-disc list-inside">
+                    <li>post_max_size must ≥ upload_max_filesize，Nginx client_max_body_size must be consistent</li>
+                    <li>max_execution_time  300，temporarily raise to 600 for imports or batch processing. 600</li>
+                    <li>MariaDB innodb_buffer_pool_size should be 10%~25%（conservative），MySQL official recommendation up to 50%~70%</li>
+                    <li>Redis maxmemory per site approx. 64~128mb，scale proportionally for multi-site but not exceeding 50%</li>
+                    <li>Single-site vs. multi-site differs mainly in MariaDB pool and Redis; PHP params depend mainly on site complexity</li>
+                </ul>
+            </div>
+
+            <div class="mt-5 text-right">
+                <button @click="showHelp = false" class="btn-primary text-sm">Got it</button>
+            </div>
+        </div>
+    </div>
+
+    <div x-data="processGuard()" x-init="fetch()" class="card mb-6">
+        <div class="flex items-center justify-between mb-3">
+            <h3 class="text-lg font-semibold text-white">Process Guardian</h3>
+            <span class="text-xs text-gray-500">Auto-check every 30s</span>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead class="border-b border-gray-700 text-gray-400 text-xs">
+                    <tr>
+                        <th class="py-2 text-left font-medium">Service</th>
+                        <th class="py-2 text-left font-medium">Version</th>
+                        <th class="py-2 text-left font-medium">Status</th>
+                        <th class="py-2 text-right font-medium">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-800">
+                    <template x-for="s in services" :key="s.name">
+                        <tr>
+                            <td class="py-2.5 pr-4">
+                                <div class="flex items-center gap-2">
+                                    <span class="text-white font-medium" x-text="s.name"></span>
+                                    <span x-show="s.restarts > 0" class="text-xs text-gray-500" x-text="'Recovered'+s.restarts+'times'"></span>
+                                </div>
+                            </td>
+                            <td class="py-2.5 pr-4">
+                                <span class="text-xs text-gray-400" x-text="s.version"></span>
+                            </td>
+                            <td class="py-2.5 pr-4">
+                                <span x-show="s.running && !s.paused" class="text-green-400 text-xs">● Running</span>
+                                <span x-show="s.paused" class="text-yellow-400 text-xs">● Manually Stopped</span>
+                                <span x-show="!s.running && !s.paused" class="text-red-400 text-xs">● Stopped</span>
+                            </td>
+                            <td class="py-2.5 text-right whitespace-nowrap">
+                                <button x-show="s.running && !s.paused" @click="action(s.service, 'stop')" :disabled="s._acting" class="btn-secondary text-xs py-1 px-2.5">Stop</button>
+                                <button x-show="!s.running || s.paused" @click="action(s.service, 'start')" :disabled="s._acting" class="btn-primary text-xs py-1 px-2.5">Start</button>
+                                <button @click="action(s.service, 'restart')" :disabled="s._acting" class="btn-secondary text-xs py-1 px-2.5 ml-1.5">Restart</button>
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+        <div class="mt-3 pt-3 border-t border-gray-800 text-xs text-gray-500">
+            systemd Restart=always provides first-layer protection; panel checks every3030s and auto-restarts on failure.Manually Stoppedthe guardian no longer auto-Start。
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <template x-for="sw in software" :key="sw.name">
+            <div class="card">
+                <div class="flex items-center justify-between mb-3">
+                    <div class="flex items-center space-x-3">
+                        <h3 class="text-lg font-semibold text-white" x-text="sw.name"></h3>
+                        <span class="text-sm text-blue-400" x-text="sw.version"></span>
+                    </div>
+                    <span class="text-xs text-gray-400" x-text="sw.status"></span>
+                </div>
+
+                <div class="space-y-3">
+                    <template x-for="cfg in sw.configs" :key="cfg.key">
+                        <div>
+                            <div class="flex items-center justify-between mb-1">
+                                <label class="text-xs text-gray-400" x-text="cfg.label"></label>
+                                <span class="text-xs text-gray-600" x-text="'Current: ' + cfg.value"></span>
+                            </div>
+                            <input type="text" x-model="cfg._value" class="input-field w-full text-sm py-1.5">
+                            <p class="text-xs text-gray-500 mt-0.5" x-text="cfg.hint"></p>
+                        </div>
+                    </template>
+                </div>
+
+                <div class="flex space-x-2 mt-4">
+                    <button @click="saveConfig(sw)" :disabled="sw._saving" class="btn-primary text-sm" x-text="sw._saving ? (sw.name === 'PHP' ? 'Saving & rebuilding site FPM...' : 'Saving & reloading...') : 'Save & Reload'"></button>
+                    <button @click="viewLog(sw.name)" class="btn-secondary text-sm">View Logs</button>
+                </div>
+            </div>
+        </template>
+    </div>
+
+    <div x-show="logModal.open" class="modal-overlay" @click.self="logModal.open = false">
+        <div class="modal-content" style="max-width: 56rem;">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-bold text-white" x-text="logModal.title + ' Logs'"></h3>
+                <div class="flex items-center space-x-3">
+                    <button @click="clearLog()" class="btn-danger text-xs py-1 px-2">ClearLogs</button>
+                    <button @click="logModal.open = false" class="text-gray-400 hover:text-white text-xl">&times;</button>
+                </div>
+            </div>
+            <pre x-text="logModal.content" class="w-full rounded p-3 text-xs font-mono overflow-auto" style="background-color: #0f172a; border: 1px solid #334155; color: #94a3b8; max-height: 500px; white-space: pre-wrap; word-break: break-all;"></pre>
+        </div>
+    </div>
+</div>
+
+<script>
+function processGuard() {
+    return {
+        services: [],
+        async fetch() {
+            try {
+                const r = await api('/software/guard');
+                if (r.success) {
+                    (r.data || []).forEach(s => s._acting = false);
+                    this.services = r.data || [];
+                }
+            } catch(e) {}
+            setTimeout(() => this.fetch(), 30000);
+        },
+        async action(service, act) {
+            const s = this.services.find(s => s.service === service);
+            if (!s) return;
+            s._acting = true;
+            try {
+                const r = await api('/software/guard/action', { method: 'POST', body: { service, action: act } });
+                showToast(r.data?.message || service + ' ' + act + ' success', 'success');
+                await this.fetch();
+            } catch(e) {
+                showToast(e.message, 'error');
+                s._acting = false;
+            }
+        }
+    }
+}
+
+function softwareManager() {
+    return {
+        software: [],
+        showHelp: false,
+        logModal: { open: false, title: '', content: '' },
+        async fetchList() {
+            try {
+                const r = await api('/software');
+                if (r.success) {
+                    this.software = (r.data || []).map(sw => {
+                        sw._saving = false;
+                        (sw.configs || []).forEach(cfg => { cfg._value = cfg.value; });
+                        return sw;
+                    });
+                }
+            } catch(e) {}
+        },
+        async viewLog(name) {
+            this.logModal.title = name;
+            this.logModal.content = 'Loading...';
+            this.logModal.open = true;
+            try {
+                const r = await api('/software/log?name=' + encodeURIComponent(name) + '&lines=200');
+                this.logModal.content = r.success ? r.data.content : 'Load failed';
+            } catch(e) { this.logModal.content = 'Load failed: ' + e.message; }
+        },
+        async clearLog() {
+            if (!await confirmModal('Confirm clearing ' + this.logModal.title + '？')) return;
+            try {
+                const r = await api('/software/log?name=' + encodeURIComponent(this.logModal.title), { method: 'DELETE' });
+                if (r.success) {
+                    this.logModal.content = '（LogsCleared）';
+                    showToast(r.data?.message || 'Cleared', 'success');
+                }
+            } catch(e) { showToast(e.message, 'error'); }
+        },
+        async saveConfig(sw) {
+            for (const cfg of sw.configs) {
+                if (cfg._value === cfg.value) continue;
+                sw._saving = true;
+                try {
+                    const r = await api('/software/config', { method: 'PUT', body: { name: sw.name, key: cfg.key, value: cfg._value } });
+                    cfg.value = cfg._value;
+                    showToast(r.data?.message || 'Updated ' + cfg.label, 'success');
+                } catch(e) { showToast(e.message, 'error'); }
+                sw._saving = false;
+            }
+        }
+    }
+}
+</script>
+{{end}}

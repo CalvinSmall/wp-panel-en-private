@@ -1,0 +1,387 @@
+{{template "base" .}}
+{{define "firewall_content"}}
+<div x-data="firewallManager()" x-init="fetchBans(); fetchWPSecurityReport()">
+    <div class="flex items-center justify-between mb-6">
+        <h2 class="text-xl font-bold text-white">Security Defense</h2>
+        <button @click="showRules = true" class="btn-secondary text-sm">Defense Rule Description</button>
+    </div>
+
+    <div x-show="showRules" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/60" @click.self="showRules = false">
+        <div class="bg-gray-800 rounded-lg p-6 max-w-4xl w-full mx-4 shadow-xl max-h-[80vh] overflow-y-auto">
+            <h3 class="text-lg font-bold text-white mb-4">Security DefenseRule Description</h3>
+            <div class="text-sm text-gray-300 space-y-4">
+                <div>
+                    <p class="text-white font-semibold mb-1">Detection Scope</p>
+                    <p>Auto-ban rules monitor access.log and error.log of all sites; WordPress suspicious access analysis additionally reads wp-security.log for local statistics and evidence collection only.</p>
+                </div>
+                <div>
+                    <p class="text-white font-semibold mb-1">Trigger Conditions (hitting any rule below counts as 1 violation)</p>
+                    <ul class="list-disc list-inside space-y-1 ml-2">
+                        <li><code class="text-gray-300">POST /wp-login.php</code> — WordPress login brute force</li>
+                        <li><code class="text-gray-300">POST /xmlrpc.php</code> returns <span class="text-gray-300">HTTP 403</span> — still requested after XML-RPC disabled (includes <code class="text-gray-300">//xmlrpc.php</code> variant)</li>
+                        <li>returns <span class="text-gray-300">HTTP 429</span> — rate limit exceeded</li>
+                        <li>Sensitive file scanreturns <span class="text-gray-300">404</span> — e.g. <code class="text-gray-300">.env</code>、<code class="text-gray-300">.git</code>、<code class="text-gray-300">wp-config.php</code>、<code class="text-gray-300">.sql</code>, archives, etc.</li>
+                        <li class="text-green-400">404 flood detection — any pathreturns 404 reaching <span class="text-green-300">30 hits/60 seconds</span> classified as directory scanning (independent rule, fixed threshold)</li>
+                        <li>WordPress anomalous path access — written to <code class="text-gray-300">wp-security.log</code>, for admin analysis, no auto-ban</li>
+                    </ul>
+                </div>
+                <div>
+                    <p class="text-white font-semibold mb-1">Ban Threshold</p>
+                    <p>First 4 rules default to <span class="text-blue-400">60 seconds</span>within <span class="text-blue-400">5 hits</span>violations → auto-ban (thresholds, window, and ban duration can be customized in Security Settings).</p>
+                    <p>404 flood rule is fixed at <span class="text-blue-400">30 hits/60 seconds</span>, not configurable.</p>
+                </div>
+                <div>
+                    <p class="text-white font-semibold mb-1">Progressive Tiered Ban</p>
+                    <ul class="space-y-1 ml-2">
+                        <li>firsthitsviolations → Fail2ban Ban <span class="text-blue-400">10 minutes</span>, auto-released on expiry</li>
+                        <li>24 hourswithinhitsviolations → upgraded to <span class="text-blue-400">24 hours</span> ban, also added to Nftables persistent rules</li>
+                        <li>cumulative 3 hits 24 hoursBan → auto-converted to<span class="text-red-400">Permanent Ban</span>, enforced only via Nftables persistent rules</li>
+                    </ul>
+                    <p class="text-gray-500 mt-1">The ban list can distinguish Fail2ban temporary bans from Nftables persistent bans via the "Source" column.</p>
+                </div>
+                <div>
+                    <p class="text-white font-semibold mb-1">Ban Mechanism</p>
+                    <ul class="space-y-1 ml-2">
+                        <li><span class="text-blue-400">Fail2ban</span> — manages site protection bans (jail: <code class="text-gray-300">wppanel</code>、<code class="text-gray-300">wppanel-404</code>) and SSH protection bans (jail: <code class="text-gray-300">wppanel-sshd</code>), auto-released on expiry</li>
+                        <li><span class="text-purple-400">Nftables Persistent</span> — managesPermanent Ban、Scan DefenseBan（Source: <code class="text-gray-300">panel_scan</code>) and panel auth bans (source: <code class="text-gray-300">panel</code>），independent of Fail2ban, auto-released on expiry</li>
+                        <li><span class="text-green-400">Nginx Blocklist</span>  — integrated with Fail2ban，Web protection jail Ban, synced to Nginx geo blocklist，banned IP directlyreturns <code class="text-gray-300">444</code> (close connection), ensuring effective blocking even behind Cloudflare proxy</li>
+                    </ul>
+                    <p class="text-gray-500 mt-1">All three channels work simultaneously: Nftables blocks direct requests to origin, Nginx blocks requests forwarded through Cloudflare, Fail2ban auto-releases on expiry.</p>
+                </div>
+                <div>
+                    <p class="text-white font-semibold mb-1">Cloudflare Scenario Notes</p>
+                    <ul class="space-y-1 ml-2">
+                        <li>Panel auto-deploys <code class="text-gray-300">/etc/nginx/conf.d/wppanel-realip.conf</code>, derives real visitor IP from Cloudflare's <code class="text-gray-300">CF-Connecting-IP</code> header</li>
+                        <li>Whitelist auto-updates official Cloudflare IP ranges on refresh, ensuring only Cloudflare sources are trusted</li>
+                        <li>No manual configuration needed; auto-enabled when Cloudflare proxy is detected</li>
+                    </ul>
+                    <p class="text-gray-500 mt-1">To disable Nginx-layer blocking: delete <code class="text-gray-300">/etc/fail2ban/action.d/wppanel-nginx.conf</code>, and from <code class="text-gray-300">/etc/fail2ban/jail.d/wppanel.conf</code> remove the <code class="text-gray-300">wppanel-nginx</code> action, then <code class="text-gray-300">systemctl reload fail2ban && nginx -s reload</code>。</p>
+                </div>
+                <div>
+                    <p class="text-white font-semibold mb-1">Scan Defense</p>
+                    <ul class="space-y-1 ml-2">
+                        <li>Targets panel port <span class="text-blue-400">8443</span> ; does not apply to site ports (80/443)</li>
+                        <li>Non-browser requests (e.g., curl, scripts, scanners) hitting panel port without matching random entry → banned <span class="text-red-400">30 days</span>; common browser system probing paths and requests with BasicAuth headers do not directly trigger scan ban</li>
+                        <li>Hitting random entry (<code class="text-gray-300">/{suffix}</code>) allows requests through normally</li>
+                    </ul>
+                    <p class="text-gray-500 mt-1">UpUpon trigger, written to panel ban list, source labeled as "Scan Defense"，Levelas temporary 30 days。</p>
+                </div>
+                <div>
+                    <p class="text-white font-semibold mb-1">Whitelist Exemption</p>
+                    <p>127.0.0.1, Cloudflare / Googlebot / Bingbot official IP ranges, and custom whitelist IPs will not be banned. Whitelist is managed in Security Settings.</p>
+                    <p class="text-gray-500 mt-1">WordPress security log path whitelist only excludes paths like ownership verification files; does not affect IP ban whitelist.</p>
+                </div>
+                <div>
+                    <p class="text-white font-semibold mb-1">Rate Limiting Principle</p>
+                    <p>Token bucket algorithm: one bucket per IP, capacity = burst buffer (default 300), second refills 1 token. Requests consume tokens; once depleted, returns 429. Human browsing has natural pauses, during which the bucket auto-refills; bots are limited to 1 hit/second.</p>
+                    <p class="text-red-400 mt-1">⚠ multiplehits 429 will trigger a Fail2ban auto-ban.Please ensure the burst buffer is sufficient for normal usage.</p>
+                    <p class="text-green-400">✓ Increasing burst buffer does not affect bot blocking or weaken security.</p>
+                </div>
+                <div>
+                    <p class="text-white font-semibold mb-1">Server Verification Commands</p>
+                    <p class="text-gray-500 mb-1">SSH into the server and run the following commands to check current ban status:</p>
+                    <div class="bg-gray-900 rounded p-3 font-mono text-xs text-gray-300 space-y-2">
+                        <div>
+                            <span class="text-gray-500"># Check site protection bans</span>
+                            <br><span class="text-green-400">fail2ban-client</span> status wppanel
+                        </div>
+                        <div>
+                            <span class="text-gray-500"># Check 404 flood bans</span>
+                            <br><span class="text-green-400">fail2ban-client</span> status wppanel-404
+                        </div>
+                        <div>
+                            <span class="text-gray-500"># Check SSH brute-force bans</span>
+                            <br><span class="text-green-400">fail2ban-client</span> status wppanel-sshd
+                        </div>
+                        <div>
+                            <span class="text-gray-500"># View Nftables PersistentBan（Scan Defense + PanelAuthBan）</span>
+                            <br><span class="text-green-400">nft</span> list set ip wppanel_persist banned_ips
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="mt-5 text-right">
+                <button @click="showRules = false" class="btn-primary text-sm">Got it</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="card mb-6">
+        <h3 class="text-lg font-semibold text-white mb-4">Manual IP Ban</h3>
+        <div class="flex items-end space-x-3">
+            <div class="flex-1">
+                <label class="block text-sm text-gray-300 mb-1">IP Address</label>
+                <input type="text" x-model="banIP" class="input-field" placeholder="192.168.1.100">
+            </div>
+            <div>
+                <label class="block text-sm text-gray-300 mb-1">Ban Duration</label>
+                <select x-model="banDuration" class="input-field">
+                    <option value="600">10 minutes</option>
+                    <option value="3600">1 hours</option>
+                    <option value="86400">24 hours</option>
+                    <option value="0">Permanent</option>
+                </select>
+            </div>
+            <button @click="manualBan()" :disabled="banSubmitting" class="btn-danger" x-text="banSubmitting ? 'Banning...' : 'Ban'"></button>
+        </div>
+    </div>
+
+    <div class="card mb-6">
+        <div class="flex items-center justify-between mb-4">
+            <div>
+                <h3 class="text-lg font-semibold text-white">WordPress Suspicious Access Analysis</h3>
+                <p class="text-xs text-gray-500 mt-1">Based on local WordPress security logs and Nginx error log statistics，evidence compilation only，not auto-ban。</p>
+                <p class="text-xs text-gray-500 mt-1">Results cached for 30 seconds；When WordPress sites exceed 50 or disk I/O is slower, the first refresh may be slower。</p>
+            </div>
+            <button @click="fetchWPSecurityReport()" :disabled="securityReportLoading" class="btn-secondary text-xs py-1.5 px-3" x-text="securityReportLoading ? 'Analyzing...' : 'Refresh Analysis'"></button>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead class="border-b border-gray-700">
+                    <tr>
+                        <th class="table-header">IP Address</th>
+                        <th class="table-header">Site</th>
+                        <th class="table-header">Risk</th>
+                        <th class="table-header">hitsCount</th>
+                        <th class="table-header">Last Seen</th>
+                        <th class="table-header">Sample Paths</th>
+                        <th class="table-header">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <template x-for="item in securityReportItems" :key="item.domain + item.ip_address">
+                        <tr class="border-b border-gray-700/50">
+                            <td class="table-cell font-mono text-sm" x-text="item.ip_address"></td>
+                            <td class="table-cell text-sm" x-text="item.domain"></td>
+                            <td class="table-cell"><span :class="riskClass(item.risk_level)" x-text="item.risk_level"></span></td>
+                            <td class="table-cell" x-text="item.event_count"></td>
+                            <td class="table-cell text-xs" x-text="item.last_seen || '--'"></td>
+                            <td class="table-cell text-xs font-mono">
+                                <template x-for="p in item.sample_paths.slice(0, 3)" :key="p">
+                                    <div x-text="p"></div>
+                                </template>
+                            </td>
+                            <td class="table-cell whitespace-nowrap">
+                                <button @click="copySecurityReport(item)" class="btn-secondary text-xs py-1 px-2">Copy Report</button>
+                                <button @click="banIP = item.ip_address; showToast('IPhas been filled into the manual ban IP field, please manually selectBan Durationand click theBanbutton', 'success')" class="btn-danger text-xs py-1 px-2 ml-1">fill into theBan</button>
+                            </td>
+                        </tr>
+                    </template>
+                    <tr x-show="securityReportLoaded && securityReportItems.length === 0">
+                        <td colspan="7" class="table-cell text-center text-gray-500 py-6">No WordPress suspicious access statistics</td>
+                    </tr>
+                    <tr x-show="!securityReportLoaded">
+                        <td colspan="7" class="table-cell text-center text-gray-500 py-6">Reading local logs...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card mb-6">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-semibold text-white">Current Ban List</h3>
+            <div class="flex items-center space-x-2">
+                <input type="text" x-model="searchIP" @keydown.enter="page=1;fetchBans()" class="input-field text-sm py-1.5 w-48" placeholder="Search IP Address...">
+                <button @click="page=1;fetchBans()" class="btn-secondary text-xs py-1.5 px-3">Search</button>
+            </div>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead class="border-b border-gray-700">
+                    <tr>
+                        <th class="table-header">IP Address</th>
+                        <th class="table-header">Level</th>
+                        <th class="table-header">Reason</th>
+                        <th class="table-header">Source</th>
+                        <th class="table-header">BanTime</th>
+                        <th class="table-header">Expiry</th>
+                        <th class="table-header">cumulativehitsCount</th>
+                        <th class="table-header">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <template x-for="ban in bans" :key="ban.id">
+                        <tr class="border-b border-gray-700/50">
+                            <td class="table-cell font-mono text-sm" x-text="ban.ip_address"></td>
+                            <td class="table-cell">
+                                <span :class="banLevelClass(ban.ban_level)" x-text="banLevelText(ban.ban_level)"></span>
+                            </td>
+                            <td class="table-cell text-sm" x-text="ban.reason || '--'"></td>
+                            <td class="table-cell">
+                                <span :class="sourceClass(ban)" class="text-xs" x-text="sourceLabel(ban)"></span>
+                            </td>
+                            <td class="table-cell text-xs" x-text="formatTime(ban.banned_at)"></td>
+                            <td class="table-cell text-xs" x-text="ban.expires_at ? formatTime(ban.expires_at) : 'Permanent'"></td>
+                            <td class="table-cell" x-text="ban.ban_count"></td>
+                            <td class="table-cell">
+                                <button @click="unban(ban)" class="btn-success text-xs py-1 px-2">Unban</button>
+                                <button x-show="ban.ban_level < 5" @click="permanentBan(ban)" class="btn-danger text-xs py-1 px-2 ml-1">Permanent Ban</button>
+                            </td>
+                        </tr>
+                    </template>
+                    <tr x-show="bans.length === 0">
+                        <td colspan="8" class="table-cell text-center text-gray-500 py-8">No bans currently</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <div x-show="totalPages > 1" class="flex items-center justify-between mt-4 pt-3 border-t border-gray-700/50">
+            <span class="text-sm text-gray-400" x-text="`Total: ${total} records`"></span>
+            <div class="flex items-center space-x-1">
+                <button @click="goPage(page-1)" :disabled="page <= 1" class="px-3 py-1 text-sm rounded bg-gray-700 hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed">Previous</button>
+                <template x-for="p in pageNumbers" :key="p">
+                    <button @click="goPage(p)" :class="p === page ? 'bg-blue-600 text-white' : 'bg-gray-700 hover:bg-gray-600'" class="px-3 py-1 text-sm rounded" x-text="p"></button>
+                </template>
+                <button @click="goPage(page+1)" :disabled="page >= totalPages" class="px-3 py-1 text-sm rounded bg-gray-700 hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed">Next</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="card" x-data="{history:[], loaded:false}" x-init="api('/firewall/bans?history=1').then(r => { if (r.success) history = r.data?.data || r.data || []; loaded = true }).catch(e => {})">
+        <h3 class="text-lg font-semibold text-white mb-4">Historyban records（Last30）</h3>
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead class="border-b border-gray-700">
+                    <tr>
+                        <th class="table-header">IP Address</th>
+                        <th class="table-header">Level</th>
+                        <th class="table-header">Reason</th>
+                        <th class="table-header">Source</th>
+                        <th class="table-header">BanTime</th>
+                        <th class="table-header">UnbanTime</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <template x-for="h in history" :key="h.id">
+                        <tr class="border-b border-gray-700/50">
+                            <td class="table-cell font-mono text-sm" x-text="h.ip_address"></td>
+                            <td class="table-cell">
+                                <span :class="['','badge-info','badge-warning','badge-danger','badge-danger','badge-danger'][h.ban_level]" x-text="['','Rate Limit','Temp10minutes','Temp24hours','Temp30days','Permanent Ban'][h.ban_level]"></span>
+                            </td>
+                            <td class="table-cell text-sm" x-text="h.reason || '--'"></td>
+                            <td class="table-cell">
+                                <span :class="sourceClass(h)" class="text-xs" x-text="sourceLabel(h)"></span>
+                            </td>
+                            <td class="table-cell text-xs" x-text="formatTime(h.banned_at)"></td>
+                            <td class="table-cell text-xs" x-text="h.unbanned_at ? formatTime(h.unbanned_at) : (h.ban_level >= 5 ? 'Permanent' : (h.expires_at ? formatTime(h.expires_at) : '--'))"></td>
+                        </tr>
+                    </template>
+                    <tr x-show="history.length === 0">
+                        <td colspan="6" class="table-cell text-center text-gray-500 py-4">No history</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+</div>
+
+<script>
+function firewallManager() {
+    return {
+        bans: [],
+        banIP: '',
+        banDuration: '600',
+        banSubmitting: false,
+        showRules: false,
+        securityReportItems: [],
+        securityReportLoaded: false,
+        securityReportLoading: false,
+        searchIP: '',
+        page: 1,
+        totalPages: 1,
+        total: 0,
+        async fetchBans() {
+            try {
+                let url = '/firewall/bans?page=' + this.page;
+                if (this.searchIP.trim()) url += '&search=' + encodeURIComponent(this.searchIP.trim());
+                const r = await api(url);
+                if (r.success) {
+                    this.bans = r.data?.data || r.data || [];
+                    this.total = r.data?.total || this.bans.length;
+                    this.page = r.data?.page || 1;
+                    this.totalPages = r.data?.total_pages || 1;
+                }
+            } catch(e) {}
+        },
+        async fetchWPSecurityReport() {
+            this.securityReportLoading = true;
+            try {
+                const r = await api('/firewall/wp-security-report');
+                if (r.success) {
+                    this.securityReportItems = r.data?.items || [];
+                    this.securityReportLoaded = true;
+                }
+            } catch(e) { showToast('Read WordPress Suspicious Access Analysisfailed: ' + e.message, 'error'); }
+            finally { this.securityReportLoading = false; }
+        },
+        goPage(p) {
+            if (p < 1 || p > this.totalPages) return;
+            this.page = p;
+            this.fetchBans();
+        },
+        get pageNumbers() {
+            const pages = [];
+            const total = this.totalPages;
+            const current = this.page;
+            let start = Math.max(1, current - 2);
+            let end = Math.min(total, start + 4);
+            if (end - start < 4) start = Math.max(1, end - 4);
+            for (let i = start; i <= end; i++) pages.push(i);
+            return pages;
+        },
+        banLevelText(l) { return ['','Rate Limit','Temp10minutes','Temp24hours','Temp30days','Permanent Ban'][l] || 'Unknown'; },
+        banLevelClass(l) { return ['','badge-info','badge-warning','badge-danger','badge-danger','badge-danger'][l] || 'badge-info'; },
+        riskClass(level) {
+            if (level === 'High') return 'badge-danger';
+            if (level === 'Medium') return 'badge-warning';
+            return 'badge-info';
+        },
+        sourceLabel(ban) {
+            if (ban.source_jail === 'wppanel') return 'Web Protection';
+            if (ban.source_jail === 'wppanel-404') return '404 Defense';
+            if (ban.source_jail === 'wppanel-sshd') return 'SSH Protection';
+            if (ban.source_jail === 'panel') return 'Panel';
+            if (ban.source_jail === 'panel_scan') return 'Scan Defense';
+            if (ban.source_jail === 'manual') return 'ManualBan';
+            if (ban.ban_level >= 5) return 'Nftables Persistent';
+            return ban.source_jail || '--';
+        },
+        sourceClass(ban) {
+            if (ban.source_jail === 'wppanel') return 'text-blue-400';
+            if (ban.source_jail === 'wppanel-404') return 'text-yellow-400';
+            if (ban.source_jail === 'wppanel-sshd') return 'text-green-400';
+            if (ban.source_jail === 'manual') return 'text-purple-400';
+            if (ban.ban_level >= 4) return 'text-purple-400';
+            return 'text-gray-400';
+        },
+        formatTime(t) { return t ? new Date(t).toLocaleString('zh-CN') : '--'; },
+        async unban(ban) {
+            if (!await confirmModal('ConfirmUnban ' + ban.ip_address + '？')) return;
+            try { await api('/firewall/bans/' + ban.id, { method: 'DELETE' }); await this.fetchBans(); showToast('has beenUnban', 'success'); } catch(e) { showToast(e.message, 'error'); }
+        },
+        async permanentBan(ban) {
+            if (!await confirmModal('Confirm making ' + ban.ip_address + ' Permanent Ban？')) return;
+            try { await api('/firewall/bans/' + ban.id + '/permanent', { method: 'POST' }); await this.fetchBans(); showToast('Added to blocklist', 'success'); } catch(e) { showToast(e.message, 'error'); }
+        },
+        async copySecurityReport(item) {
+            try {
+                await navigator.clipboard.writeText(item.copy_text || '');
+                showToast('Analysis report copied', 'success');
+            } catch(e) { showToast('Copy failed, please select and copy manually', 'error'); }
+        },
+        async manualBan() {
+            if (!this.banIP.trim()) { showToast('Please enter an IP address', 'error'); return; }
+            this.banSubmitting = true;
+            try {
+                const r = await api('/firewall/bans', { method: 'POST', body: { ip: this.banIP.trim(), duration: parseInt(this.banDuration) } });
+                showToast(r.data?.message || 'Bansuccess', 'success');
+                this.banIP = '';
+                await this.fetchBans();
+            } catch(e) { showToast(e.message, 'error'); }
+            finally { this.banSubmitting = false; }
+        }
+    }
+}
+
+</script>
+{{end}}

@@ -1,0 +1,203 @@
+{{template "base" .}}
+{{define "websites_content"}}
+<div x-data="websiteList()" x-init="fetchList()">
+    <div class="flex items-center justify-between mb-6">
+        <h2 class="text-xl font-bold text-white">Site Management</h2>
+        <a href="/{{.RandomSuffix}}/websites/new" class="btn-primary">Create Site</a>
+    </div>
+
+    <!-- Reinstall WordPress dialog -->
+    <div x-show="reinstallModal.show" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60" @click.self="reinstallModal.show = false">
+        <div class="bg-gray-800 border border-gray-700 rounded-lg p-6 w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
+            <h3 class="text-lg font-bold text-white mb-2" x-text="'Reinstall WordPress — ' + (reinstallModal.site?.domain || '')"></h3>
+            <p class="text-sm text-red-400 mb-4">⚠️ This will delete all site files, empty the database, and deploy a fresh WordPress installation. All data is irrecoverable.</p>
+
+            <label class="flex items-center space-x-2 cursor-pointer mb-3">
+                <input type="checkbox" x-model="reinstallModal.cleanDefaults" class="w-4 h-4 rounded border-gray-600 bg-gray-700 text-blue-600">
+                <span class="text-gray-300 text-sm">Auto-remove default plugins (Akismet + Hello Dolly)</span>
+            </label>
+
+            <label class="flex items-center space-x-2 cursor-pointer mb-4">
+                <input type="checkbox" x-model="reinstallModal.removeUnusedThemes" class="w-4 h-4 rounded border-gray-600 bg-gray-700 text-blue-600">
+                <span class="text-gray-300 text-sm">Remove unused default themes (Twenty Twenty-Four / Twenty Twenty-Three)</span>
+            </label>
+
+            <div class="grid grid-cols-2 gap-4 mb-4">
+                <div>
+                    <p class="text-xs text-gray-500 mb-2">Install Themes</p>
+                    <template x-for="t in reinstallModal.extensions.filter(e => e.etype === 'theme' && e.enabled)" :key="t.id">
+                        <label class="flex items-center space-x-2 cursor-pointer mb-1">
+                            <input type="checkbox" :value="t.slug" x-model="reinstallModal.installThemes" class="w-3.5 h-3.5 rounded border-gray-600 bg-gray-700 text-blue-600">
+                            <span class="text-gray-300 text-xs" x-text="t.name"></span>
+                        </label>
+                    </template>
+                </div>
+                <div>
+                    <p class="text-xs text-gray-500 mb-2">Install Plugins</p>
+                    <template x-for="p in reinstallModal.extensions.filter(e => e.etype === 'plugin' && e.enabled)" :key="p.id">
+                        <label class="flex items-center space-x-2 cursor-pointer mb-1">
+                            <input type="checkbox" :value="p.slug" x-model="reinstallModal.installPlugins" class="w-3.5 h-3.5 rounded border-gray-600 bg-gray-700 text-blue-600">
+                            <span class="text-gray-300 text-xs" x-text="p.name"></span>
+                        </label>
+                    </template>
+                </div>
+            </div>
+
+            <div class="flex justify-end space-x-3">
+                <button @click="reinstallModal.show = false" class="btn-secondary text-sm">Cancel</button>
+                <button @click="doReinstallWP()" class="text-sm py-2 px-4 rounded text-white" style="background-color: #7f1d1d;">Confirm Reinstall</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead class="border-b border-gray-700">
+                    <tr>
+                        <th class="table-header">Domain</th>
+                        <th class="table-header">Status</th>
+                        <th class="table-header">SSL</th>
+                        <th class="table-header">Monitor</th>
+                        <th class="table-header">Cache</th>
+                        <th class="table-header">Logs</th>
+                        <th class="table-header">DB Backup</th>
+                        <th class="table-header">Created</th>
+                        <th class="table-header">Expires</th>
+                        <th class="table-header">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <template x-for="site in websites" :key="site.id">
+                        <tr class="border-b border-gray-700/50">
+                            <td class="table-cell font-medium">
+                                <a :href="'http://' + site.domain" target="_blank" class="text-blue-400 hover:text-blue-300 hover:underline" x-text="site.domain"></a>
+                            </td>
+                            <td class="table-cell">
+                                <span :class="site.status === 'active' ? 'badge-success' : 'badge-warning'"
+                                      x-text="site.status === 'active' ? 'Running' : 'Paused'"></span>
+                            </td>
+                            <td class="table-cell">
+                                <div class="space-y-1">
+                                    <span :class="site.ssl_enabled ? 'badge-success' : site.ssl_last_error ? 'badge-warning' : 'badge-info'"
+                                          x-text="site.ssl_enabled ? 'Enabled' : site.ssl_last_error ? 'Pending' : 'Disabled'"></span>
+                                    <p x-show="!site.ssl_enabled && site.ssl_last_error" class="text-xs text-yellow-400 max-w-48 truncate" :title="site.ssl_last_error" x-text="site.ssl_last_error"></p>
+                                </div>
+                            </td>
+                            <td class="table-cell">
+                                <span :class="site.monitoring_enabled ? 'badge-success' : 'badge-info'"
+                                      x-text="site.monitoring_enabled ? 'On' : 'Off'"></span>
+                            </td>
+                            <td class="table-cell">
+                                <span :class="site.fastcgi_cache_enabled ? 'badge-success' : 'badge-info'"
+                                      x-text="site.fastcgi_cache_enabled ? 'On' : 'Off'"></span>
+                            </td>
+                            <td class="table-cell">
+                                <span :class="site.access_log_mode === 'full' ? 'badge-success' : site.access_log_mode === 'error_only' ? 'badge-warning' : 'badge-info'"
+                                      x-text="site.access_log_mode === 'full' ? 'Full' : site.access_log_mode === 'error_only' ? 'Errors Only' : 'Off'"></span>
+                            </td>
+                            <td class="table-cell">
+                                <span :class="site.backup_enabled ? 'badge-success' : 'badge-info'"
+                                      x-text="site.backup_enabled ? 'Enabled' : 'Disabled'"></span>
+                            </td>
+                            <td class="table-cell" x-text="new Date(site.created_at).toLocaleDateString('zh-CN')"></td>
+                            <td class="table-cell text-xs" x-text="site.expires_at ? new Date(site.expires_at).toLocaleDateString('zh-CN') : 'Never'"></td>
+                            <td class="table-cell">
+                                <div class="flex space-x-2">
+                                    <a :href="'/{{$.RandomSuffix}}/websites/' + site.id" class="btn-secondary text-xs py-1 px-2">Details</a>
+                                    <a :href="'/{{$.RandomSuffix}}/files?site_id=' + site.id" class="text-xs py-1 px-2 rounded" style="background-color: #1e3a5f; color: #93c5fd;">Files</a>
+                                    <button @click="toggleStatus(site)" class="text-xs py-1 px-2 rounded"
+                                            :class="site.status === 'active' ? 'btn-warning bg-yellow-700 hover:bg-yellow-600 text-white' : 'btn-success text-xs'"
+                                            x-text="site.status === 'active' ? 'Pause' : 'Enable'"></button>
+                                    <button x-show="site.site_type === 'wordpress'" @click="reinstallWP(site)" :disabled="reinstallingId === site.id" class="text-xs py-1 px-2 rounded" style="background-color: #7f1d1d; color: #fca5a5;" x-text="reinstallingId === site.id ? 'Reinstalling...' : 'Reinstall'"></button>
+                                    <button @click="deleteSite(site)" class="btn-danger text-xs py-1 px-2">Delete</button>
+                                </div>
+                            </td>
+                        </tr>
+                    </template>
+                    <tr x-show="websites.length === 0">
+                        <td colspan="10" class="table-cell text-center text-gray-500 py-8">No sites</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+function websiteList() {
+    return {
+        websites: [],
+        reinstallingId: null,
+        reinstallModal: {
+            show: false,
+            site: null,
+            extensions: [],
+            cleanDefaults: true,
+            removeUnusedThemes: true,
+            installThemes: [],
+            installPlugins: [],
+        },
+        async fetchList() {
+            try {
+                const resp = await api('/websites');
+                if (resp.success) this.websites = resp.data || [];
+            } catch (e) { showToast(e.message, 'error'); }
+        },
+        async toggleStatus(site) {
+            const action = site.status === 'active' ? 'pause' : 'enable';
+            try {
+                const resp = await api('/websites/' + site.id + '/status', { method: 'PATCH', body: { action } });
+                if (resp.success) {
+                    site.status = action === 'pause' ? 'paused' : 'active';
+                    showToast(resp.message || 'Operation succeeded', 'success');
+                }
+            } catch (e) { showToast(e.message, 'error'); }
+        },
+        async reinstallWP(site) {
+            this.reinstallModal.site = site;
+            this.reinstallModal.cleanDefaults = true;
+            this.reinstallModal.removeUnusedThemes = true;
+            this.reinstallModal.installThemes = [];
+            this.reinstallModal.installPlugins = [];
+            this.reinstallModal.extensions = [];
+            try {
+                const resp = await api('/extensions');
+                if (resp.success) this.reinstallModal.extensions = resp.data;
+            } catch(e) {}
+            this.reinstallModal.show = true;
+        },
+        async doReinstallWP() {
+            const site = this.reinstallModal.site;
+            this.reinstallModal.show = false;
+            this.reinstallingId = site.id;
+            showToast('Reinstalling ' + site.domain + ', please wait...', 'info');
+            try {
+                const body = {};
+                if (site.site_type === 'wordpress') {
+                    body.clean_defaults = this.reinstallModal.cleanDefaults;
+                    body.remove_unused_themes = this.reinstallModal.removeUnusedThemes;
+                    body.install_themes = this.reinstallModal.installThemes;
+                    body.install_plugins = this.reinstallModal.installPlugins;
+                }
+                const resp = await api('/websites/' + site.id + '/reinstall-wp', { method: 'POST', body });
+                if (resp.success) {
+                    showToast(resp.data?.message || 'WordPress reinstall complete', 'success');
+                }
+            } catch (e) { showToast(e.message, 'error'); }
+            this.reinstallingId = null;
+        },
+        async deleteSite(site) {
+            if (!await confirmModal('Confirm deletion of site ' + site.domain + '? This action is irreversible.')) return;
+            try {
+                const resp = await api('/websites/' + site.id, { method: 'DELETE' });
+                if (resp.success) {
+                    this.websites = this.websites.filter(s => s.id !== site.id);
+                    showToast('Site deleted', 'success');
+                }
+            } catch (e) { showToast(e.message, 'error'); }
+        }
+    }
+}
+</script>
+{{end}}

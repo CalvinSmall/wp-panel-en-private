@@ -1,0 +1,285 @@
+{{template "base" .}}
+{{define "alert_content"}}
+<div x-data="alertManager()" x-init="fetchAll()">
+    <h2 class="text-xl font-bold text-white mb-6">Alert Notifications</h2>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-6">
+        <div class="space-y-8">
+            <div class="card" x-data="smtpConfig()" x-init="fetch()">
+                <h3 class="text-lg font-semibold text-white mb-4">SMTP Email Configuration</h3>
+                <div class="mb-3">
+                    <label class="text-sm text-gray-300 mb-1 block">SMTP Server</label>
+                    <input type="text" x-model="cfg.smtp_host" class="input-field text-sm">
+                </div>
+                <div class="mb-3">
+                    <label class="text-sm text-gray-300 mb-1 block">Port</label>
+                    <input type="text" x-model="cfg.smtp_port" class="input-field text-sm">
+                </div>
+                <div class="mb-3">
+                    <label class="text-sm text-gray-300 mb-1 block">Encryption</label>
+                    <select x-model="cfg.smtp_encryption" class="input-field text-sm">
+                        <option value="starttls">STARTTLS</option>
+                        <option value="ssl">SSL</option>
+                        <option value="none">None</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="text-sm text-gray-300 mb-1 block">Sender Email</label>
+                    <input type="text" x-model="cfg.smtp_user" class="input-field text-sm">
+                </div>
+                <div class="mb-3">
+                    <label class="text-sm text-gray-300 mb-1 block">Password / Auth Code</label>
+                    <input type="password" x-model="cfg.smtp_pass" class="input-field text-sm">
+                </div>
+                <div class="mb-3">
+                    <label class="text-sm text-gray-300 mb-1 block">Admin Notification Email</label>
+                    <input type="text" x-model="cfg.admin_email" class="input-field text-sm" placeholder="admin@example.com">
+                </div>
+                <div class="flex space-x-3">
+                    <button @click="save" :disabled="saving" class="btn-primary text-sm" x-text="saving ? 'Saving...' : 'Save'"></button>
+                    <button @click="test" :disabled="testing" class="btn-secondary text-sm" x-text="testing ? 'Sending...' : 'Test Send'"></button>
+                </div>
+            </div>
+
+            <div class="card" x-data="webhookConfig()" x-init="fetch()">
+                <h3 class="text-lg font-semibold text-white mb-4">Webhook Push</h3>
+                <div class="mb-3">
+                    <label class="text-sm text-gray-300 mb-1 block">Enable</label>
+                    <label class="flex items-center space-x-2 cursor-pointer">
+                        <input type="checkbox" x-model="cfg.webhook_enabled">
+                        <span class="text-sm text-gray-400">Enable Webhook Push Notifications</span>
+                    </label>
+                </div>
+                <div class="mb-3">
+                    <label class="text-sm text-gray-300 mb-1 block">Push Channel</label>
+                    <select x-model="cfg.webhook_channel" class="input-field text-sm">
+                        <option value="wecom">WeCom</option>
+                        <option value="dingtalk">DingTalk</option>
+                        <option value="feishu">Feishu</option>
+                        <option value="serverchan">ServerChan</option>
+                        <option value="bark">Bark</option>
+                        <option value="custom">Custom</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="text-sm text-gray-300 mb-1 block">Webhook URL</label>
+                    <input type="text" x-model="cfg.webhook_url" class="input-field text-sm" placeholder="https://...">
+                </div>
+                <div class="flex space-x-3">
+                    <button @click="save" :disabled="saving" class="btn-primary text-sm" x-text="saving ? 'Saving...' : 'Save'"></button>
+                    <button @click="test" :disabled="testing" class="btn-secondary text-sm" x-text="testing ? 'Sending...' : 'Test Send'"></button>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3 class="text-lg font-semibold text-white mb-4">Alert Rules</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+                <label class="flex items-center space-x-2 text-sm text-gray-300 cursor-pointer mb-3">
+                    <input type="checkbox" x-model="rules.alert_cpu" @change="save">
+                    <span>CPU &gt; 80% sustained for 5 minutes</span>
+                </label>
+                <label class="flex items-center space-x-2 text-sm text-gray-300 cursor-pointer mb-3">
+                    <input type="checkbox" x-model="rules.alert_memory" @change="save">
+                    <span>Available memory &lt; 10% sustained for 5 minutes</span>
+                </label>
+                <label class="flex items-center space-x-2 text-sm text-gray-300 cursor-pointer mb-3">
+                    <input type="checkbox" x-model="rules.alert_disk" @change="save">
+                    <span>Disk &gt; 90%</span>
+                </label>
+            </div>
+            <div>
+                <label class="flex items-center space-x-2 text-sm text-gray-300 cursor-pointer mb-3">
+                    <input type="checkbox" x-model="rules.alert_service" @change="save">
+                    <span>Service process abnormal restart</span>
+                </label>
+                <label class="flex items-center space-x-2 text-sm text-gray-300 cursor-pointer mb-3">
+                    <input type="checkbox" x-model="rules.alert_ssl" @change="save">
+                    <span>SSL certificate expiring (within 14 days)</span>
+                </label>
+                <label class="flex items-center space-x-2 text-sm text-gray-300 cursor-pointer mb-3">
+                    <input type="checkbox" x-model="rules.alert_backup" @change="save">
+                    <span>Database backup failed</span>
+                </label>
+                <label class="flex items-center space-x-2 text-sm text-gray-300 cursor-pointer mb-3">
+                    <input type="checkbox" x-model="rules.alert_remote_backup" @change="save">
+                    <span>Remote backup failed (requires remote backup enabled)</span>
+                </label>
+                <label class="flex items-center space-x-2 text-sm text-gray-300 cursor-pointer mb-3">
+                    <input type="checkbox" x-model="rules.alert_cron_fail" @change="save">
+                    <span>Scheduled task execution failed</span>
+                </label>
+                <label class="flex items-center space-x-2 text-sm text-gray-300 cursor-pointer mb-3">
+                    <input type="checkbox" x-model="rules.alert_website_expiry" @change="save">
+                    <span>Site expiring (within 14 days)</span>
+                </label>
+                <label class="flex items-center space-x-2 text-sm text-gray-300 cursor-pointer mb-3">
+                    <input type="checkbox" x-model="rules.alert_system_update" @change="save">
+                    <span>System updates available</span>
+                </label>
+                <label class="flex items-center space-x-2 text-sm text-gray-300 cursor-pointer mb-3">
+                    <input type="checkbox" x-model="rules.alert_panel_update" @change="save">
+                    <span>New panel version available</span>
+                </label>
+            </div>
+        </div>
+        <p class="text-xs text-gray-500 mt-2">Alerts are sent at most once per 30 minutes. A recovery notification will be sent once the anomaly is resolved.</p>
+    </div>
+    </div>
+
+    <div class="card">
+        <h3 class="text-lg font-semibold text-white mb-4">Alert History (Last 30)</h3>
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead class="border-b border-gray-700 text-gray-400">
+                    <tr>
+                        <th class="py-2 text-left">Time</th>
+                        <th class="py-2 text-left">Type</th>
+                        <th class="py-2 text-left">Level</th>
+                        <th class="py-2 text-left">Content</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-800">
+                    <template x-for="l in logs" :key="l.id">
+                        <tr>
+                            <td class="py-2 text-xs text-gray-400" x-text="fmtTime(l.created_at)"></td>
+                            <td class="py-2 text-sm text-gray-300" x-text="typeLabel(l.alert_type)"></td>
+                            <td class="py-2">
+                                <span x-show="l.level === 'critical'" class="text-red-400 text-xs">● Alert</span>
+                                <span x-show="l.level === 'info'" class="text-green-400 text-xs">● Recovered</span>
+                            </td>
+                            <td class="py-2 text-sm text-gray-400" x-text="l.message"></td>
+                        </tr>
+                    </template>
+                    <tr x-show="logs.length === 0">
+                        <td colspan="4" class="py-6 text-center text-gray-500">No alert records</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+function smtpConfig() {
+    return {
+        cfg: { smtp_host: '', smtp_port: '587', smtp_encryption: 'starttls', smtp_user: '', smtp_pass: '', admin_email: '' },
+        saving: false,
+        testing: false,
+        async fetch() {
+            try {
+                const r = await api('/alert/settings');
+                if (r.success) {
+                    const d = r.data || {};
+                    this.cfg = {
+                        smtp_host: d.smtp_host || '',
+                        smtp_port: d.smtp_port || '587',
+                        smtp_encryption: d.smtp_encryption || 'starttls',
+                        smtp_user: d.smtp_user || '',
+                        smtp_pass: d.smtp_pass || '',
+                        admin_email: d.admin_email || ''
+                    };
+                }
+            } catch(e) {}
+        },
+        async save() {
+            this.saving = true;
+            try {
+                const body = {
+                    smtp_host: this.cfg.smtp_host || '',
+                    smtp_port: this.cfg.smtp_port || '587',
+                    smtp_encryption: this.cfg.smtp_encryption || 'starttls',
+                    smtp_user: this.cfg.smtp_user || '',
+                    smtp_pass: this.cfg.smtp_pass || '',
+                    admin_email: this.cfg.admin_email || ''
+                };
+                await api('/alert/settings', { method: 'PUT', body });
+                showToast('SMTP configuration saved', 'success');
+            } catch(e) { showToast(e.message, 'error'); }
+            this.saving = false;
+        },
+        async test() {
+            this.testing = true;
+            try {
+                const r = await api('/alert/test-smtp', { method: 'POST', body: { email: this.cfg.admin_email || '' } });
+                showToast(r.data?.message || 'Sent successfully', 'success');
+            } catch(e) { showToast(e.message || 'Send failed', 'error'); }
+            this.testing = false;
+        }
+    }
+}
+
+function webhookConfig() {
+    return {
+        cfg: { webhook_enabled: 'false', webhook_channel: 'wecom', webhook_url: '' },
+        saving: false,
+        testing: false,
+        async fetch() {
+            try { const r = await api('/alert/settings'); if (r.success) { const d = r.data || {}; if (d.webhook_enabled) this.cfg.webhook_enabled = d.webhook_enabled; if (d.webhook_channel) this.cfg.webhook_channel = d.webhook_channel; if (d.webhook_url) this.cfg.webhook_url = d.webhook_url; } } catch(e) {}
+        },
+        async save() {
+            this.saving = true;
+            try {
+                const body = { ...this.cfg };
+                if (typeof body.webhook_enabled === 'boolean') {
+                    body.webhook_enabled = body.webhook_enabled ? 'true' : 'false';
+                }
+                await api('/alert/settings', { method: 'PUT', body });
+                showToast('Webhook configuration saved', 'success');
+            } catch(e) { showToast(e.message, 'error'); }
+            this.saving = false;
+        },
+        async test() {
+            if (!this.cfg.webhook_url) { showToast('Please enter a Webhook URL', 'error'); return; }
+            this.testing = true;
+            try {
+                const r = await api('/alert/test-webhook', { method: 'POST', body: { channel: this.cfg.webhook_channel, url: this.cfg.webhook_url } });
+                showToast(r.data?.message || 'Sent successfully', 'success');
+            } catch(e) { showToast(e.message || 'Send failed', 'error'); }
+            this.testing = false;
+        }
+    }
+}
+
+function alertManager() {
+    return {
+        rules: {},
+        logs: [],
+        async fetchAll() {
+            try {
+                const r = await api('/alert/settings');
+                if (r.success) {
+                    const d = r.data || {};
+                    for (const k of Object.keys(d)) {
+                        if (k.startsWith('alert_')) {
+                            this.rules[k] = d[k] !== 'false';
+                        }
+                    }
+                }
+            } catch(e) {}
+            this.fetchLog();
+        },
+        async save() {
+            try {
+                const body = {};
+                for (const k of Object.keys(this.rules)) {
+                    body[k] = this.rules[k] ? 'true' : 'false';
+                }
+                await api('/alert/settings', { method: 'PUT', body });
+            } catch(e) {}
+        },
+        async fetchLog() {
+            try {
+                const r = await api('/alert/log');
+                if (r.success) this.logs = r.data || [];
+            } catch(e) {}
+        },
+        typeLabel(t) {
+            const m = { alert_cpu: 'CPU High Load', alert_memory: 'Low Available Memory', alert_disk: 'Disk Low', alert_service: 'Service Anomaly', alert_ssl: 'SSL Expiring', alert_backup: 'Backup Failed', alert_remote_backup: 'Remote Backup Failed', alert_cron_fail: 'Cron Task Failed', alert_website_expiry: 'Site Expiring', alert_site: 'Site Unavailable', alert_system_update: 'System Update Available', alert_panel_update: 'Panel New Version' };
+            return m[t] || t;
+        }
+    }
+}
+</script>
+{{end}}

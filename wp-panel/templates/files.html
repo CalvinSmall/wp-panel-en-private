@@ -1,0 +1,683 @@
+{{template "base" .}}
+{{define "files_content"}}
+<div x-data="fileManager()" x-init="initSites()">
+    <h2 class="text-xl font-bold text-white mb-6">File Manager</h2>
+
+    <div x-show="selected.length > 0" class="flex flex-wrap items-center gap-2 mb-3 p-3 bg-blue-900/30 rounded border border-blue-800">
+        <span class="text-sm text-gray-300" x-text="'Selected on current page ' + selected.length + ' items'"></span>
+        <button @click="batchCompress()" :disabled="archiveBusy" class="btn-secondary text-sm py-1">Batch Compress</button>
+        <button @click="cutItems()" class="btn-secondary text-sm py-1">Cut</button>
+        <button @click="copyItems()" class="btn-secondary text-sm py-1">Copy</button>
+        <button @click="batchDelete()" class="btn-danger text-sm py-1">Batch Delete</button>
+        <button @click="selected = []" class="text-sm text-gray-400 hover:text-white py-1">Deselect</button>
+    </div>
+
+    <template x-if="clipboard">
+    <div class="flex flex-wrap items-center gap-2 mb-3 p-3 bg-green-900/30 rounded border border-green-800">
+        <span class="text-sm text-gray-300" x-text="'Clipboard: ' + clipboard.names.length + ' items (' + (clipboard.action === 'cut' ? 'Cut' : 'Copy') + ')'"></span>
+        <button @click="pasteItems()" class="btn-primary text-sm py-1">Paste</button>
+        <button @click="clipboard = null" class="text-sm text-gray-400 hover:text-white py-1">Clear</button>
+    </div>
+    </template>
+
+    <div x-show="archiveBusy" class="flex items-center gap-3 mb-3 p-3 bg-amber-900/30 rounded border border-amber-700 text-amber-100" aria-live="polite">
+        <span class="inline-block w-4 h-4 rounded-full border-2 border-amber-200 border-t-transparent animate-spin"></span>
+        <span class="text-sm" x-text="archiveBusyText"></span>
+    </div>
+
+    <div x-show="showRemoteImport" class="modal-overlay" x-cloak>
+        <div class="modal-content max-w-xl">
+            <h3 class="text-lg font-semibold text-white mb-4">Remote Import</h3>
+            <div class="space-y-3">
+                <div>
+                    <label class="label">HTTPS URL</label>
+                    <input type="url" x-model="remoteImportUrl" class="input-field text-sm" placeholder="https://example.com/backup.zip">
+                </div>
+                <div class="flex items-start gap-2">
+                    <input type="checkbox" x-model="remoteImportAllowInsecureTLS" class="mt-1">
+                    <label class="text-sm text-gray-300">Allow self-signed or untrusted HTTPS certificates</label>
+                </div>
+                <div x-show="remoteImportStatus" class="p-3 rounded bg-gray-700/50">
+                    <div class="flex justify-between text-sm text-gray-300 mb-2">
+                        <span x-text="remoteImportStatus?.message || 'Preparing download'"></span>
+                        <span x-text="(remoteImportStatus?.percent || 0) + '%'"></span>
+                    </div>
+                    <div class="h-2 bg-gray-800 rounded overflow-hidden">
+                        <div class="h-full bg-blue-600" :style="'width:' + (remoteImportStatus?.percent || 0) + '%'"></div>
+                    </div>
+                    <div class="text-xs text-gray-500 mt-2" x-text="remoteImportBytesText()"></div>
+                </div>
+            </div>
+            <div class="flex justify-end gap-2 mt-5">
+                <button @click="closeRemoteImport()" class="btn-secondary text-sm" :disabled="remoteImporting">Cancel</button>
+                <button @click="startRemoteImport()" class="btn-primary text-sm" :disabled="remoteImporting || !remoteImportUrl.trim()" x-text="remoteImporting ? 'Importing...' : 'Start Import'"></button>
+            </div>
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="flex items-center space-x-4 mb-4">
+            <select x-model="selectedSite" @change="switchRoot()" class="input-field w-64" x-ref="siteSelect">
+                <option value="">Select site...</option>
+                <template x-for="s in sites" :key="s.id">
+                    <option :value="s.id" x-text="s.domain"></option>
+                </template>
+                <option value="0">📦 Backup Directory</option>
+            </select>
+        </div>
+
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-2 mb-4">
+            <div class="flex items-center space-x-2 text-sm">
+                <template x-for="(seg, idx) in breadcrumbs()" :key="idx">
+                    <span>
+                        <span class="text-gray-500" x-show="idx > 0"> / </span>
+                        <span class="cursor-pointer hover:text-blue-400" :class="idx === breadcrumbs().length - 1 ? 'text-white' : 'text-gray-400'"
+                              @click="goToBreadcrumb(idx)" x-text="seg.label"></span>
+                    </span>
+                </template>
+            </div>
+            <div class="flex flex-wrap items-center gap-2">
+                <button @click="showMkdir = true" :disabled="!selectedSite" class="btn-secondary text-sm">New Folder</button>
+                <button @click="fixPermissions()" :disabled="!selectedSite || selectedSite == '0' || fixingPerms" class="btn-secondary text-sm" x-text="fixingPerms ? 'Fixing...' : 'Fix Permissions'"></button>
+                <button @click="openRemoteImport()" :disabled="!hasSelectedRoot() || remoteImporting" class="btn-secondary text-sm">Remote Import</button>
+                <form @submit.prevent="uploadFile" class="flex items-center gap-2">
+                    <input type="file" @change="fileSelected($event)" :disabled="!hasSelectedRoot() || uploading" class="input-field w-32 sm:w-48 md:w-64 text-sm">
+                    <button type="submit" class="btn-primary text-sm" :disabled="!hasSelectedRoot() || !uploadTarget || uploading" x-text="uploading ? 'Uploading ' + uploadProgress + '%' : 'Upload'"></button>
+                </form>
+            </div>
+        </div>
+
+        <div x-show="showMkdir" class="flex items-center space-x-2 mb-4 p-3 bg-gray-700/50 rounded">
+            <span class="text-sm text-gray-300">Folder name:</span>
+            <input type="text" x-model="mkdirName" @keyup.enter="createDir()" class="input-field w-48 text-sm" placeholder="New folder">
+            <button @click="createDir()" class="btn-primary text-sm">Create</button>
+            <button @click="showMkdir = false; mkdirName = ''" class="btn-secondary text-sm">Cancel</button>
+        </div>
+
+        <div x-show="showRename" class="flex items-center space-x-2 mb-4 p-3 bg-gray-700/50 rounded">
+            <span class="text-sm text-gray-300">Rename <span class="text-white" x-text="renameTarget"></span> to:</span>
+            <input type="text" x-model="renameName" @keyup.enter="doRename()" class="input-field w-48 text-sm">
+            <button @click="doRename()" class="btn-primary text-sm">Confirm</button>
+            <button @click="showRename = false" class="btn-secondary text-sm">Cancel</button>
+        </div>
+
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead class="border-b border-gray-700">
+                    <tr>
+                        <th class="table-header w-10"><input type="checkbox" @change="selectAll($event.target.checked)" :disabled="files.length === 0"></th>
+                        <th class="table-header cursor-pointer hover:text-white select-none" @click="setSort('name')">Name<span class="ml-1 text-xs" x-text="sortMark('name')"></span></th>
+                        <th class="table-header cursor-pointer hover:text-white select-none" @click="setSort('type')">Type<span class="ml-1 text-xs" x-text="sortMark('type')"></span></th>
+                        <th class="table-header cursor-pointer hover:text-white select-none" @click="setSort('size')">Size<span class="ml-1 text-xs" x-text="sortMark('size')"></span></th>
+                        <th class="table-header">Permissions</th>
+                        <th class="table-header cursor-pointer hover:text-white select-none" @click="setSort('time')">Modified<span class="ml-1 text-xs" x-text="sortMark('time')"></span></th>
+                        <th class="table-header">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr x-show="currentPath !== '/'" class="border-b border-gray-700/50 cursor-pointer hover:bg-gray-800/50" @click="goUp()">
+                        <td class="table-cell text-gray-400" colspan="7">📂 ..</td>
+                    </tr>
+                    <template x-for="f in files" :key="f.name">
+                        <tr class="border-b border-gray-700/50" :class="isSelected(f.name) ? 'bg-blue-900/20' : ''">
+                            <td class="table-cell">
+                                <input type="checkbox" :checked="isSelected(f.name)" @click.stop @change="toggleSelect(f.name, $event.target.checked)">
+                            </td>
+                            <td class="table-cell">
+                                <span x-show="f.is_dir" class="cursor-pointer hover:text-blue-400" @click="enterDir(f.name)" x-text="'📁 ' + f.name"></span>
+                                <span x-show="!f.is_dir" x-text="'📄 ' + f.name"></span>
+                            </td>
+                            <td class="table-cell text-sm" x-text="f.is_dir ? 'Directory' : 'File'"></td>
+                            <td class="table-cell text-sm" x-text="f.is_dir ? '--' : formatBytes(f.size)"></td>
+                            <td class="table-cell font-mono text-xs" x-text="f.mode"></td>
+                            <td class="table-cell text-xs" x-text="f.mod_time"></td>
+                            <td class="table-cell">
+                                <div class="flex flex-wrap gap-1">
+                                    <button x-show="!f.is_dir" @click="downloadFile(f.name)" class="btn-primary text-xs py-1 px-2">Download</button>
+                                    <button @click="startRename(f.name)" class="btn-secondary text-xs py-1 px-2">Rename</button>
+                                    <button @click="compressItems([f.name])" :disabled="archiveBusy" class="btn-secondary text-xs py-1 px-2" :title="f.is_dir ? 'CompressDirectory' : 'CompressFile'">Compress</button>
+                                    <button x-show="isArchive(f.name)" @click="decompressFile(f.name)" :disabled="archiveBusy" class="btn-secondary text-xs py-1 px-2">Extract</button>
+                                    <button @click="deleteItems([f.name])" class="btn-danger text-xs py-1 px-2">Delete</button>
+                                </div>
+                            </td>
+                        </tr>
+                    </template>
+                    <tr x-show="files.length === 0 && selectedSite">
+                        <td colspan="7" class="table-cell text-center text-gray-500 py-8">Directory</td>
+                    </tr>
+                    <tr x-show="!selectedSite">
+                        <td colspan="7" class="table-cell text-center text-gray-500 py-8">Please select a site first</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <div x-show="selectedSite && totalPages > 1" class="flex items-center justify-between mt-4 pt-3 border-t border-gray-700/50">
+            <span class="text-sm text-gray-400" x-text="'Total ' + total + ' items，per page ' + perPage + ' items'"></span>
+            <div class="flex items-center space-x-1">
+                <button @click="goPage(page - 1)" :disabled="page <= 1" class="px-3 py-1 text-sm rounded bg-gray-700 hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed">Previous</button>
+                <template x-for="p in pageNumbers" :key="p">
+                    <button @click="goPage(p)" :class="p === page ? 'bg-blue-600 text-white' : 'bg-gray-700 hover:bg-gray-600'" class="px-3 py-1 text-sm rounded" x-text="p"></button>
+                </template>
+                <button @click="goPage(page + 1)" :disabled="page >= totalPages" class="px-3 py-1 text-sm rounded bg-gray-700 hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed">Next</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function fileManager() {
+    return {
+        sites: [],
+        selectedSite: '',
+        currentPath: '/',
+        files: [],
+        selected: [],
+        sortBy: 'name',
+        sortDir: 'asc',
+        page: 1,
+        perPage: 50,
+        total: 0,
+        totalPages: 1,
+        setSort(field) {
+            if (this.sortBy === field) { this.sortDir = this.sortDir === 'asc' ? 'desc' : 'asc'; }
+            else { this.sortBy = field; this.sortDir = 'asc'; }
+            this.page = 1;
+            this.loadFiles();
+        },
+        sortMark(field) {
+            if (this.sortBy !== field) return '';
+            return this.sortDir === 'asc' ? '▲' : '▼';
+        },
+        uploadTarget: null,
+        uploading: false,
+        uploadProgress: 0,
+        fixingPerms: false,
+        archiveBusy: false,
+        archiveBusyText: '',
+        showMkdir: false,
+        mkdirName: '',
+        showRename: false,
+        renameTarget: '',
+        renameName: '',
+        clipboard: null,
+        showRemoteImport: false,
+        remoteImportUrl: '',
+        remoteImportAllowInsecureTLS: false,
+        remoteImporting: false,
+        remoteImportStatus: null,
+        remoteImportTimer: null,
+        hasSelectedRoot() {
+            return this.selectedSite !== '' && this.selectedSite !== null && typeof this.selectedSite !== 'undefined';
+        },
+        apiMessage(data, fallback) {
+            return data?.message || data?.data?.message || fallback;
+        },
+        async initSites() {
+            try {
+                const r = await api('/websites');
+                if (r.success && r.data) this.sites = r.data;
+            } catch(e) {}
+            // Auto-select site from URL params (navigated from Site Management page)
+            const params = new URLSearchParams(window.location.search);
+            const sid = params.get('site_id');
+            if (sid && !this.selectedSite) {
+                this.selectedSite = parseInt(sid);
+                this.loadFiles();
+            }
+        },
+        switchRoot() {
+            this.currentPath = '/';
+            this.page = 1;
+            this.selected = [];
+            this.loadFiles();
+        },
+        breadcrumbs() {
+            const parts = [{ label: 'Directory', path: '/' }];
+            if (this.currentPath === '/') return parts;
+            const segs = this.currentPath.split('/').filter(s => s);
+            let p = '';
+            for (const s of segs) {
+                p += '/' + s;
+                parts.push({ label: s, path: p });
+            }
+            return parts;
+        },
+        goToBreadcrumb(idx) {
+            const bc = this.breadcrumbs();
+            this.currentPath = bc[idx].path;
+            this.page = 1;
+            this.loadFiles();
+        },
+        async loadFiles() {
+            if (!this.selectedSite) {
+                this.files = [];
+                this.total = 0;
+                this.totalPages = 1;
+                return;
+            }
+            this.selected = [];
+            try {
+                let url = '/files/list?site_id=' + this.selectedSite
+                    + '&path=' + encodeURIComponent(this.currentPath)
+                    + '&page=' + this.page
+                    + '&per_page=' + this.perPage
+                    + '&sort_by=' + encodeURIComponent(this.sortBy)
+                    + '&sort_dir=' + encodeURIComponent(this.sortDir);
+                const r = await api(url);
+                if (r.success) {
+                    this.files = r.data.files || [];
+                    this.total = r.data.total || this.files.length;
+                    this.page = r.data.page || 1;
+                    this.perPage = r.data.per_page || 50;
+                    this.totalPages = r.data.total_pages || 1;
+                }
+            } catch(e) { showToast(e.message, 'error'); }
+        },
+        goPage(p) {
+            if (p < 1 || p > this.totalPages) return;
+            this.page = p;
+            this.loadFiles();
+        },
+        get pageNumbers() {
+            const pages = [];
+            const total = this.totalPages;
+            const current = this.page;
+            let start = Math.max(1, current - 2);
+            let end = Math.min(total, start + 4);
+            if (end - start < 4) start = Math.max(1, end - 4);
+            for (let i = start; i <= end; i++) pages.push(i);
+            return pages;
+        },
+        isSelected(name) { return this.selected.includes(name); },
+        toggleSelect(name, checked) {
+            if (checked) { if (!this.selected.includes(name)) this.selected.push(name); }
+            else { this.selected = this.selected.filter(s => s !== name); }
+        },
+        selectAll(checked) {
+            this.selected = checked ? this.files.map(f => f.name) : [];
+        },
+        enterDir(name) {
+            this.currentPath = this.currentPath === '/' ? '/' + name : this.currentPath + '/' + name;
+            this.page = 1;
+            this.loadFiles();
+        },
+        goUp() {
+            if (this.currentPath === '/') return;
+            const parts = this.currentPath.split('/').filter(s => s);
+            parts.pop();
+            this.currentPath = '/' + parts.join('/');
+            if (this.currentPath === '') this.currentPath = '/';
+            this.page = 1;
+            this.loadFiles();
+        },
+        fileSelected(e) { this.uploadTarget = e.target.files[0]; },
+        openRemoteImport() {
+            if (!this.hasSelectedRoot()) {
+                showToast('Please select a site firstorBackup Directory', 'error');
+                return;
+            }
+            this.remoteImportUrl = '';
+            this.remoteImportAllowInsecureTLS = false;
+            this.remoteImportStatus = null;
+            this.showRemoteImport = true;
+        },
+        closeRemoteImport() {
+            if (this.remoteImporting) return;
+            this.showRemoteImport = false;
+            if (this.remoteImportTimer) clearTimeout(this.remoteImportTimer);
+            this.remoteImportTimer = null;
+        },
+        remoteImportBytesText() {
+            if (!this.remoteImportStatus) return '';
+            const downloaded = formatBytes(this.remoteImportStatus.downloaded || 0);
+            const total = this.remoteImportStatus.total > 0 ? formatBytes(this.remoteImportStatus.total) : 'UnknownSize';
+            return downloaded + ' / ' + total;
+        },
+        async startRemoteImport() {
+            if (!this.hasSelectedRoot()) {
+                showToast('Please select a site firstorBackup Directory', 'error');
+                return;
+            }
+            const siteID = Number(this.selectedSite);
+            if (!Number.isInteger(siteID)) {
+                showToast('Please select a site firstorBackup Directory', 'error');
+                return;
+            }
+            this.remoteImporting = true;
+            try {
+                const r = await api('/files/remote-import', {
+                    method: 'POST',
+                    body: {
+                        url: this.remoteImportUrl.trim(),
+                        allow_insecure_tls: this.remoteImportAllowInsecureTLS,
+                        site_id: siteID,
+                        path: this.currentPath
+                    }
+                });
+                this.remoteImportStatus = r.data;
+                this.pollRemoteImport(r.data.id);
+            } catch(e) {
+                this.remoteImporting = false;
+            }
+        },
+        async pollRemoteImport(id) {
+            try {
+                const r = await api('/files/remote-import/' + encodeURIComponent(id));
+                this.remoteImportStatus = r.data;
+                if (r.data?.status === 'success') {
+                    this.remoteImporting = false;
+                    this.loadFiles();
+                    showToast(r.data.message || 'Remote import complete', 'success');
+                    return;
+                }
+                if (r.data?.status === 'failed') {
+                    this.remoteImporting = false;
+                    showToast(r.data.error || r.data.message || 'Remote Importfailed', 'error');
+                    return;
+                }
+            } catch(e) {
+                this.remoteImporting = false;
+                return;
+            }
+            this.remoteImportTimer = setTimeout(() => this.pollRemoteImport(id), 1000);
+        },
+        async uploadFile() {
+            if (!this.uploadTarget) return;
+            if (!this.hasSelectedRoot()) {
+                showToast('Please select a site firstorBackup Directory', 'error');
+                return;
+            }
+            const file = this.uploadTarget;
+            const name = file.name;
+            const exists = this.files.some(f => !f.is_dir && f.name === name);
+            if (exists && !await confirmModal(name + ' already exists. Overwrite?')) return;
+
+            const prefix = document.body.dataset.panelPrefix || '';
+            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+            const CHUNK_SIZE = 5 * 1024 * 1024;
+            const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+            const siteID = Number(this.selectedSite);
+            if (!Number.isInteger(siteID)) {
+                showToast('Please select a site firstorBackup Directory', 'error');
+                return;
+            }
+
+            this.uploading = true;
+            this.uploadProgress = 0;
+
+            try {
+                const initRes = await fetch(prefix + '/api/files/upload/init', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+                    body: JSON.stringify({
+                        filename: name,
+                        file_size: file.size,
+                        total_chunks: totalChunks,
+                        site_id: siteID,
+                        path: this.currentPath,
+                        last_modified: file.lastModified || 0
+                    })
+                });
+                const initData = await initRes.json();
+                if (!initData.success) { showToast(this.apiMessage(initData, 'Upload initialization failed'), 'error'); this.uploading = false; return; }
+
+                const uploadID = initData.data.upload_id;
+                const completedChunks = new Set(initData.data.completed_chunks || []);
+
+                for (let i = 0; i < totalChunks; i++) {
+                    if (completedChunks.has(i)) {
+                        this.uploadProgress = Math.round((i + 1) / totalChunks * 100);
+                        continue;
+                    }
+
+                    const start = i * CHUNK_SIZE;
+                    const end = Math.min(start + CHUNK_SIZE, file.size);
+                    const blob = file.slice(start, end);
+
+                    const fd = new FormData();
+                    fd.append('upload_id', uploadID);
+                    fd.append('chunk_index', String(i));
+                    fd.append('chunk', blob, 'chunk-' + i);
+
+                    let success = false;
+                    let lastError = '';
+                    for (let retry = 0; retry < 3; retry++) {
+                        try {
+                            const chunkRes = await fetch(prefix + '/api/files/upload/chunk', {
+                                method: 'POST',
+                                headers: { 'X-CSRF-Token': csrfToken },
+                                body: fd
+                            });
+                            const chunkData = await chunkRes.json();
+                            if (chunkData.success) { success = true; break; }
+                            lastError = this.apiMessage(chunkData, '');
+                            if (retry < 2) await new Promise(r => setTimeout(r, 1000 * (retry + 1)));
+                        } catch(e) {
+                            lastError = e.message || '';
+                            if (retry < 2) await new Promise(r => setTimeout(r, 1000 * (retry + 1)));
+                        }
+                    }
+                    if (!success) {
+                        showToast('Chunk ' + (i + 1) + '/' + totalChunks + ' Uploadfailed' + (lastError ? ': ' + lastError : ''), 'error');
+                        this.uploading = false;
+                        return;
+                    }
+                    this.uploadProgress = Math.round((i + 1) / totalChunks * 100);
+                }
+
+                const completeRes = await fetch(prefix + '/api/files/upload/complete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+                    body: JSON.stringify({ upload_id: uploadID, site_id: siteID, path: this.currentPath })
+                });
+                const completeData = await completeRes.json();
+                if (completeData.success) {
+                    this.uploadTarget = null;
+                    document.querySelector('input[type="file"]').value = '';
+                    this.loadFiles();
+                    showToast('Upload complete', 'success');
+                } else {
+                    showToast(this.apiMessage(completeData, 'File merge failed'), 'error');
+                }
+            } catch(e) {
+                showToast('Uploadfailed: ' + e.message, 'error');
+            }
+            this.uploading = false;
+        },
+        async fixPermissions() {
+            if (!await confirmModal('Confirm fixing ' + (this.sites.find(s => s.id == this.selectedSite)?.domain || '') + '  file permissions?\n\nDirectories will be set to 755, files to 644, sensitive files tightened, owner set to site_user:site_user.')) return;
+            this.fixingPerms = true;
+            try {
+                const r = await api('/files/fix-permissions?site_id=' + this.selectedSite, { method: 'POST' });
+                if (r.success) showToast(r.data?.message || 'Permissions fixed', 'success');
+                else showToast(r.data?.message || 'Actionsfailed', 'error');
+            } catch(e) { showToast(e.message, 'error'); }
+            this.fixingPerms = false;
+        },
+        downloadFile(name) {
+            const prefix = document.body.dataset.panelPrefix || '';
+            window.open(prefix + '/api/files/download?site_id=' + this.selectedSite + '&path=' + encodeURIComponent(this.currentPath === '/' ? '/' + name : this.currentPath + '/' + name));
+        },
+        startRename(name) {
+            this.renameTarget = name;
+            this.renameName = name;
+            this.showRename = true;
+            this.$nextTick(() => {
+                const inp = document.querySelector('input[x-model="renameName"]');
+                if (inp) { inp.focus(); inp.select(); }
+            });
+        },
+        async doRename() {
+            const name = this.renameName.trim();
+            if (!name || name === this.renameTarget) { this.showRename = false; return; }
+            const oldPath = this.currentPath === '/' ? '/' + this.renameTarget : this.currentPath + '/' + this.renameTarget;
+            try {
+                await api('/files/rename', {
+                    method: 'PUT',
+                    body: { site_id: parseInt(this.selectedSite), old_path: oldPath, new_name: name }
+                });
+                this.showRename = false;
+                this.loadFiles();
+                showToast('Renamed successfully', 'success');
+            } catch(e) { showToast(e.message, 'error'); }
+        },
+        async createDir() {
+            const name = this.mkdirName.trim();
+            if (!name) return;
+            try {
+                await api('/files/mkdir?site_id=' + this.selectedSite + '&path=' + encodeURIComponent(this.currentPath), {
+                    method: 'POST', body: { name }
+                });
+                this.showMkdir = false;
+                this.mkdirName = '';
+                this.loadFiles();
+                showToast('Directory created successfully', 'success');
+            } catch(e) { showToast(e.message, 'error'); }
+        },
+        pathFor(name) { return this.currentPath === '/' ? '/' + name : this.currentPath + '/' + name; },
+        isArchive(name) {
+            const lower = name.toLowerCase();
+            return lower.endsWith('.zip') || lower.endsWith('.tar') || lower.endsWith('.tar.gz') || lower.endsWith('.tgz') || lower.endsWith('.tar.bz2') || lower.endsWith('.tbz2');
+        },
+        async deleteItems(names) {
+            const label = names.length === 1 ? names[0] : names.length + ' items';
+            if (!await confirmModal('ConfirmDelete ' + label + '？')) return;
+            for (let i = 0; i < names.length; i++) {
+                const name = names[i];
+                try {
+                    await api('/files/delete?site_id=' + this.selectedSite + '&path=' + encodeURIComponent(this.pathFor(name)), { method: 'DELETE' });
+                    if (names.length > 1) showToast('Deleted ' + name + ' (' + (i + 1) + '/' + names.length + ')', 'info');
+                } catch(e) { showToast('Delete ' + name + ' failed: ' + e.message, 'error'); return; }
+            }
+            this.loadFiles(); showToast('Deletion complete', 'success');
+        },
+        batchDelete() { this.deleteItems([...this.selected]); },
+        cutItems() {
+            this.clipboard = { action: 'cut', site_id: this.selectedSite, src_path: this.currentPath, names: [...this.selected] };
+            showToast('Cut ' + this.selected.length + ' itemsitems to clipboard', 'info');
+            this.selected = [];
+        },
+        copyItems() {
+            this.clipboard = { action: 'copy', site_id: this.selectedSite, src_path: this.currentPath, names: [...this.selected] };
+            showToast('Copied ' + this.selected.length + ' itemsitems to clipboard', 'info');
+            this.selected = [];
+        },
+        async pasteItems() {
+            if (!this.clipboard) return;
+            if (!this.selectedSite) { showToast('Please select a target site or directory first.', 'error'); return; }
+            const cb = this.clipboard;
+            const apiPath = cb.action === 'cut' ? '/files/move' : '/files/copy';
+            const pasteRequest = async (conflictPolicy = '') => {
+                return await api(apiPath, {
+                    method: 'POST',
+                    body: {
+                        site_id: parseInt(cb.site_id),
+                        dest_site_id: parseInt(this.selectedSite),
+                        src_path: cb.src_path,
+                        dest_path: this.currentPath,
+                        names: cb.names,
+                        conflict_policy: conflictPolicy
+                    }
+                });
+            };
+            try {
+                const r = await pasteRequest();
+                showToast(r.data?.message || 'Operation complete', 'success');
+                this.clipboard = null;
+                this.loadFiles();
+            } catch(e) {
+                if (e.conflicts) {
+                    const msg = 'The following items already exist:\n\n' + e.conflicts.join('\n')
+                        + '\n\nChoosing "Confirm" will merge directories and overwrite same-named files; choosing "Cancel" to skip.';
+                    if (await confirmModal(msg)) {
+                        try {
+                            const r = await pasteRequest('overwrite');
+                            showToast(r.data?.message || 'Operation complete', 'success');
+                            this.clipboard = null;
+                            this.loadFiles();
+                        } catch(e2) { showToast(e2.message, 'error'); }
+                        return;
+                    }
+                    if (await confirmModal('Skip existing items and continue pasting the remaining items?')) {
+                        try {
+                            const r = await pasteRequest('skip');
+                            showToast(r.data?.message || 'Operation complete', 'success');
+                            this.clipboard = null;
+                            this.loadFiles();
+                        } catch(e2) { showToast(e2.message, 'error'); }
+                    }
+                    return;
+                }
+                showToast(e.message, 'error');
+            }
+        },
+        async compressItems(names) {
+            if (names.length === 1) {
+                this.archiveBusy = true;
+                this.archiveBusyText = 'Compressing. Large files may take some time. Please wait for completion notification.';
+                try {
+                    const r = await api('/files/zip?site_id=' + this.selectedSite + '&path=' + encodeURIComponent(this.pathFor(names[0])), { method: 'POST' });
+                    if (r.success) { this.loadFiles(); showToast(r.data?.message || 'Compression complete', 'success'); }
+                } catch(e) { showToast(e.message, 'error'); }
+                finally { this.archiveBusy = false; this.archiveBusyText = ''; }
+            } else {
+                this.batchCompress();
+            }
+        },
+        async batchCompress() {
+            if (this.selected.length === 0) return;
+            const defaultName = 'archive_' + new Date().toISOString().replace(/[-:]/g, '').replace(/\..+/, '') + '.zip';
+            const archiveName = prompt('Enter archive filename:', defaultName);
+            if (!archiveName) return;
+            this.archiveBusy = true;
+            this.archiveBusyText = 'Compressing. Large files may take some time. Please wait for completion notification.';
+            try {
+                const r = await api('/files/batch-zip', {
+                    method: 'POST',
+                    body: {
+                        site_id: parseInt(this.selectedSite),
+                        path: this.currentPath,
+                        names: [...this.selected],
+                        archive_name: archiveName.trim()
+                    }
+                });
+                if (r.success) { this.loadFiles(); showToast(r.data?.message || 'Compression complete', 'success'); }
+            } catch(e) { showToast(e.message, 'error'); }
+            finally { this.archiveBusy = false; this.archiveBusyText = ''; }
+        },
+        async decompressFile(name) {
+            if (!await confirmModal('Confirm extracting ' + name + ' to the current directory?')) return;
+            const path = this.pathFor(name);
+            this.archiveBusy = true;
+            this.archiveBusyText = 'Extracting. Large files may take some time. Please wait for completion notification.';
+            try {
+                const r = await api('/files/unzip?site_id=' + this.selectedSite + '&path=' + encodeURIComponent(path), { method: 'POST' });
+                if (r.success) { this.loadFiles(); showToast(r.data?.message || 'Extraction complete', 'success'); }
+            } catch(e) {
+                if (e.conflicts) {
+                    this.archiveBusy = false;
+                    this.archiveBusyText = '';
+                    const msg = 'The following files will be overwritten. Continue?\n\n' + e.conflicts.join('\n');
+                    if (await confirmModal(msg)) {
+                        this.archiveBusy = true;
+                        this.archiveBusyText = 'Extracting. Large files may take some time. Please wait for completion notification.';
+                        try {
+                            await api('/files/unzip?site_id=' + this.selectedSite + '&path=' + encodeURIComponent(path) + '&overwrite=1', { method: 'POST' });
+                            this.loadFiles(); showToast('Extraction complete', 'success');
+                        } catch(e2) { showToast(e2.message, 'error'); }
+                        finally { this.archiveBusy = false; this.archiveBusyText = ''; }
+                    }
+                } else {
+                    showToast(e.message, 'error');
+                }
+            } finally {
+                if (this.archiveBusy) {
+                    this.archiveBusy = false;
+                    this.archiveBusyText = '';
+                }
+            }
+        }
+    }
+}
+</script>
+{{end}}

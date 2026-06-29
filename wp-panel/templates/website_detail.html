@@ -1,0 +1,1096 @@
+{{template "base" .}}
+{{define "websites_detail_content"}}
+<div x-data="websiteDetail()" x-init="init()">
+
+    <div class="flex items-center justify-between mb-6">
+        <h2 class="text-xl font-bold text-white">Site Detail</h2>
+        <a href="/{{.RandomSuffix}}/websites" class="btn-secondary">Back to List</a>
+    </div>
+
+    <div x-show="loading" class="text-center py-8">
+        <div class="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto"></div>
+    </div>
+<template x-if="site">
+    <div>
+
+    <!-- Row 1: Basic Info | Site Monitoring + Database -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div class="card">
+            <h3 class="text-lg font-semibold text-white mb-4">Basic Info</h3>
+            <dl class="space-y-3">
+                <div><dt class="text-sm text-gray-400">Domain</dt><dd><a :href="(site.ssl_enabled ? 'https' : 'http') + '://' + site.domain" target="_blank" class="text-blue-400 hover:text-blue-300 hover:underline" x-text="site.domain"></a></dd></div>
+                <div><dt class="text-sm text-gray-400">Aliases</dt><dd class="text-white" x-text="site.aliases || 'None'"></dd></div>
+                <div class="pt-2">
+                    <button @click="domainModalOpen = true; editDomain = site.domain; editAliasesStr = site.aliases || ''" class="text-sm py-1.5 px-3 rounded" style="background-color: #1e3a5f; color: #93c5fd;">EditDomain</button>
+                    <a :href="(document.body.dataset.panelPrefix || '') + '/files?site_id=' + site.id" class="text-sm py-1.5 px-3 rounded ml-2 inline-block" style="background-color: #1e3a5f; color: #93c5fd;">File Manager</a>
+                    <a :href="(document.body.dataset.panelPrefix || '') + '/ai-diagnostics?site_id=' + site.id" class="text-sm py-1.5 px-3 rounded ml-2 inline-block" style="background-color: #14532d; color: #86efac;">AI Diagnostics</a>
+                </div>
+                <div><dt class="text-sm text-gray-400">Status</dt><dd><span :class="site.status === 'active' ? 'badge-success' : 'badge-warning'" x-text="site.status === 'active' ? 'Running' : 'Paused'"></span></dd></div>
+                <div><dt class="text-sm text-gray-400">Type</dt><dd class="text-white" x-text="site.site_type === 'php' ? 'Generic PHP Site' : 'WordPress'"></dd></div>
+                <div class="pt-2 border-t border-gray-700/50">
+                    <dt class="text-sm text-gray-400 mb-2">CDN Real IP</dt>
+                    <div class="rounded border border-blue-900/60 bg-blue-950/30 p-2 mb-2 text-xs text-blue-200">
+                        <p>Cloudflare Real IP handled by system automatically.</p>
+                        <p class="mt-1 text-blue-200/80">This is only for Alibaba Cloud ESA, Tencent EdgeOne, Upyun, or other non-Cloudflare CDNs.</p>
+                    </div>
+                    <label class="flex items-center space-x-2 text-sm text-gray-300 mb-2">
+                        <input type="checkbox" x-model="cdnRealIPEnabled">
+                        <span>Enable Other CDN Real IP</span>
+                    </label>
+                    <div x-show="cdnRealIPEnabled" class="space-y-2">
+                        <template x-for="g in selectableCDNGroups()" :key="g.id">
+                            <label class="flex items-start space-x-2 text-sm text-gray-300">
+                                <input type="checkbox" class="mt-1" :value="g.id" x-model="cdnRealIPGroupIDs" :disabled="!g.enabled">
+                                <span>
+                                    <span class="text-white" x-text="g.name"></span>
+                                    <span class="text-xs text-gray-500" x-text="' · ' + g.header_name"></span>
+                                </span>
+                            </label>
+                        </template>
+                        <p x-show="selectableCDNGroups().length === 0" class="text-xs text-gray-500">No selectable non-Cloudflare CDN config groups. Please create one in Security Settings first.</p>
+                        <p class="text-xs text-gray-500" x-text="cdnRealIPModeText()"></p>
+                    </div>
+                    <button @click="saveCDNRealIP()" :disabled="cdnRealIPSaving" class="btn-primary text-sm mt-2" x-text="cdnRealIPSaving ? 'Saving...' : 'Save Other CDN Settings'"></button>
+                </div>
+                <div><dt class="text-sm text-gray-400">System User</dt><dd class="text-white font-mono" x-text="site.system_user"></dd></div>
+                <div><dt class="text-sm text-gray-400">Site Root Directory</dt><dd class="text-white font-mono text-sm" x-text="site.web_root"></dd></div>
+                <div x-show="site.site_type === 'php'">
+                    <dt class="text-sm text-gray-400">Web Document Root Subdirectory</dt>
+                    <dd class="flex items-center space-x-2 mt-1">
+                        <select x-model="documentRootSubdir" class="input-field text-sm py-1 w-56">
+                            <option value="">Project Root</option>
+                            <option value="public">public(Laravel / Symfony etc.)</option>
+                        </select>
+                        <button @click="saveDocumentRoot()" :disabled="documentRootSaving" class="btn-primary text-xs py-1 px-2" x-text="documentRootSaving ? 'Saving...' : 'Save'"></button>
+                    </dd>
+                    <p class="text-xs text-gray-500 mt-1">Site Root Directoryremains forFile Managerand backupcopies； Nginx for external access root。</p>
+                </div>
+                <div><dt class="text-sm text-gray-400">Log Directory</dt><dd class="text-white font-mono text-sm" x-text="site.log_dir"></dd></div>
+                <div>
+                    <dt class="text-sm text-gray-400">Expiry</dt>
+                    <dd class="text-white" x-show="!editingExpiry" x-text="site.expires_at ? new Date(site.expires_at).toLocaleDateString('zh-CN') : 'Not Set'"></dd>
+                    <div x-show="editingExpiry" class="flex items-center space-x-2">
+                        <input type="date" x-model="expiresAtInput" class="input-field text-sm py-1 w-44">
+                        <button @click="saveExpiry()" :disabled="expirySaving" class="btn-primary text-xs py-1 px-2" x-text="expirySaving ? 'Saving...' : 'Save'"></button>
+                        <button @click="editingExpiry = false" class="text-gray-400 hover:text-white text-xs">Cancel</button>
+                    </div>
+                </div>
+                <div class="pt-1" x-show="!editingExpiry">
+                    <button @click="editingExpiry = true; expiresAtInput = site.expires_at ? site.expires_at.substring(0, 10) : ''" class="text-xs py-1 px-2 rounded" style="background-color: #1e3a5f; color: #93c5fd;">EditExpiry</button>
+                </div>
+            </dl>
+        </div>
+
+        <div class="card">
+            <h3 class="text-lg font-semibold text-white mb-4">Site Monitoring</h3>
+            <label class="flex items-center space-x-2 text-sm text-gray-300 cursor-pointer mb-3">
+                <input type="checkbox" x-model="monitoringEnabled">
+                <span>Enable Site Monitoring</span>
+            </label>
+            <div x-show="monitoringEnabled" class="flex items-center space-x-2 mb-4">
+                <span class="text-xs text-gray-500">Check Interval</span>
+                <select x-model="monitoringInterval" class="input-field w-24 text-sm py-1">
+                    <option value="1">1 minute</option>
+                    <option value="5">5 minutes</option>
+                    <option value="10">10 minutes</option>
+                    <option value="30">30 minutes</option>
+                </select>
+            </div>
+            <button @click="saveMonitoring()" :disabled="monitoringSaving" class="btn-primary text-sm" x-text="monitoringSaving ? 'Saving...' : 'Save Settings'"></button>
+            <p x-show="monitoringEnabled" class="text-xs text-gray-500 mt-3">Periodically checks site HTTP status codes; sends email on anomalies via alert notifications. SMTP must be configured in Alert Notifications first.</p>
+            <p x-show="!monitoringEnabled" class="text-xs text-gray-600 mt-3">When enabled, periodically checks site accessibility and sends email alerts on anomalies.</p>
+
+            <hr class="my-5 border-gray-700">
+
+            <h3 class="text-lg font-semibold text-white mb-4">Database</h3>
+            <dl class="space-y-3 mb-4">
+                <div><dt class="text-sm text-gray-400">DatabaseName</dt><dd class="text-white font-mono text-sm" x-text="site.db_name"></dd></div>
+                <div><dt class="text-sm text-gray-400">Username</dt><dd class="text-white font-mono text-sm" x-text="site.db_user"></dd></div>
+                <div x-show="site.site_type === 'wordpress'">
+                    <dt class="text-sm text-gray-400">Table Prefix</dt>
+                    <dd class="flex items-center space-x-2 mt-1">
+                        <input type="text" x-model="editTablePrefix" class="input-field text-sm font-mono py-1 w-28" placeholder="e.g. wp_">
+                        <button @click="detectTablePrefix()" :disabled="detectingPrefix" class="text-xs py-1 px-2 rounded" style="background-color: #1e3a5f; color: #93c5fd;" x-text="detectingPrefix ? 'Detecting...' : 'Auto Detect'"></button>
+                    </dd>
+                    <p class="text-xs text-gray-500 mt-1">After migration, if the table prefix of thee.g.DatabaseTable Prefix differs from wp-config.php; modify here. Click "Auto Detect" to read from databaseread the actual prefix。</p>
+                </div>
+            </dl>
+            <button @click="dbPasswordModal = true" class="text-sm py-1.5 px-3 rounded" style="background-color: #1e3a5f; color: #93c5fd;">Change Password</button>
+            <button @click="fixWPConfig()" :disabled="dbSubmitting" class="text-sm py-1.5 px-3 rounded ml-2" style="background-color: #14532d; color: #86efac;" x-text="dbSubmitting ? 'Processing...' : 'SyncDatabaseInfo'"></button>
+            <button @click="openSiteURLModal()" x-show="site.site_type === 'wordpress'" class="text-sm py-1.5 px-3 rounded ml-2" style="background-color: #1e3a5f; color: #93c5fd;">Edit Site URL</button>
+            <button @click="clearDatabase()" :disabled="dbSubmitting" class="text-sm py-1.5 px-3 rounded ml-2" style="background-color: #7f1d1d; color: #fca5a5;" x-text="dbSubmitting ? 'Clearing...' : 'ClearDatabase'"></button>
+
+            <hr class="my-4 border-gray-700">
+
+            <div class="flex items-center space-x-3 mb-3">
+                <button @click="createBackup()" :disabled="backupSubmitting" class="btn-primary text-sm" x-text="backupSubmitting ? 'Backing up...' : 'Manual Backup'"></button>
+                <button @click="uploadRestore()" :disabled="restoreUploading" class="btn-secondary text-sm" x-text="restoreUploading ? 'Restoring...' : 'Upload & Restore'"></button>
+                <input type="file" id="restoreFileInput" @change="handleRestoreUpload($event)" accept=".sql,.sql.gz,.gz,.zip" class="hidden">
+            </div>
+
+            <div class="flex items-center space-x-3 mb-3 p-2 rounded" style="background-color: #0f172a;">
+                <label class="flex items-center space-x-2 text-sm text-gray-300 cursor-pointer">
+                    <input type="checkbox" x-model="backupEnabled" @change="saveBackupSettings()">
+                    <span>Auto Backup (daily at 4:00)</span>
+                </label>
+                <label class="flex items-center space-x-2 text-sm text-gray-300 ml-4">
+                    <span>Keep</span>
+                    <input type="number" x-model.number="backupKeepCount" @change="saveBackupSettings()" class="input-field w-16 text-sm py-0.5 text-center" min="1" max="30">
+                    <span>copies</span>
+                </label>
+            </div>
+
+            <details class="mb-2">
+                <summary class="cursor-pointer text-blue-400 hover:text-blue-300 text-xs" x-text="`backupcopieslist（${backups.length} copies）`"></summary>
+                <div class="overflow-x-auto mt-2">
+                    <table class="w-full text-sm">
+                        <thead class="border-b border-gray-700 text-gray-400">
+                            <tr>
+                                <th class="py-2 text-left whitespace-nowrap">Filename</th>
+                                <th class="py-2 text-left whitespace-nowrap">Size</th>
+                                <th class="py-2 text-left whitespace-nowrap">Time</th>
+                                <th class="py-2 text-left whitespace-nowrap">Type</th>
+                                <th class="py-2 text-left w-36">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="b in backups" :key="b.id">
+                                <tr class="border-b border-gray-700/50">
+                                    <td class="py-2 font-mono text-xs whitespace-nowrap" x-text="b.filename"></td>
+                                    <td class="py-2 text-xs whitespace-nowrap" x-text="formatBytes(b.file_size)"></td>
+                                    <td class="py-2 text-xs whitespace-nowrap" x-text="new Date(b.created_at).toLocaleString('zh-CN')"></td>
+                                    <td class="py-2 whitespace-nowrap"><span :class="b.auto ? 'badge-info' : 'badge-success'" class="text-xs" x-text="b.auto ? 'Auto' : 'Manual'"></span></td>
+                                    <td class="py-2">
+                                        <div class="flex flex-wrap gap-1">
+                                            <button @click="downloadBackup(b)" class="btn-primary text-xs py-1 px-2">Download</button>
+                                            <button @click="restoreBackup(b)" :disabled="restoringId" class="text-xs py-1 px-2 rounded" style="background-color: #7f1d1d; color: #fca5a5;" x-text="restoringId === b.id ? 'Restoring...' : 'Restore'"></button>
+                                            <button @click="deleteBackup(b)" :disabled="restoringId" class="btn-secondary text-xs py-1 px-2">Delete</button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </template>
+                            <tr x-show="backups.length === 0">
+                                <td colspan="5" class="py-4 text-center text-gray-500">Temporarily nono backup records</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </details>
+        </div>
+    </div>
+
+    <!-- Row 2: SSL + Nginx | WordPress Optimization -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mt-6">
+        <div class="card">
+            <h3 class="text-lg font-semibold text-white mb-4">SSL Certificate Management</h3>
+            <div class="mb-3">
+                <span :class="site.ssl_enabled ? 'badge-success' : site.ssl_last_error ? 'badge-warning' : 'badge-info'" class="text-sm" x-text="site.ssl_enabled ? 'Enabled' : site.ssl_last_error ? 'Pending' : 'Disabled'"></span>
+            </div>
+            <div x-show="!site.ssl_enabled && site.ssl_last_error" class="mb-4 p-3 bg-yellow-900/40 border border-yellow-700 rounded-lg text-yellow-200 text-sm">
+                <p class="font-medium mb-1">Last SSL application failed</p>
+                <p x-text="site.ssl_last_error"></p>
+            </div>
+            <div x-show="site.ssl_enabled">
+                <dl class="space-y-3 mb-4">
+                    <div><dt class="text-sm text-gray-400">Certificate Path</dt><dd class="text-white font-mono text-sm break-all" x-text="site.ssl_cert_path"></dd></div>
+                    <div><dt class="text-sm text-gray-400">Private Key Path</dt><dd class="text-white font-mono text-sm break-all" x-text="site.ssl_key_path"></dd></div>
+                    <div><dt class="text-sm text-gray-400">Expiry</dt><dd class="text-white" x-text="site.ssl_expires_at ? new Date(site.ssl_expires_at).toLocaleDateString('zh-CN') : 'Unknown'"></dd></div>
+                </dl>
+                <div class="flex flex-wrap gap-3">
+                    <button @click="downloadSSLPackage()" class="text-sm py-1.5 px-3 rounded" style="background-color: #374151; color: #e5e7eb;">Download Cert Bundle</button>
+                    <button @click="sslMode='auto'; sslModalOpen=true" class="text-sm py-1.5 px-3 rounded" style="background-color: #166534; color: #bbf7d0;">Re-apply</button>
+                    <button @click="sslMode='manual'; sslCert=''; sslKey=''; sslModalOpen=true" class="text-sm py-1.5 px-3 rounded" style="background-color: #1e3a5f; color: #93c5fd;">Replace Certificate</button>
+                    <button @click="removeSSL()" class="text-sm py-1.5 px-3 rounded" style="background-color: #7f1d1d; color: #fca5a5;">Remove Certificate</button>
+                </div>
+                <label class="mt-4 flex items-start space-x-2 cursor-pointer text-sm text-gray-300">
+                    <input type="checkbox" x-model="sslExportEnabled" @change="saveSSLExport()" :disabled="sslExportSaving" class="mt-0.5 w-4 h-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500">
+                    <span>Allow Companion Plugin to Read SSL Certificate</span>
+                </label>
+            </div>
+            <div x-show="!site.ssl_enabled">
+                <p class="text-gray-400 mb-4">This site has not yet enabled SSL</p>
+                <button @click="sslMode='auto'; sslModalOpen=true" class="btn-primary">Enable SSL</button>
+            </div>
+
+            <hr class="my-5 border-gray-700">
+
+            <h3 class="text-lg font-semibold text-white mb-2">Nginx Custom Configuration</h3>
+            <details class="mb-4">
+                <summary class="cursor-pointer text-blue-400 hover:text-blue-300 text-xs">Configuration Guide & Examples</summary>
+                <div class="mt-2 ml-2 space-y-2 text-gray-500 text-xs">
+                    <p><strong class="text-gray-400">pre.conf</strong>  — placed before the <code class="text-gray-400">root</code>  directive; suitable for upload size limits, early rewrites, and other directives that need to take effect at the very front of request processing.</p>
+                    <pre class="bg-gray-900 p-2 rounded leading-relaxed"># Upload file size limit
+client_max_body_size 128m;
+
+# Custom variable (for use in .conf)
+set $custom_var "value";</pre>
+                    <p><strong class="text-gray-400">.conf</strong>  — placed before the <code class="text-gray-400">location</code>  blocks; suitable for custom location blocks, cache bypass rules, plugin rewrites, etc.</p>
+                    <pre class="bg-gray-900 p-2 rounded leading-relaxed"># Bypass FastCGI cache: specified path skips cache
+if ($request_uri ~* "/ai-assistant") {
+    set $wp_skip_cache 1;
+}
+
+# Bypass cache: specified Cookie skips cache
+if ($http_cookie ~* "my_app_session") {
+    set $wp_skip_cache 1;
+}
+
+# Custom location block
+location ^~ /api/ {
+    proxy_pass http://127.0.0.1:3000;
+}</pre>
+                    <p class="text-yellow-500">⚠️ pre.conf and .conf both take effect at the server level; do not nest location blocks inside other location blocks.</p>
+                </div>
+            </details>
+            <div class="mb-3">
+                <label class="block text-sm text-gray-300 mb-1">Server-level Config (pre.conf — before root directive)</label>
+                <textarea x-model="nginxPreContent" rows="3" class="w-full rounded p-2 text-xs font-mono" style="background-color: #0f172a; border: 1px solid #334155; color: #e2e8f0; resize: vertical;" placeholder="client_max_body_size 128m;"></textarea>
+            </div>
+            <div class="mb-4">
+                <label class="block text-sm text-gray-300 mb-1">Location-level Config (.conf — before location blocks; write cache bypass rules here)</label>
+                <textarea x-model="nginxContent" rows="6" class="w-full rounded p-2 text-xs font-mono" style="background-color: #0f172a; border: 1px solid #334155; color: #e2e8f0; resize: vertical;" placeholder="if ($request_uri ~* &quot;/ai-assistant&quot;) { set $wp_skip_cache 1; }"></textarea>
+            </div>
+            <div class="flex space-x-3">
+                <button @click="saveNginxCustom()" :disabled="nginxSubmitting" class="btn-primary text-sm" x-text="nginxSubmitting ? 'Validating...' : 'Save & Apply'"></button>
+                <button @click="fetchNginxCustom()" class="text-sm py-1.5 px-3 rounded" style="background-color: #1e293b; border: 1px solid #334155; color: #e2e8f0;">Refresh</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3 class="text-lg font-semibold text-white mb-4">WordPress Optimization</h3>
+            <div class="flex items-center space-x-3 mb-3">
+                <label class="flex items-center space-x-2 text-sm text-gray-300 cursor-pointer">
+                    <input type="checkbox" x-model="fcacheEnabled">
+                    <span>Enable FastCGI Cache</span>
+                </label>
+            </div>
+            <div x-show="fcacheEnabled" class="mb-3 ml-6">
+                <label class="text-sm text-gray-300 mb-1 block">Cache TTL (seconds)</label>
+                <input type="number" x-model="fcacheTTL" class="input-field w-32 text-sm py-1" min="10" max="86400">
+            </div>
+            <div class="flex items-center space-x-3 mb-3">
+                <label class="flex items-center space-x-2 text-sm text-gray-300 cursor-pointer">
+                    <input type="checkbox" x-model="disableWPUpdates">
+                    <span>Disable Update Checks (core/plugins/themes)</span>
+                </label>
+            </div>
+            <div class="flex items-center space-x-3 mb-4">
+                <label class="flex items-center space-x-2 text-sm text-gray-300 cursor-pointer">
+                    <input type="checkbox" x-model="disableFileEditing">
+                    <span>Disable File Editing in Admin</span>
+                </label>
+            </div>
+            <div class="flex items-center space-x-3 mb-3" x-show="site.site_type === 'wordpress'">
+                <label class="flex items-center space-x-2 text-sm text-gray-300 cursor-pointer">
+                    <input type="checkbox" x-model="wpDebug">
+                    <span>Enable Debug Mode (WP_DEBUG)</span>
+                </label>
+            </div>
+            <div x-show="wpDebug" class="mb-3 ml-6">
+                <p class="text-xs text-gray-400">When enabled, PHP errors and warnings are written to wp-content/debug.log. Use temporarily for troubleshooting; keep disabled during normal use.</p>
+            </div>
+            <div class="flex items-center space-x-3 mb-3" x-show="site.site_type === 'wordpress'">
+                <label class="text-sm text-gray-300">
+                    <span>Post Revisions</span>
+                    <input type="number" :value="wpPostRevisions >= 0 ? wpPostRevisions : ''" @input="wpPostRevisions = $event.target.value === '' ? -1 : parseInt($event.target.value)" class="input-field w-24 text-sm py-1 ml-2" placeholder="Default">
+                </label>
+                <span class="text-xs text-gray-500">Leave empty=WordPressDefault (unlimited), 0 = no revisions kept, recommended 3~5reduceDatabaseusage</span>
+            </div>
+            <div class="flex items-center space-x-3 mb-3" x-show="site.site_type === 'wordpress'">
+                <label class="text-sm text-gray-300">
+                    <span>PHP Memory Limit</span>
+                    <input type="text" x-model="wpMemoryLimit" class="input-field w-24 text-sm py-1 ml-2" placeholder="Default 40M">
+                </label>
+                <span class="text-xs text-gray-500">e.g. 128M、256M，when encountering memory exhaustion (white screen/500）when encountering memory exhaustion (white screen/500)</span>
+            </div>
+            <div class="flex items-center space-x-3 mb-4" x-show="site.site_type === 'wordpress'">
+                <label class="flex items-center space-x-2 text-sm text-gray-300 cursor-pointer">
+                    <input type="checkbox" x-model="xmlrpcEnabled">
+                    <span>Allow XML-RPC Interface</span>
+                </label>
+                <span class="text-xs text-gray-500">Off by default; when enabled, /xmlrpc.php becomes accessible</span>
+            </div>
+            <div class="flex items-center space-x-3 mb-3">
+                <button @click="saveWPOptimizations()" :disabled="optimizationSaving" class="btn-primary text-sm" x-text="optimizationSaving ? 'Saving...' : 'Save Settings'"></button>
+                <button x-show="fcacheEnabled" @click="clearFCache()" class="text-sm py-1.5 px-3 rounded" style="background-color: #7f1d1d; color: #fca5a5;">Clear Cache</button>
+            </div>
+            <div x-show="(fcacheEnabled || disableWPUpdates || disableFileEditing || wpDebug) && site.site_type === 'wordpress'" class="flex items-center space-x-3 mb-3">
+                <button x-show="pluginStatus === 'not_installed'" @click="installPlugin()" :disabled="pluginInstalling" class="btn-primary text-sm py-1.5" x-text="pluginInstalling ? 'Installing...' : 'Install Companion Plugin'"></button>
+                <button x-show="pluginStatus === 'update_available'" @click="installPlugin()" :disabled="pluginInstalling" class="text-sm py-1.5 px-3 rounded" style="background-color: #166534; color: #bbf7d0;" x-text="pluginInstalling ? 'Updating...' : 'Update Companion Plugin'"></button>
+                <span x-show="pluginStatus === 'installed'" class="text-xs text-green-400">✓ Plugin Installed</span>
+            </div>
+            <div class="mt-3 p-3 rounded text-xs" style="background-color: #0f172a;">
+                <p class="text-gray-300 font-medium mb-2">How FastCGI Cache Works</p>
+                <ul class="text-gray-400 space-y-1 list-disc list-inside">
+                    <li>Nginx caches PHP page output as static HTML cached on disk; visitors receive HTML directly without going through PHP/MariaDB.</li>
+                    <li>Each site has an independent cache version key; clicking "Clear Cache" rotates key; Old cache files are auto-deleted after 60 minutes</li>
+                    <li x-show="site.site_type === 'wordpress'">Logged-in users, POST requests, and wp-admin auto-skip cache</li>
+                    <li x-show="site.site_type === 'php'">POST requests and requests with query params auto-skip cache</li>
+                </ul>
+                <p class="text-gray-500 mt-2" x-show="site.site_type === 'wordpress'">After installing the companion plugin (WP Panel Optimizer), site admins can manage cache, disable update checks, and file editing from the WordPress admin, in real-time sync with panel settings. Do not install third-party cache plugins (WP Rocket / W3 Total Cache Nginx mode) — they will conflict with this card.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Row 3: Site Logs -->
+    <div class="mt-6">
+        <div class="card">
+            <h3 class="text-lg font-semibold text-white mb-4">Site Logs</h3>
+            <div class="flex flex-wrap items-center gap-2 mb-3">
+                <button @click="logType='access'; fetchLogs()" :class="logType === 'access' ? 'text-white border-b-2 border-blue-400' : 'text-gray-400 hover:text-white'" class="px-3 py-1 text-sm font-medium">Access Log</button>
+                <button @click="logType='error'; fetchLogs()" :class="logType === 'error' ? 'text-white border-b-2 border-blue-400' : 'text-gray-400 hover:text-white'" class="px-3 py-1 text-sm font-medium">Error Log</button>
+                <button x-show="site.site_type === 'wordpress'" @click="logType='security'; fetchLogs()" :class="logType === 'security' ? 'text-white border-b-2 border-blue-400' : 'text-gray-400 hover:text-white'" class="px-3 py-1 text-sm font-medium">Security Log</button>
+                <button @click="fetchLogs()" class="text-sm py-1 px-3 rounded text-gray-400 hover:text-white" style="background-color: #1e293b; border: 1px solid #334155;">Refresh</button>
+                <button @click="clearLogs()" class="text-sm py-1 px-3 rounded" style="background-color: #7f1d1d; color: #fca5a5;">Clear</button>
+                <button @click="logFullscreen = true" class="text-sm py-1 px-3 rounded text-gray-400 hover:text-white" style="background-color: #1e293b; border: 1px solid #334155;">Fullscreen</button>
+                <select @change="setAccessLogMode($event.target.value)" x-model="accessLogMode" x-show="logType === 'access'" class="input-field w-28 text-sm py-1">
+                    <option value="off">Log Off</option>
+                    <option value="error_only">Errors Only</option>
+                    <option value="full">Full</option>
+                </select>
+                <div class="flex items-center gap-1 text-sm text-gray-400 whitespace-nowrap">
+                    <span>Keep</span>
+                    <input type="number" x-model.number="logRetentionDays" @change="saveLogRetention()" class="input-field w-16 text-sm py-1 text-center" min="0" max="365">
+                    <span>days</span>
+                </div>
+            </div>
+            <pre x-text="logContent" class="w-full rounded p-3 text-xs font-mono overflow-auto" style="background-color: #0f172a; border: 1px solid #334155; color: #94a3b8; max-height: 400px; white-space: pre-wrap; word-break: break-all;"></pre>
+        </div>
+    </div>
+
+    <!-- Log Fullscreen Modal -->
+    <div x-show="logFullscreen" class="fixed inset-0 bg-black bg-opacity-90 flex flex-col z-50" @keydown.escape.window="logFullscreen = false">
+        <div class="flex items-center justify-between px-6 py-3 border-b border-gray-700">
+            <div class="flex items-center space-x-4 text-sm">
+                <span class="text-white font-semibold" x-text="logType === 'access' ? 'Access Log' : (logType === 'security' ? 'Security Log' : 'Error Log')"></span>
+                <button @click="logType='access'; fetchLogs()" :class="logType === 'access' ? 'text-white border-b-2 border-blue-400' : 'text-gray-400 hover:text-white'" class="px-3 py-1 text-sm font-medium">Access Log</button>
+                <button @click="logType='error'; fetchLogs()" :class="logType === 'error' ? 'text-white border-b-2 border-blue-400' : 'text-gray-400 hover:text-white'" class="px-3 py-1 text-sm font-medium">Error Log</button>
+                <button x-show="site.site_type === 'wordpress'" @click="logType='security'; fetchLogs()" :class="logType === 'security' ? 'text-white border-b-2 border-blue-400' : 'text-gray-400 hover:text-white'" class="px-3 py-1 text-sm font-medium">Security Log</button>
+                <button @click="fetchLogs()" class="text-sm py-1 px-3 rounded text-gray-400 hover:text-white" style="background-color: #1e293b; border: 1px solid #334155;">Refresh</button>
+            </div>
+            <button @click="logFullscreen = false" class="text-gray-400 hover:text-white text-2xl leading-none">&times;</button>
+        </div>
+        <pre x-text="logContent" class="flex-1 w-full p-6 text-xs font-mono overflow-auto" style="background-color: #0a0e14; color: #94a3b8; white-space: pre-wrap; word-break: break-all;"></pre>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- Modals -->
+    <!-- ============================================================ -->
+
+    <!-- Change Database Password -->
+    <div x-show="dbPasswordModal" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50" @click.self="dbPasswordModal = false">
+        <div class="rounded-lg shadow-xl w-full max-w-md p-6" style="background-color: #1e293b; border: 1px solid #334155;">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-semibold text-white">Change Database Password</h3>
+                <button @click="dbPasswordModal = false" class="text-gray-400 hover:text-white text-xl">&times;</button>
+            </div>
+            <p class="text-gray-400 text-sm mb-3">Database <span class="text-white font-mono" x-text="site.db_name"></span> / users <span class="text-white font-mono" x-text="site.db_user"></span></p>
+            <div class="mb-4">
+                <label class="block text-sm text-gray-300 mb-1">New Password (leave blank for random)</label>
+                <input type="text" x-model="newDBPassword" class="w-full rounded p-2 text-sm font-mono" style="background-color: #0f172a; border: 1px solid #334155; color: #e2e8f0;" placeholder="Leave emptyAutogenerate24-char random password">
+            </div>
+            <p class="text-gray-500 text-xs mb-4" x-show="site.site_type === 'wordpress'">Will auto-update wp-config.php Autoupdate wp-config.php password; no manual changes needed.</p>
+            <p class="text-gray-500 text-xs mb-4" x-show="site.site_type === 'php'">Update the new password in your site's DatabaseConfiguration。</p>
+            <div class="flex justify-end space-x-3">
+                <button @click="dbPasswordModal = false" class="btn-secondary">Cancel</button>
+                <button @click="changeDBPassword()" :disabled="dbSubmitting" class="btn-primary" x-text="dbSubmitting ? 'Processing...' : 'Confirm Change'"></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- EditDomain -->
+    <div x-show="domainModalOpen" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50" @click.self="domainModalOpen = false">
+        <div class="rounded-lg shadow-xl w-full max-w-md p-6" style="background-color: #1e293b; border: 1px solid #334155;">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-semibold text-white">EditDomain</h3>
+                <button @click="domainModalOpen = false" class="text-gray-400 hover:text-white text-xl">&times;</button>
+            </div>
+            <div class="mb-3">
+                <label class="block text-sm text-gray-300 mb-1">Primary Domain</label>
+                <input type="text" x-model="editDomain" class="w-full rounded p-2 text-sm font-mono" style="background-color: #0f172a; border: 1px solid #334155; color: #e2e8f0;">
+            </div>
+            <div class="mb-3">
+                <label class="block text-sm text-gray-300 mb-1">Aliases（one per line, excluding primaryDomain）</label>
+                <textarea x-model="editAliasesStr" rows="4" class="w-full rounded p-2 text-sm font-mono" style="background-color: #0f172a; border: 1px solid #334155; color: #e2e8f0; resize: vertical;" placeholder="www.aaa.com&#10;blog.aaa.com"></textarea>
+            </div>
+            <div x-show="editDomain !== site.domain" class="mb-3 p-3 rounded text-sm" style="background-color: #422006; border: 1px solid #78350f; color: #fbbf24;">
+                Changing the primary domain will rename the site directory, log directory, Nginx config, PHP-FPM pool, and SSL certificate directory. System User（<span x-text="site.system_user" class="font-mono"></span>) and database name remain unchanged.<span x-show="site.site_type === 'wordpress'">WordPress site URL can be modified in the Database card</span>
+            </div>
+            <p x-show="site.ssl_enabled" class="text-yellow-400 text-xs mb-3">Changing the domain. You'll need to re-apply the SSL certificate to match the new domain.</p>
+            <div class="flex justify-end space-x-3">
+                <button @click="domainModalOpen = false" class="btn-secondary">Cancel</button>
+                <button @click="updateDomains()" :disabled="domainSubmitting" class="btn-primary" x-text="domainSubmitting ? 'Processing...' : 'Save'"></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SSL Certificate -->
+    <div x-show="sslModalOpen" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50" @click.self="sslModalOpen = false">
+        <div class="rounded-lg shadow-xl w-full max-w-2xl p-6" style="background-color: #1e293b; border: 1px solid #334155;">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-semibold text-white">
+                    <span x-show="!site.ssl_enabled">for <span x-text="site.domain"></span> Enable SSL</span>
+                    <span x-show="site.ssl_enabled && sslMode === 'auto'">for <span x-text="site.domain"></span> Re-apply Certificate</span>
+                    <span x-show="site.ssl_enabled && sslMode === 'manual'">for <span x-text="site.domain"></span> Replace Certificate</span>
+                </h3>
+                <button @click="sslModalOpen = false" class="text-gray-400 hover:text-white text-xl">&times;</button>
+            </div>
+
+            <div class="flex border-b border-gray-600 mb-4">
+                <button @click="sslMode = 'auto'" :class="sslMode === 'auto' ? 'text-blue-400 border-b-2 border-blue-400' : 'text-gray-400 hover:text-white'" class="px-4 py-2 text-sm font-medium">Auto-Apply Free Certificate</button>
+                <button @click="sslMode = 'manual'" :class="sslMode === 'manual' ? 'text-blue-400 border-b-2 border-blue-400' : 'text-gray-400 hover:text-white'" class="px-4 py-2 text-sm font-medium">ManualEnter Certificate Manually</button>
+            </div>
+
+            <div x-show="sslMode === 'auto'">
+                <p class="text-gray-400 text-sm mb-4">Will use Let's Encrypt AutoApply Free SSL Certificate。Please ensure Domainresolves correctly to this server。</p>
+            </div>
+
+            <div x-show="sslMode === 'manual'">
+                <div class="mb-4">
+                    <label class="block text-sm text-gray-300 mb-1">Certificate Content (fullchain.pem)</label>
+                    <textarea x-model="sslCert" rows="6" class="w-full rounded p-3 text-sm font-mono" style="background-color: #0f172a; border: 1px solid #334155; color: #e2e8f0; resize: vertical;" placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----"></textarea>
+                </div>
+                <div class="mb-4">
+                    <label class="block text-sm text-gray-300 mb-1">Private Key Content (privkey.pem)</label>
+                    <textarea x-model="sslKey" rows="6" class="w-full rounded p-3 text-sm font-mono" style="background-color: #0f172a; border: 1px solid #334155; color: #e2e8f0; resize: vertical;" placeholder="-----BEGIN PRIVATE KEY-----&#10;...&#10;-----END PRIVATE KEY-----"></textarea>
+                </div>
+            </div>
+
+            <div class="flex justify-end space-x-3 mt-4">
+                <button @click="sslModalOpen = false" class="btn-secondary">Cancel</button>
+                <button @click="enableSSL()" :disabled="sslSubmitting" class="btn-primary" x-text="sslSubmitting ? 'Processing...' : 'Confirm'"></button>
+            </div>
+        </div>
+    </div>
+    </div>
+</template>
+
+    <!-- Edit Site URL -->
+    <div x-show="siteURLModal" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50" @click.self="siteURLModal = false">
+        <div class="rounded-lg shadow-xl w-full max-w-md p-6" style="background-color: #1e293b; border: 1px solid #334155;">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-semibold text-white">Edit Site URL</h3>
+                <button @click="siteURLModal = false" class="text-gray-400 hover:text-white text-xl">&times;</button>
+            </div>
+            <div class="space-y-3 mb-4">
+                <div>
+                    <label class="block text-sm text-gray-300 mb-1">Current siteurl</label>
+                    <div class="text-sm font-mono text-gray-400" x-text="currentSiteURL || '(loading...)'"></div>
+                </div>
+                <div>
+                    <label class="block text-sm text-gray-300 mb-1">Current home</label>
+                    <div class="text-sm font-mono text-gray-400" x-text="currentHomeURL || '(loading...)'"></div>
+                </div>
+                <hr class="border-gray-700">
+                <div>
+                    <label class="block text-sm text-gray-300 mb-1">New siteurl</label>
+                    <input type="text" x-model="newSiteURL" class="w-full rounded p-2 text-sm font-mono" style="background-color: #0f172a; border: 1px solid #334155; color: #e2e8f0;" placeholder="https://example.com">
+                </div>
+                <div>
+                    <label class="block text-sm text-gray-300 mb-1">New home</label>
+                    <input type="text" x-model="newHomeURL" class="w-full rounded p-2 text-sm font-mono" style="background-color: #0f172a; border: 1px solid #334155; color: #e2e8f0;" placeholder="https://example.com">
+                </div>
+                <button @click="autoFillSiteURL()" type="button" class="text-xs py-1 px-2 rounded" style="background-color: #1e3a5f; color: #93c5fd;">AutoAuto-fill PanelDomain</button>
+            </div>
+            <div class="p-3 rounded text-xs mb-4" style="background-color: #422006; border: 1px solid #78350f; color: #fbbf24;">
+                <p class="font-medium mb-1">Notes</p>
+                <ul class="space-y-1 list-disc list-inside">
+                    <li>This only modifies wp_options siteurl and home; does not replace old domains in post/content</li>
+                    <li>Old domains in post content need to be replaced in WP admin using Better Search Replace or similar plugin</li>
+                    <li>After modification, if page styling is broken, go to WP admin Settings → Permalinks and re-save</li>
+                    <li>e.g.if the browser still redirects to the old site, clear browser cache and try again</li>
+                </ul>
+            </div>
+            <div class="flex justify-end space-x-3">
+                <button @click="siteURLModal = false" class="btn-secondary">Cancel</button>
+                <button @click="updateSiteURLs()" :disabled="siteURLSubmitting" class="btn-primary" x-text="siteURLSubmitting ? 'Updating...' : 'Confirmupdate'"></button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function websiteDetail() {
+    return {
+        site: null,
+        loading: true,
+        sslModalOpen: false,
+        sslMode: 'auto',
+        sslCert: '',
+        sslKey: '',
+        sslSubmitting: false,
+        sslExportEnabled: false,
+        sslExportSaving: false,
+        dbPasswordModal: false,
+        newDBPassword: '',
+        dbSubmitting: false,
+        backups: [],
+        backupSubmitting: false,
+        backupEnabled: false,
+        backupKeepCount: 7,
+        restoringId: null,
+        restoreUploading: false,
+        restorePollingActive: true,
+        logType: 'access',
+        logContent: '',
+        logFullscreen: false,
+        nginxPreContent: '',
+        nginxContent: '',
+        nginxSubmitting: false,
+        fcacheEnabled: false,
+        fcacheTTL: 300,
+        disableWPUpdates: false,
+        disableFileEditing: false,
+        xmlrpcEnabled: false,
+        wpDebug: false,
+        wpPostRevisions: -1,
+        wpMemoryLimit: '',
+        logRetentionDays: 7,
+        optimizationSaving: false,
+        pluginStatus: 'not_installed',
+        pluginInstalling: false,
+        monitoringEnabled: false,
+        monitoringInterval: 5,
+        monitoringSaving: false,
+        documentRootSubdir: '',
+        documentRootSaving: false,
+        cdnGroups: [],
+        cdnRealIPEnabled: false,
+        cdnRealIPGroupIDs: [],
+        cdnRealIPSaving: false,
+        accessLogMode: 'off',
+        expiresAtInput: '',
+        editingExpiry: false,
+        expirySaving: false,
+        domainModalOpen: false,
+        editDomain: '',
+        editAliasesStr: '',
+        domainSubmitting: false,
+        editTablePrefix: '',
+        detectingPrefix: false,
+        siteURLModal: false,
+        currentSiteURL: '',
+        currentHomeURL: '',
+        newSiteURL: '',
+        newHomeURL: '',
+        siteURLSubmitting: false,
+        init() {
+            this.restorePollingActive = true;
+            window.addEventListener('beforeunload', () => { this.restorePollingActive = false; });
+            this.fetchDetail();
+        },
+        async fetchDetail() {
+            const id = window.location.pathname.split('/').pop();
+            try {
+                const r = await api('/websites/' + id);
+                if (r.success) {
+                    this.site = r.data;
+                    this.fcacheEnabled = r.data.fastcgi_cache_enabled;
+                    this.fcacheTTL = r.data.fastcgi_cache_ttl || 300;
+                    this.disableWPUpdates = r.data.disable_wp_updates || false;
+                    this.disableFileEditing = r.data.disable_file_editing || false;
+                    this.xmlrpcEnabled = r.data.xmlrpc_enabled || false;
+                    this.wpDebug = r.data.wp_debug_enabled || false;
+                    this.wpPostRevisions = r.data.wp_post_revisions != null ? r.data.wp_post_revisions : -1;
+                    this.wpMemoryLimit = r.data.wp_memory_limit || '';
+                    this.logRetentionDays = r.data.log_retention_days || 7;
+                    this.monitoringEnabled = r.data.monitoring_enabled || false;
+                    this.monitoringInterval = r.data.monitoring_interval || 5;
+                    this.documentRootSubdir = r.data.document_root_subdir || '';
+                    this.cdnRealIPEnabled = r.data.cdn_realip_enabled || false;
+                    this.cdnRealIPGroupIDs = (r.data.cdn_realip_groups || []).map(g => g.id);
+                    this.editTablePrefix = r.data.table_prefix || '';
+                    this.sslExportEnabled = r.data.ssl_export_enabled || false;
+                }
+            } catch(e) { showToast('Load failed:  ' + e.message, 'error'); }
+            this.loading = false;
+            this.fetchNginxCustom();
+            this.fetchPluginStatus();
+            this.fetchLogs();
+            this.fetchBackups();
+            this.fetchBackupSettings();
+            this.fetchCDNGroups();
+        },
+        async fetchCDNGroups() {
+            try {
+                const r = await api('/security/cdn-realip-groups');
+                if (r.success) {
+                    this.cdnGroups = r.data || [];
+                    this.normalizeCDNRealIPSelection();
+                }
+            } catch(e) {}
+        },
+        selectableCDNGroups() {
+            return this.cdnGroups.filter(g => g.provider !== 'cloudflare');
+        },
+        normalizeCDNRealIPSelection() {
+            const currentIDs = this.cdnRealIPGroupIDs.map(id => parseInt(id));
+            const selected = this.cdnGroups.filter(g => currentIDs.includes(g.id));
+            const selectedNonCloudflareIDs = selected.filter(g => g.provider !== 'cloudflare').map(g => g.id);
+            if (this.cdnRealIPEnabled && selected.length > 0 && selectedNonCloudflareIDs.length === 0) {
+                this.cdnRealIPEnabled = false;
+            }
+            this.cdnRealIPGroupIDs = selectedNonCloudflareIDs;
+        },
+        cdnRealIPModeText() {
+            if (!this.cdnRealIPEnabled) return '';
+            const currentIDs = this.cdnRealIPGroupIDs.map(id => parseInt(id));
+            const selected = this.selectableCDNGroups().filter(g => currentIDs.includes(g.id));
+            if (selected.length === 0) return 'Please select at least one non- Cloudflare CDN Configurationgroup。Cloudflare handled by systemAutohandled automatically.';
+            const headers = [...new Set(selected.map(g => (g.header_name || '').toLowerCase()))];
+            if (headers.length > 1) return 'Selected config groups have inconsistent headers. Save will be rejected.';
+            if (selected.some(g => !(g.ip_ranges || '').trim())) {
+                return 'Compatibility mode: no trusted origin IPs; will trust Real IP headers from all sources.';
+            }
+            return 'trusted CDN mode: Only trusts origin IP ranges from selected config groups.';
+        },
+        async saveCDNRealIP() {
+            this.cdnRealIPSaving = true;
+            try {
+                const groupIDs = this.cdnRealIPGroupIDs.map(id => parseInt(id)).filter(id => this.selectableCDNGroups().some(g => g.id === id));
+                if (this.cdnRealIPEnabled && groupIDs.length === 0) {
+                    showToast('Please select at least one non- Cloudflare CDN Configurationgroup；Cloudflare handled by system automatically.no saving needed.', 'error');
+                    return;
+                }
+                const r = await api('/websites/' + this.site.id + '/cdn-realip', {
+                    method: 'PUT',
+                    body: { enabled: this.cdnRealIPEnabled, group_ids: groupIDs }
+                });
+                showToast(r.data?.message || 'CDN Real IP Saved', 'success');
+                await this.fetchDetail();
+            } catch(e) { showToast(e.message, 'error'); }
+            finally { this.cdnRealIPSaving = false; }
+        },
+        async enableSSL() {
+            if (this.sslMode === 'manual' && (!this.sslCert || !this.sslKey)) {
+                showToast('Please provide certificate content and private key', 'error');
+                return;
+            }
+            this.sslSubmitting = true;
+            try {
+                const body = { mode: this.sslMode };
+                if (this.sslMode === 'manual') {
+                    body.certificate = this.sslCert;
+                    body.private_key = this.sslKey;
+                }
+                const r = await api('/websites/' + this.site.id + '/ssl', { method: 'POST', body });
+                if (r.success) {
+                    showToast(r.data?.message || 'Operation succeeded', 'success');
+                    this.sslModalOpen = false;
+                    await this.fetchDetail();
+                } else {
+                    showToast(r.data?.message || 'Operation failed', 'error');
+                }
+            } catch(e) { showToast('Operation failed: ' + e.message, 'error'); }
+            this.sslSubmitting = false;
+        },
+        downloadSSLPackage() {
+            if (!this.site || !this.site.ssl_enabled) return;
+            const prefix = '/' + document.body.dataset.panelPrefix.replace('/', '');
+            window.open(prefix + '/api/websites/' + this.site.id + '/ssl/download');
+        },
+        async saveSSLExport() {
+            if (!this.site) return;
+            this.sslExportSaving = true;
+            try {
+                const r = await api('/websites/' + this.site.id + '/ssl/export', {
+                    method: 'PUT',
+                    body: { enabled: this.sslExportEnabled }
+                });
+                showToast(r.data?.message || 'SSL certificate export permission saved', 'success');
+                await this.fetchDetail();
+            } catch(e) {
+                this.sslExportEnabled = !this.sslExportEnabled;
+                showToast(e.message, 'error');
+            } finally {
+                this.sslExportSaving = false;
+            }
+        },
+        async updateDomains() {
+            this.domainSubmitting = true;
+            try {
+                const newDomain = this.editDomain.trim();
+                if (!newDomain) { showToast('Domain cannot be empty', 'error'); this.domainSubmitting = false; return; }
+                const aliases = this.editAliasesStr.split('\n').map(a => a.trim()).filter(a => a);
+                const body = { new_domain: newDomain, aliases };
+                const r = await api('/websites/' + this.site.id + '/domains', { method: 'PUT', body });
+                if (r.success) {
+                    showToast(r.data?.message || 'Updated', 'success');
+                    this.domainModalOpen = false;
+                    await this.fetchDetail();
+                } else {
+                    showToast(r.data?.message || 'Operation failed', 'error');
+                }
+            } catch(e) { showToast('Operation failed: ' + e.message, 'error'); }
+            this.domainSubmitting = false;
+        },
+        async removeSSL() {
+            if (!await confirmModal('ConfirmDelete ' + this.site.domain + ' SSL certificate? The site will revert to HTTP access.')) return;
+            try {
+                const r = await api('/websites/' + this.site.id + '/ssl', { method: 'DELETE' });
+                if (r.success) {
+                    showToast(r.data?.message || 'Certificate deleted', 'success');
+                    await this.fetchDetail();
+                } else {
+                    showToast(r.data?.message || 'Operation failed', 'error');
+                }
+            } catch(e) { showToast('Operation failed: ' + e.message, 'error'); }
+        },
+        async changeDBPassword() {
+            this.dbSubmitting = true;
+            try {
+                const body = {};
+                if (this.newDBPassword) body.new_password = this.newDBPassword;
+                const r = await api('/websites/' + this.site.id + '/db-password', { method: 'PUT', body });
+                if (r.success) {
+                    showToast('Password updated: ' + (r.data ? r.data.new_password : '****'), 'success');
+                    this.dbPasswordModal = false;
+                    this.newDBPassword = '';
+                } else {
+                    showToast(r.data?.message || 'Operation failed', 'error');
+                }
+            } catch(e) { showToast('Operation failed: ' + e.message, 'error'); }
+            this.dbSubmitting = false;
+        },
+        async fixWPConfig() {
+            const parts = ['Will overwrite DB_NAME and DB_USER in wp-config.php with the current database name and username'];
+            if (this.editTablePrefix) {
+                parts.push('Also update $table_prefix for ' + this.editTablePrefix);
+            }
+            if (!await confirmModal(parts.join('，') + '，Confirmcontinue？')) return;
+            this.dbSubmitting = true;
+            try {
+                const body = {};
+                if (this.editTablePrefix) {
+                    body.table_prefix = this.editTablePrefix;
+                }
+                const r = await api('/websites/' + this.site.id + '/fix-wp-config', { method: 'POST', body });
+                if (r.success) {
+                    showToast(r.data?.message || 'Updated', 'success');
+                    await this.fetchDetail();
+                } else {
+                    showToast(r.data?.message || 'Operation failed', 'error');
+                }
+            } catch(e) { showToast('Operation failed: ' + e.message, 'error'); }
+            this.dbSubmitting = false;
+        },
+        async detectTablePrefix() {
+            this.detectingPrefix = true;
+            try {
+                const r = await api('/websites/' + this.site.id + '/detect-table-prefix');
+                if (r.success && r.data.prefix) {
+                    this.editTablePrefix = r.data.prefix;
+                    const candidates = r.data.candidates || [];
+                    if (candidates.length > 1) {
+                        showToast('Multiple possible prefixes detected: ' + candidates.join('、') + '. Pre-selected "' + r.data.prefix + '」，e.g.if inaccurate, please modify manually', 'warning');
+                    } else {
+                        showToast('Table Prefix: ' + r.data.prefix + '，click "Sync Database Info" to save', 'success');
+                    }
+                } else {
+                    showToast(r.data?.message || 'No Table Prefix', 'error');
+                }
+            } catch(e) { showToast('Detection failed: ' + e.message, 'error'); }
+            this.detectingPrefix = false;
+        },
+        async openSiteURLModal() {
+            this.siteURLModal = true;
+            this.currentSiteURL = '';
+            this.currentHomeURL = '';
+            this.newSiteURL = '';
+            this.newHomeURL = '';
+            try {
+                const r = await api('/websites/' + this.site.id + '/wp-site-urls');
+                if (r.success) {
+                    this.currentSiteURL = r.data.siteurl || '';
+                    this.currentHomeURL = r.data.home || '';
+                }
+            } catch(e) { showToast('Failed to read current URL: ' + e.message, 'error'); }
+        },
+        autoFillSiteURL() {
+            const proto = this.site.ssl_enabled ? 'https' : 'http';
+            const url = proto + '://' + this.site.domain;
+            this.newSiteURL = url;
+            this.newHomeURL = url;
+        },
+        async updateSiteURLs() {
+            if (!this.newSiteURL && !this.newHomeURL) {
+                showToast('Please fill in at least one URL', 'error');
+                return;
+            }
+            if (!await confirmModal('ConfirmUpdate site URLfor：\nsiteurl: ' + (this.newSiteURL || ' (unchanged)') + '\nhome: ' + (this.newHomeURL || ' (unchanged)'))) return;
+            this.siteURLSubmitting = true;
+            try {
+                const body = {};
+                if (this.newSiteURL) body.siteurl = this.newSiteURL;
+                if (this.newHomeURL) body.home = this.newHomeURL;
+                const r = await api('/websites/' + this.site.id + '/wp-site-urls', { method: 'PUT', body });
+                if (r.success) {
+                    showToast('site URL Updated', 'success');
+                    this.siteURLModal = false;
+                } else {
+                    showToast(r.data?.message || 'Update failed', 'error');
+                }
+            } catch(e) { showToast('Update failed: ' + e.message, 'error'); }
+            this.siteURLSubmitting = false;
+        },
+        async clearDatabase() {
+            if (!await confirmModal('Confirm clearingDatabase「' + this.site.db_name + '」？This will Deleteall tables，irreversible！')) return;
+            this.dbSubmitting = true;
+            try {
+                const r = await api('/websites/' + this.site.id + '/backups/clear-database', { method: 'POST' });
+                if (r.success) {
+                    showToast(r.data?.message || 'Databasecleared', 'success');
+                } else {
+                    showToast(r.data?.message || 'Operation failed', 'error');
+                }
+            } catch(e) { showToast('Operation failed: ' + e.message, 'error'); }
+            this.dbSubmitting = false;
+        },
+        async fetchNginxCustom() {
+            try {
+                const r = await api('/websites/' + this.site.id + '/nginx-custom');
+                if (r.success) {
+                    this.nginxPreContent = r.data.pre_content || '';
+                    this.nginxContent = r.data.content || '';
+                    this.accessLogMode = r.data.access_log_mode || 'off';
+                }
+            } catch(e) { /* silently fail */ }
+        },
+        async saveDocumentRoot() {
+            if (!this.site || this.site.site_type !== 'php') return;
+            this.documentRootSaving = true;
+            try {
+                const r = await api('/websites/' + this.site.id + '/document-root', {
+                    method: 'PUT',
+                    body: { document_root_subdir: this.documentRootSubdir }
+                });
+                if (r.success) {
+                    showToast(r.data?.message || 'Web Document Root SubdirectorySaved', 'success');
+                    await this.fetchDetail();
+                } else {
+                    showToast(r.data?.message || 'Save failed', 'error');
+                }
+            } catch(e) { showToast('Operation failed: ' + e.message, 'error'); }
+            this.documentRootSaving = false;
+        },
+        async saveNginxCustom() {
+            this.nginxSubmitting = true;
+            try {
+                const r = await api('/websites/' + this.site.id + '/nginx-custom', {
+                    method: 'PUT',
+                    body: { pre_content: this.nginxPreContent, content: this.nginxContent }
+                });
+                if (r.success) {
+                    showToast(r.data?.message || 'Saved', 'success');
+                } else {
+                    showToast(r.data?.message || 'Save failed', 'error');
+                }
+            } catch(e) { showToast('Operation failed: ' + e.message, 'error'); }
+            this.nginxSubmitting = false;
+        },
+        async fetchLogs() {
+            if (!this.site) return;
+            try {
+                const r = await api('/websites/' + this.site.id + '/logs?type=' + this.logType);
+                if (r.success) {
+                    this.logContent = r.data.content;
+                }
+            } catch(e) { showToast('Failed to load logs: ' + e.message, 'error'); }
+        },
+        async setAccessLogMode(mode) {
+            try {
+                const r = await api('/websites/' + this.site.id + '/access-log', { method: 'PUT', body: { mode } });
+                if (r.success) {
+                    this.accessLogMode = mode;
+                    if (mode === 'off') {
+                        this.logContent = '';
+                    }
+                    showToast(r.data?.message, 'success');
+                } else {
+                    showToast(r.data?.message || 'Operation failed', 'error');
+                }
+            } catch(e) { showToast('Operation failed: ' + e.message, 'error'); }
+        },
+        async clearLogs() {
+            const label = this.logType === 'error' ? 'Error' : (this.logType === 'security' ? 'Security' : 'Access');
+            if (!await confirmModal('Confirm clearing ' + label + ' log?')) return;
+            try {
+                const r = await api('/websites/' + this.site.id + '/logs?type=' + this.logType, { method: 'DELETE' });
+                if (r.success) {
+                    showToast('Log cleared', 'success');
+                    this.logContent = '(log is empty or file does not exist)';
+                }
+            } catch(e) { showToast('Operation failed: ' + e.message, 'error'); }
+        },
+        async fetchBackups() {
+            try {
+                const r = await api("/websites/" + this.site.id + "/backups");
+                if (r.success) this.backups = r.data || [];
+            } catch(e) {}
+        },
+        async fetchBackupSettings() {
+            try {
+                const r = await api("/websites/" + this.site.id + "/backups/settings");
+                if (r.success) { this.backupEnabled = r.data.enabled; this.backupKeepCount = r.data.keep_count; }
+            } catch(e) {}
+        },
+        async createBackup() {
+            this.backupSubmitting = true;
+            try {
+                const r = await api("/websites/" + this.site.id + "/backups", { method: "POST" });
+                showToast(r.data?.message || "backup complete", "success");
+                await this.fetchBackups();
+            } catch(e) { showToast(e.message, "error"); }
+            this.backupSubmitting = false;
+        },
+        async downloadBackup(b) {
+            const prefix = document.body.dataset.panelPrefix || "";
+            window.open(prefix + "/api/websites/" + this.site.id + "/backups/" + b.id + "/download");
+        },
+        async restoreBackup(b) {
+            if (!await confirmModal("Will restore database from " + b.filename + " overwrite the current database. This action is irreversible. Confirm restore?")) return;
+            this.restoringId = b.id;
+            try {
+                const r = await api("/websites/" + this.site.id + "/backups/" + b.id + "/restore", { method: "POST" });
+                const taskId = r.data?.task_id;
+                if (!taskId) throw new Error("RestoreTask creation failed");
+                showToast(r.data?.message || "DatabaseRestoretask started", "info");
+                await this.pollRestoreTask(taskId);
+            } catch(e) { showToast(e.message, "error"); }
+            this.restoringId = null;
+        },
+        async deleteBackup(b) {
+            if (!await confirmModal("ConfirmDeletebackupcopies " + b.filename + "？")) return;
+            try {
+                await api("/websites/" + this.site.id + "/backups/" + b.id, { method: "DELETE" });
+                await this.fetchBackups();
+                showToast("Deleted", "success");
+            } catch(e) { showToast(e.message, "error"); }
+        },
+        uploadRestore() { document.getElementById("restoreFileInput").click(); },
+        async handleRestoreUpload(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            const validExts = [".sql", ".sql.gz", ".gz", ".zip"];
+            if (!validExts.some(ext => file.name.endsWith(ext))) {
+                showToast("Only .sql / .sql.gz / .zip formats supported", "error"); return;
+            }
+            if (!await confirmModal("Will restore database from " + file.name + " overwriteCurrentDatabase，ConfirmRestore？")) { e.target.value = ""; return; }
+            this.restoreUploading = true;
+            const fd = new FormData();
+            fd.append("file", file);
+            try {
+                const r = await api("/websites/" + this.site.id + "/backups/upload-restore", { method: "POST", body: fd, headers: {} });
+                const taskId = r.data?.task_id;
+                if (!taskId) throw new Error("RestoreTask creation failed");
+                showToast(r.data?.message || "DatabaseRestoretask started", "info");
+                await this.pollRestoreTask(taskId);
+                await this.fetchBackups();
+            } catch(e) { showToast(e.message, "error"); }
+            this.restoreUploading = false;
+            e.target.value = "";
+        },
+        async pollRestoreTask(taskId) {
+            this.restorePollingActive = true;
+            for (let i = 0; i < 3600 && this.restorePollingActive; i++) {
+                const r = await api("/websites/" + this.site.id + "/backups/restore-tasks/" + encodeURIComponent(taskId));
+                const status = r.data || {};
+                if (status.status === "success") {
+                    showToast(status.message || "Database restore successful", "success");
+                    return;
+                }
+                if (status.status === "failed") {
+                    throw new Error(status.message || "Database restore failed");
+                }
+                await new Promise(resolve => setTimeout(resolve, 2000));
+            }
+            if (!this.restorePollingActive) return;
+            throw new Error("Restoretask still running. PleaseRefreshpage to check results");
+        },
+        async fetchPluginStatus() {
+            try {
+                const r = await api('/websites/' + this.site.id + '/install-plugin/status');
+                if (r.success) this.pluginStatus = r.data.status;
+            } catch(e) {}
+        },
+        async installPlugin() {
+            this.pluginInstalling = true;
+            try {
+                const r = await api('/websites/' + this.site.id + '/install-plugin', { method: 'POST' });
+                showToast(r.data?.message || 'Installed', 'success');
+                await this.fetchPluginStatus();
+            } catch(e) { showToast(e.message, 'error'); }
+            this.pluginInstalling = false;
+        },
+        async saveMonitoring() {
+            this.monitoringSaving = true;
+            try {
+                await api('/websites/' + this.site.id + '/monitoring', {
+                    method: 'PUT',
+                    body: { enabled: this.monitoringEnabled, interval: parseInt(this.monitoringInterval) || 5 }
+                });
+                showToast('Monitoring settingsSaved', 'success');
+            } catch(e) { showToast('Save failed: ' + e.message, 'error'); }
+            this.monitoringSaving = false;
+        },
+        async saveExpiry() {
+            this.expirySaving = true;
+            try {
+                await api('/websites/' + this.site.id + '/expiry', {
+                    method: 'PUT',
+                    body: { expires_at: this.expiresAtInput }
+                });
+                this.site.expires_at = this.expiresAtInput || null;
+                this.editingExpiry = false;
+                showToast('ExpirySaved', 'success');
+            } catch(e) { showToast('Save failed: ' + e.message, 'error'); }
+            this.expirySaving = false;
+        },
+        async saveWPOptimizations() {
+            this.optimizationSaving = true;
+            try {
+                await api('/websites/' + this.site.id + '/wp-optimizations', {
+                    method: 'PUT',
+                    body: {
+                        fcache_enabled: this.fcacheEnabled,
+                        fcache_ttl: parseInt(this.fcacheTTL) || 300,
+                        disable_wp_updates: this.disableWPUpdates,
+                        disable_file_editing: this.disableFileEditing,
+                        xmlrpc_enabled: this.xmlrpcEnabled,
+                        wp_debug_enabled: this.wpDebug,
+                        wp_post_revisions: this.wpPostRevisions,
+                        wp_memory_limit: this.wpMemoryLimit
+                    }
+                });
+                showToast('Saved successfully', 'success');
+            } catch(e) { showToast('Save failed: ' + e.message, 'error'); }
+            this.optimizationSaving = false;
+        },
+        async saveLogRetention() {
+            try {
+                await api('/websites/' + this.site.id + '/log-retention', {
+                    method: 'PUT',
+                    body: { retention_days: parseInt(this.logRetentionDays) || 0 }
+                });
+            } catch(e) {}
+        },
+        async clearFCache() {
+            if (!await confirmModal('Confirm clearing FastCGI cache?')) return;
+            try {
+                await api('/websites/' + this.site.id + '/cache', { method: 'DELETE' });
+                showToast('Cache cleared', 'success');
+            } catch(e) { showToast(e.message, 'error'); }
+        },
+        async saveBackupSettings() {
+            try {
+                await api("/websites/" + this.site.id + "/backups/settings", {
+                    method: "PUT",
+                    body: { enabled: this.backupEnabled, keep_count: parseInt(this.backupKeepCount) || 7 }
+                });
+                showToast('backup settings saved', 'success');
+            } catch(e) { showToast(e.message, "error"); }
+        },
+    }
+}
+</script>
+{{end}}

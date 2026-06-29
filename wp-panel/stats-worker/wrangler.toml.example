@@ -1,0 +1,13 @@
+name = "wp-panel-stats"
+main = "index.js"
+compatibility_date = "2025-01-01"
+
+# Worker receives anonymous panel heartbeat reports and provides public stats API.
+# Before deploying, create a KV namespace:
+#   npx wrangler kv namespace create "STATS_KV"
+# Then fill the output ID into the double quotes below.
+
+[[kv_namespaces]]
+binding = "STATS_KV"
+id = "YOUR_KV_NAMESPACE_ID"
+preview_id = "YOUR_KV_NAMESPACE_ID"

@@ -1,0 +1,1 @@
+Thank you for using WP Panel! If you encounter any issues, reach out via WeChat at <strong>vv15_zhi</strong>, or <a href="https://raw.githubusercontent.com/naibabiji/wp-panel/main/wechat-group.png" target="_blank">click here</a> to join the WeChat group discussion.

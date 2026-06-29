@@ -1,0 +1,1246 @@
+{{template "base" .}}
+{{define "settings_content"}}
+<div x-data="panelSettings()" x-init="fetchSettings()">
+    <h2 class="text-xl font-bold text-white mb-6">Panel Settings</h2>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-6">
+        <div class="card">
+            <h3 class="text-lg font-semibold text-white mb-4">Account Security</h3>
+
+            <div class="mb-4 p-3 rounded" style="background-color: #0f172a;">
+                <p class="text-xs text-blue-400 font-medium mb-2">BasicAuth Authentication</p>
+                <p class="text-xs text-gray-500 mb-3">First-layer authentication for the random path entry; browser pop-up style login</p>
+                <div class="mb-3">
+                    <label class="text-xs text-gray-400">Username</label>
+                    <input type="text" x-model="basicAuthUser" class="input-field text-sm py-1.5 mt-1">
+                </div>
+                <div>
+                    <label class="text-xs text-gray-400">Password (min 8 chars; leave blank to keep unchanged)</label>
+                    <input type="password" x-model="pw.basic" class="input-field text-sm py-1.5 mt-1" placeholder="Leave blank to keep unchanged" autocomplete="new-password">
+                </div>
+            </div>
+
+            <div class="mb-4 p-3 rounded" style="background-color: #0f172a;">
+                <p class="text-xs text-green-400 font-medium mb-2">Panel Web Login</p>
+                <p class="text-xs text-gray-500 mb-3">Web form login shown after BasicAuth passes</p>
+                <div class="mb-3">
+                    <label class="text-xs text-gray-400">Username</label>
+                    <input type="text" x-model="username" class="input-field text-sm py-1.5 mt-1">
+                </div>
+                <div>
+                    <label class="text-xs text-gray-400">Password (min 8 chars; leave blank to keep unchanged)</label>
+                    <input type="password" x-model="pw.old" class="input-field text-sm py-1.5 mt-1" placeholder="Current password (required to change password)" autocomplete="current-password">
+                    <div class="flex space-x-2 mt-2">
+                        <input type="password" x-model="pw.new1" class="input-field flex-1 text-sm py-1.5" placeholder="New password (min 8 chars)" autocomplete="new-password">
+                        <input type="password" x-model="pw.new2" class="input-field flex-1 text-sm py-1.5" placeholder="Confirm new password">
+                    </div>
+                </div>
+            </div>
+
+            <button @click="saveAccount" :disabled="accountSaving" class="btn-primary w-full" x-text="accountSaving ? 'Saving...' : 'Save Account Settings'"></button>
+            <p class="text-xs text-yellow-400 mt-2" x-show="accountSaved">Saved, signing out...</p>
+        </div>
+
+        <div class="card">
+            <h3 class="text-lg font-semibold text-white mb-4">Server Settings</h3>
+
+            <div class="mb-4">
+                <label class="label">Panel Title</label>
+                <div class="flex space-x-2">
+                    <input type="text" x-model="panelTitle" class="input-field flex-1">
+                    <button @click="saveBasic" class="btn-primary text-sm">Save</button>
+                </div>
+            </div>
+
+            <div class="mb-4">
+                <label class="label">Timezone</label>
+                <select x-model="timezone" @change="saveServerSetting('timezone', timezone)" class="input-field">
+                    <option value="Asia/Shanghai">Asia/Shanghai (UTC+8)</option>
+                    <option value="Asia/Tokyo">Asia/Tokyo (UTC+9)</option>
+                    <option value="Asia/Singapore">Asia/Singapore (UTC+8)</option>
+                    <option value="Asia/Hong_Kong">Asia/Hong_Kong (UTC+8)</option>
+                    <option value="America/New_York">America/New_York (UTC-5)</option>
+                    <option value="America/Los_Angeles">America/Los_Angeles (UTC-8)</option>
+                    <option value="America/Chicago">America/Chicago (UTC-6)</option>
+                    <option value="Europe/London">Europe/London (UTC+0)</option>
+                    <option value="Europe/Berlin">Europe/Berlin (UTC+1)</option>
+                    <option value="Europe/Paris">Europe/Paris (UTC+1)</option>
+                    <option value="Australia/Sydney">Australia/Sydney (UTC+10)</option>
+                    <option value="UTC">UTC</option>
+                </select>
+                <div class="flex items-center justify-between mt-1">
+                    <p class="text-xs text-gray-400">Server time: <span x-text="serverTime" class="text-white font-mono"></span></p>
+                    <div class="flex items-center space-x-2">
+                        <span class="text-xs" :class="ntpSynced ? 'text-green-400' : 'text-yellow-400'" x-text="ntpSynced ? 'NTP Synced' : 'NTP Not Synced'"></span>
+                        <button @click="syncNTP()" class="text-xs py-0.5 px-2 rounded" style="background-color: #1e3a5f; color: #93c5fd;">Sync</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mb-4">
+                <label class="label">Hostname</label>
+                <div class="flex space-x-2">
+                    <input type="text" x-model="hostname" class="input-field flex-1">
+                    <button @click="saveServerSetting('hostname', hostname)" :disabled="!hostname" class="btn-primary text-sm">Save</button>
+                </div>
+            </div>
+
+            <div class="mb-4">
+                <label class="label">GitHub Proxy URL</label>
+                <p class="text-xs text-gray-500 mb-2">Fill in when GitHub is inaccessible from your server. Leave blank to connect directly.</p>
+                <div class="flex space-x-2">
+                    <input type="text" x-model="githubProxy" placeholder="https://gh.wp-panel.org" class="input-field flex-1">
+                    <button @click="testProxy()" :disabled="proxyTesting" class="btn-secondary text-sm" x-text="proxyTesting ? 'Test...' : 'Test'"></button>
+                    <button @click="saveServerSetting('github_proxy', githubProxy)" class="btn-primary text-sm">Save</button>
+                </div>
+                <p x-show="proxyResult" class="text-xs mt-2" :class="proxyOk ? 'text-green-400' : 'text-red-400'" x-text="proxyResult"></p>
+            </div>
+
+            <hr class="my-4 border-gray-700">
+
+            <div x-data="versionCheck()" x-init="fetchVersion()">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-sm text-gray-400">Panel Version</span>
+                    <span class="text-sm text-white font-mono" x-text="currentVersion"></span>
+                </div>
+                <div x-show="hasUpdate" class="mb-3 p-3 rounded" style="background-color: #064e3b; border: 1px solid #059669;">
+                    <p class="text-sm text-green-300">New version <span x-text="latestVersion" class="font-bold"></span> available</p>
+                    <pre x-text="releaseNotes" class="text-xs text-gray-400 mt-2 max-h-32 overflow-y-auto whitespace-pre-wrap"></pre>
+                </div>
+                <div class="flex items-center space-x-3">
+                    <button @click="checkUpdate()" :disabled="checking" class="btn-secondary text-xs" x-text="checking ? 'Checking...' : 'Check for Updates'"></button>
+                    <button @click="doUpdate()" x-show="hasUpdate" :disabled="updating" class="btn-primary text-xs" x-text="updating ? 'Updating...' : 'Update Now'"></button>
+                </div>
+                <div x-show="updating || updateStatus.running || updateStatus.completed || updateStatus.error" class="mt-3 p-3 rounded" style="background-color: #0f172a; border: 1px solid #1e293b;">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs" :class="updateStatus.error ? 'text-red-400' : 'text-gray-300'" x-text="updateStatusText()"></span>
+                        <span class="text-xs text-gray-500" x-text="progressLabel()"></span>
+                    </div>
+                    <div class="h-2 rounded overflow-hidden" style="background-color: #020617;">
+                        <div class="h-full transition-all duration-300" :style="'width: ' + progressPercent() + '%; background-color: ' + (updateStatus.error ? '#dc2626' : '#059669')"></div>
+                    </div>
+                    <div x-show="updateStatus.stage === 'download_binary' && updateStatus.has_total" class="flex justify-between mt-2 text-xs text-gray-500">
+                        <span x-text="formatBytes(updateStatus.downloaded_bytes || 0)"></span>
+                        <span x-text="formatBytes(updateStatus.total_bytes || 0)"></span>
+                    </div>
+                    <p x-show="updating && !updateStatus.error && !updateStatus.completed" class="text-xs text-yellow-500 mt-2">Do not close or refresh the page during update.</p>
+                </div>
+                <p x-show="updateError" class="text-xs text-red-400 mt-2" x-text="updateError"></p>
+            </div>
+
+            <div class="mt-4 p-3 rounded" style="background-color: #0f172a; border: 1px solid #1e293b;">
+                <div class="flex items-center justify-between mb-3">
+                    <div>
+                        <p class="text-sm text-gray-300">Auto Update</p>
+                        <p class="text-xs text-gray-500">Off by default; when enabled, follows the time window, release delay, and signature verification</p>
+                    </div>
+                    <label class="flex items-center space-x-2 text-sm text-gray-300 cursor-pointer">
+                        <input type="checkbox" x-model="autoUpdate.enabled" @change="saveAutoUpdate">
+                        <span x-text="autoUpdate.enabled ? 'Enabled' : 'Disabled'"></span>
+                    </label>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                        <label class="label">Update Mode</label>
+                        <select x-model="autoUpdate.mode" @change="saveAutoUpdate" class="input-field text-sm">
+                            <option value="patch_only">Patch versions only</option>
+                            <option value="all_stable">All stable releases</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="label">Update Time Window</label>
+                        <input type="text" x-model="autoUpdate.window" @change="saveAutoUpdate" class="input-field text-sm" placeholder="03:00-05:00">
+                    </div>
+                    <div>
+                        <label class="label">Release Delay (minutes)</label>
+                        <input type="number" x-model="autoUpdate.delay" @change="saveAutoUpdate" min="1" max="1440" class="input-field text-sm">
+                    </div>
+                    <div>
+                        <label class="label">Signature Timeout (minutes)</label>
+                        <input type="number" x-model="autoUpdate.signatureTimeout" @change="saveAutoUpdate" min="5" max="1440" class="input-field text-sm">
+                    </div>
+                </div>
+                <div class="mt-3 text-xs text-gray-500 space-y-1">
+                    <p>Last status: <span class="text-gray-300" x-text="autoUpdate.lastStatus || 'None'"></span> <span x-text="autoUpdate.lastStage ? '(' + autoUpdate.lastStage + ')' : ''"></span></p>
+                    <p x-show="autoUpdate.lastTarget">Target version: <span class="text-gray-300" x-text="autoUpdate.lastTarget"></span></p>
+                    <p x-show="autoUpdate.lastError" class="text-red-400" x-text="autoUpdate.lastError"></p>
+                    <p x-show="autoUpdate.lastSuccess">Last success: <span x-text="autoUpdate.lastSuccess"></span> <span x-text="autoUpdate.lastSuccessVersion"></span></p>
+                </div>
+            </div>
+
+            <hr class="my-4 border-gray-700">
+
+            <div x-data="systemUpdate()" x-init="check()">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-sm text-gray-400">System Update</span>
+                    <span class="text-sm text-white font-mono" x-show="count > 0" x-text="count + ' available'"></span>
+                    <span class="text-xs text-gray-500" x-show="count === 0">Up to date</span>
+                </div>
+                <div x-show="count > 0" class="mb-3 space-y-2">
+                    <template x-for="pkg in packages" :key="pkg.name">
+                        <div class="flex items-center justify-between p-2 rounded" style="background-color: #0f172a; border: 1px solid #1e293b;">
+                            <div class="flex items-center space-x-2">
+                                <span class="text-sm text-white font-mono" x-text="pkg.name"></span>
+                                <span class="text-xs" :class="pkg.repo.includes('security') ? 'text-red-400' : 'text-gray-500'" x-text="pkg.repo"></span>
+                            </div>
+                            <div class="flex items-center space-x-3">
+                                <span class="text-xs text-gray-400" x-text="pkg.version"></span>
+                                <a :href="'https://packages.debian.org/trixie/' + pkg.name" target="_blank" class="text-xs text-blue-400 hover:text-blue-300" title="at packages.debian.org View package details">View</a>
+                            </div>
+                        </div>
+                    </template>
+                    <p class="text-xs text-gray-500 mt-2">Not sure what a package does?click「View」link to view Debian official package description，or copy the package name and search/AI to learn more。</p>
+                </div>
+                <div class="flex items-center space-x-3">
+                    <button @click="check()" :disabled="checking" class="btn-secondary text-xs" x-text="checking ? 'Checking...' : 'Refresh'"></button>
+                    <button @click="doUpdate()" x-show="count > 0" :disabled="updating" class="btn-primary text-xs" x-text="updating ? 'Updating...' : 'Update All'"></button>
+                </div>
+                <p x-show="count > 0" class="text-xs text-yellow-500 mt-2">Updates may take several minutes. Do not close or refresh the page during the process.</p>
+                <pre x-show="output" class="text-xs text-gray-400 mt-3 p-3 rounded max-h-48 overflow-y-auto" style="background-color: #020617;" x-text="output"></pre>
+                <p x-show="msg" class="text-sm mt-2" :class="ok ? 'text-green-400' : 'text-red-400'" x-text="msg"></p>
+            </div>
+        </div>
+    </div>
+
+    <div class="card mb-6">
+        <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-4">
+            <div>
+                <h3 class="text-lg font-semibold text-white">AI Diagnostics Settings</h3>
+                <p class="text-xs text-gray-500 mt-1">Configure the AI provider used for site fault and performance diagnostics; diagnosis is performed on the AI Diagnostics page.</p>
+            </div>
+            <div class="flex items-center gap-3">
+                <a href="/{{.RandomSuffix}}/ai-diagnostics" class="btn-secondary text-sm">Go to AI Diagnostics</a>
+                <label class="flex items-center space-x-2 text-sm text-gray-300 cursor-pointer">
+                    <input type="checkbox" x-model="ai.enabled">
+                    <span x-text="ai.enabled ? 'Enabled' : 'Disabled'"></span>
+                </label>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+                <label class="label">Provider</label>
+                <select x-model="ai.provider" @change="applyAIProviderDefaults()" class="input-field text-sm">
+                    <option value="deepseek">DeepSeek</option>
+                    <option value="openai">OpenAI</option>
+                    <option value="openai_compatible">OpenAI Compatible</option>
+                </select>
+            </div>
+            <div>
+                <label class="label">Model</label>
+                <input type="text" x-model="ai.model" class="input-field text-sm" placeholder="deepseek-v4-pro">
+            </div>
+            <div>
+                <label class="label">Base URL</label>
+                <input type="text" x-model="ai.base_url" class="input-field text-sm" placeholder="https://api.deepseek.com">
+            </div>
+            <div>
+                <label class="label">API Key</label>
+                <input type="password" x-model="ai.api_key" class="input-field text-sm" :placeholder="ai.api_key_masked || 'Enter API Key'">
+            </div>
+            <div>
+                <label class="label">Timeout (seconds)</label>
+                <input type="number" x-model.number="ai.timeout_seconds" min="15" max="180" class="input-field text-sm">
+                <p class="text-xs text-gray-500 mt-1">Recommended 60-120 seconds; slower Model 180 seconds。</p>
+            </div>
+        </div>
+
+        <div class="mt-4 p-3 rounded text-xs text-yellow-200" style="background-color: #422006; border: 1px solid #854d0e;">
+            AI diagnosdiagnostics send the site domain, log summary, config summary, and check results to the selectedProvider；WILL NOT send databasePassword、AI Key、SSL private key、panelPasswordor panel database content.。
+        </div>
+        <div class="flex items-center space-x-3 mt-4">
+            <button @click="testAI()" :disabled="aiTesting" class="btn-secondary text-sm" x-text="aiTesting ? 'Test...' : 'TestConnection'"></button>
+            <button @click="saveAI()" :disabled="aiSaving" class="btn-primary text-sm" x-text="aiSaving ? 'Saving...' : 'Save AI Settings'"></button>
+        </div>
+        <p x-show="aiTestResult" class="text-xs mt-2" :class="aiTestOK ? 'text-green-400' : 'text-red-400'" x-text="aiTestResult"></p>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-6">
+        <div class="card" x-data="wpPackage()" x-init="fetchStatus()">
+            <h3 class="text-lg font-semibold text-white mb-4">WordPress Installation Package</h3>
+            <p class="text-xs text-gray-500 mb-4">When creating WordPress sites, the local package is preferred. If your server cannot download online, you can upload manually here.</p>
+
+            <div>
+                <div class="p-3 rounded mb-4" style="background-color: #0f172a;">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs text-gray-400">Local Package Status</span>
+                        <span class="text-xs font-medium" :class="pkg.available ? 'text-green-400' : 'text-yellow-400'" x-text="pkg.available ? 'Ready' : 'Not Installed'"></span>
+                    </div>
+                    <template x-if="pkg.available">
+                        <div class="space-y-1">
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs text-gray-500">File Size</span>
+                                <span class="text-xs text-white" x-text="pkg.size_text"></span>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs text-gray-500">Updated</span>
+                                <span class="text-xs text-white" x-text="pkg.updated_at"></span>
+                            </div>
+                        </div>
+                    </template>
+                    <template x-if="!pkg.available">
+                        <p class="text-xs text-yellow-400">No local package. Will attempt online download during site creation (may fail due to network issues).</p>
+                    </template>
+                </div>
+
+                <div class="flex items-center space-x-3">
+                    <button @click="downloadPkg()" :disabled="downloading" class="btn-secondary text-sm" x-text="downloading ? 'Downloading...' : 'Online Download'"></button>
+                    <label class="btn-primary text-sm cursor-pointer" :class="uploading ? 'opacity-50 cursor-not-allowed' : ''">
+                        <span x-text="uploading ? 'Uploading...' : 'Upload Package'"></span>
+                        <input type="file" accept=".zip" class="hidden" @change="uploadPkg($event)" :disabled="uploading">
+                    </label>
+                    <button x-show="pkg.available" @click="deletePkg()" :disabled="deleting" class="text-sm py-1.5 px-3 rounded" style="background-color: #7f1d1d; color: #fca5a5;" x-text="deleting ? 'Delete...' : 'Delete'"></button>
+                    <button @click="fetchStatus()" class="text-xs py-1 px-2 rounded" style="background-color: #1e3a5f; color: #93c5fd;">Refresh</button>
+                </div>
+                <p x-show="msg" class="text-xs mt-2" :class="msgOk ? 'text-green-400' : 'text-red-400'" x-text="msg"></p>
+            </div>
+        </div>
+
+        <div class="card" x-data="remoteBackup()" x-init="fetchRemote()">
+            <div class="flex items-center justify-between mb-4"><h3 class="text-lg font-semibold text-white">Remote Backup</h3><button @click="showHelp = true" class="text-xs py-1 px-2 rounded" style="background-color: #1e3a5f; color: #93c5fd;">Usage Guide</button></div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- Left：Backup Settings -->
+            <div>
+                <div class="flex items-center space-x-3 mb-4">
+                    <label class="flex items-center space-x-2 text-sm text-gray-300 cursor-pointer">
+                        <input type="checkbox" x-model="cfg.enabled">
+                        <span>EnableRemote Backup</span>
+                    </label>
+                </div>
+
+                <div x-show="cfg.enabled" class="space-y-3">
+                    <div>
+                        <label class="label">Backup Target</label>
+                        <select x-model="cfg.backup_type" class="input-field text-sm">
+                            <option value="rsync">SSH / rsync Remote Server</option>
+                            <option value="s3">S3-Compatible Object Storage</option>
+                        </select>
+                    </div>
+
+                    <div x-show="cfg.backup_type === 'rsync'" class="space-y-3">
+                    <div>
+                        <label class="label">Remote Server Address</label>
+                        <input type="text" x-model="cfg.host" class="input-field text-sm" placeholder="192.168.1.100 or domain">
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="label">SSH Port</label>
+                            <input type="number" x-model="cfg.port" class="input-field text-sm" placeholder="22">
+                        </div>
+                        <div>
+                            <label class="label">Username</label>
+                            <input type="text" x-model="cfg.username" class="input-field text-sm" placeholder="wpbackup">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="label">Auth Method</label>
+                        <select x-model="cfg.auth_type" class="input-field text-sm">
+                            <option value="key">SSH Key (Recommended)</option>
+                            <option value="password">Password</option>
+                        </select>
+                    </div>
+                    <div x-show="cfg.auth_type === 'password'">
+                        <label class="label">SSH Password</label>
+                        <div class="flex space-x-1">
+                            <input type="password" x-model="cfg.password" class="input-field text-sm flex-1" placeholder="Remote ServerPassword">
+                            <button @click="genPassword()" class="text-xs py-1 px-2 rounded flex-shrink-0" style="background-color: #1e3a5f; color: #93c5fd;" title="RandomGenerate backup accountPassword">Random</button>
+                        </div>
+                    </div>
+                    <div x-show="cfg.auth_type === 'key'" class="text-xs text-gray-400">
+                        <p>Panel has auto-generated an ed25519 keypair; the public key will be embedded in the one-liner command below.</p>
+                    </div>
+                    <div>
+                        <label class="label">Remote BackupPath</label>
+                        <input type="text" x-model="cfg.remote_path" class="input-field text-sm" :placeholder="'/home/' + cfg.username + '/backup'">
+                    </div>
+                    </div>
+
+                    <div x-show="cfg.backup_type === 's3'" class="space-y-3">
+                    <div>
+                        <label class="label">S3 Endpoint</label>
+                        <input type="text" x-model="cfg.s3_endpoint" class="input-field text-sm" placeholder="https://accountID.r2.cloudflarestorage.com">
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div>
+                            <label class="label">Bucket</label>
+                            <input type="text" x-model="cfg.s3_bucket" class="input-field text-sm" placeholder="wp-panel-backups">
+                        </div>
+                        <div>
+                            <label class="label">Region</label>
+                            <input type="text" x-model="cfg.s3_region" class="input-field text-sm" placeholder="auto">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="label">Access Key ID</label>
+                        <input type="text" x-model="cfg.s3_access_key_id" class="input-field text-sm" placeholder="Access Key ID">
+                    </div>
+                    <div>
+                        <label class="label">Secret Access Key</label>
+                        <input type="password" x-model="cfg.s3_secret_key" class="input-field text-sm" placeholder="Secret Access Key">
+                    </div>
+                    <div>
+                        <label class="label">Backup Path Prefix</label>
+                        <input type="text" x-model="cfg.s3_path_prefix" class="input-field text-sm" placeholder="wp-panel">
+                    </div>
+                    </div>
+
+                    <label class="flex items-center space-x-2 text-sm text-gray-300 cursor-pointer">
+                        <input type="checkbox" x-model="cfg.keep_local">
+                        <span>Keep Local Backup</span>
+                    </label>
+
+                </div>
+
+                <div class="flex items-center space-x-3 pt-2">
+                    <button @click="testConnection()" :disabled="testing || !cfg.enabled" class="btn-secondary text-sm" x-text="testing ? 'Test...' : 'TestConnection'"></button>
+                    <button @click="saveRemote()" :disabled="saving" class="btn-primary text-sm" x-text="saving ? 'Saving...' : 'SaveSettings'"></button>
+                </div>
+                <p x-show="saveMsg" class="text-sm" :class="saveOK ? 'text-green-400' : 'text-red-400'" x-text="saveMsg"></p>
+                <p x-show="testResult" class="text-sm" :class="testOK ? 'text-green-400' : 'text-red-400'" x-text="testResult"></p>
+
+                <div x-show="!cfg.enabled" class="text-xs text-gray-600 py-4 text-center">
+                    When enabled, each backup is auto-synced to the remote location
+                </div>
+            </div>
+
+            <!-- Right: Setup Assistant -->
+            <div x-show="cfg.backup_type === 'rsync'" class="p-4 rounded" style="background-color: #0f172a; border: 1px solid #1e293b;">
+                <div class="flex items-center justify-between mb-3">
+                    <h4 class="text-sm font-medium text-gray-300">Remote Server One-Click Setup</h4>
+                    <div class="flex rounded overflow-hidden" style="border: 1px solid #334155;">
+                        <button @click="helperMode = 'create'" :class="helperMode === 'create' ? 'text-white' : 'text-gray-500'" class="text-xs py-1 px-2" :style="helperMode === 'create' ? 'backgroundColor: #1e3a5f' : 'backgroundColor: #0f172a'">Create</button>
+                        <button @click="helperMode = 'delete'" :class="helperMode === 'delete' ? 'text-white' : 'text-gray-500'" class="text-xs py-1 px-2" :style="helperMode === 'delete' ? 'backgroundColor: #b91c1c' : 'backgroundColor: #0f172a'">Delete</button>
+                    </div>
+                </div>
+                <p x-show="helperMode === 'create'" class="text-xs text-gray-500 mb-3">On the remote server, run the following command as root to auto-create the backup account and directory：</p>
+                <p x-show="helperMode === 'delete'" class="text-xs text-red-400 mb-3"><strong>DeleteRestore。</strong>On remote server, run as root, will delete the account and backup directory:</p>
+
+                <div class="p-3 rounded" style="background-color: #020617; border: 1px solid #1e293b;">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-gray-500 text-xs">Copy and run on remote server:</span>
+                        <button @click="copyCmd()" class="text-xs py-0.5 px-2 rounded" :style="helperMode === 'delete' ? 'background-color: #7f1d1d; color: #fca5a5' : 'background-color: #1e3a5f; color: #93c5fd'">Copy Command</button>
+                    </div>
+                    <pre class="font-mono text-gray-300 whitespace-pre-wrap text-xs leading-relaxed" x-text="genCmd()" style="word-break: break-all;"></pre>
+                </div>
+
+                <ul class="space-y-1 text-gray-500 text-xs mt-3">
+                    <li>· Key auth mode: command includes public key; one line does it all</li>
+                    <li>· Password auth mode: panel auto-installs sshpass. </li>
+                    <li>· We recommend using a <span class="text-yellow-300">dedicated backup account</span>; do not use root</li>
+                    <li>· Backup account does not need admin privileges; only write access to the target directory is required</li>
+                </ul>
+            </div>
+            <div x-show="cfg.backup_type === 's3'" class="p-4 rounded text-xs text-gray-400" style="background-color: #0f172a; border: 1px solid #1e293b;">
+                <h4 class="text-sm font-medium text-gray-300 mb-3">S3-Compatible Object StorageConfiguration Tips</h4>
+                <ul class="space-y-2">
+                    <li>· Supports Cloudflare R2, AWS S3, MinIO, Backblaze B2, and other S3-compatible services.</li>
+                    <li>· In the object storage, create a Bucket and create an Access Key with object read/write permissions. Access Key。</li>
+                    <li>· Cloudflare R2 Endpoint example: <code class="text-gray-300">https://accountID.r2.cloudflarestorage.com</code>。</li>
+                    <li>· Cloudflare R2 Region is typically  <code class="text-gray-300">auto</code>，other services: perProvider。</li>
+                    <li>· Path prefix distinguishes different panels, e.g.,  <code class="text-gray-300">wp-panel/server-1</code>。</li>
+                    <li>· Large backup files automatically use S3 multipart upload; restoration is still a single complete backup object.</li>
+                </ul>
+            </div>
+        </div>
+
+            <!-- Usage GuideModal -->
+            <div x-show="showHelp" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50" @click.self="showHelp = false">
+                <div class="rounded-lg shadow-xl w-full max-w-xl p-6 max-h-80vh overflow-y-auto" style="background-color: #1e293b; border: 1px solid #334155;">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-semibold text-white">Remote BackupUsage Guide</h3>
+                        <button @click="showHelp = false" class="text-gray-400 hover:text-white text-xl">&times;</button>
+                    </div>
+                    <div class="text-sm text-gray-300 space-y-4">
+                        <div>
+                            <p class="font-medium text-blue-400 mb-1">Workflow</p>
+                            <ol class="text-gray-400 list-decimal list-inside space-y-1">
+                                <li>Panel completes local database or file backup</li>
+                                <li>Automatically transfers backup files to remote location via SSH + rsync or S3-compatible API</li>
+                                <li>If "Keep Local Backup" is off, after successful transfer, delete local files to save space</li>
+                            </ol>
+                        </div>
+                        <div>
+                            <p class="font-medium text-blue-400 mb-1">Remote Server Requirements</p>
+                            <ul class="text-gray-400 list-disc list-inside space-y-1">
+                                <li>SSH service enabled and reachable from this server</li>
+                                <li>Target directory exists and backup account has write permission</li>
+                                <li>Firewall allows SSH port (default 22)</li>
+                            </ul>
+                        </div>
+                        <div>
+                            <p class="font-medium text-blue-400 mb-1">Auth Method</p>
+                            <ul class="text-gray-400 list-disc list-inside space-y-1">
+                                <li><span class="text-yellow-300">SSH Key (Recommended)</span>：The panel auto-generates a keypair; the one-liner from the assistant on the right includes the public key. Just paste and run on the remote server. No extra software needed.</li>
+                                <li><span class="text-gray-500">Password</span>：panel auto-installs sshpass when saving settings. n。</li>
+                                <li><span class="text-yellow-300">S3-Compatible Object Storage</span>：Uses Access Key and Secret Key for signed uploads; no remote SSH account needed. Large files use automatic multipart upload.</li>
+                            </ul>
+                        </div>
+                        <div>
+                            <p class="font-medium text-blue-400 mb-1">Security Recommendations</p>
+                            <ul class="text-gray-400 list-disc list-inside space-y-1">
+                                <li>atRemote ServerCreate<span class="text-yellow-300">dedicated backup account</span>on the remote server; do not use root. Least privilege is safer.</li>
+                                <li>Remote Backupdirectory does not auto-purge old files，periodic manual checks recommended</li>
+                                <li>Key file located at  <code class="text-gray-500">/www/server/panel/remote_backup_key</code>; keep it secure.</li>
+                            </ul>
+                        </div>
+                        <div class="p-3 rounded" style="background-color: #0f172a; border: 1px solid #334155;">
+                            <p class="text-gray-400 text-xs">Tip: The one-liner generated by the assistant on the right can be copied and pasted directly into the remote server SSH terminal. Press Enter to complete all configuration.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+    </div>
+    </div>
+
+    <div class="card mb-6" x-data="dbBackup()" x-init="fetchBackups()">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-semibold text-white">Panel Database Backup</h3>
+            <div class="flex items-center space-x-2">
+                <button @click="doBackup()" :disabled="backingUp" class="btn-primary text-sm" x-text="backingUp ? 'Backing up...' : 'Backup Now'"></button>
+            </div>
+        </div>
+        <p class="text-gray-400 text-xs mb-2">Auto-backups daily at 2:30 AM; keeps the latest 7 copies. Panel will auto-restart after restore.</p>
+        <p class="text-yellow-500/80 text-xs mb-4">⚠ Backups contain sensitive data(password hash, database credentials, etc.), do not share with others. If the panel fails to start, retrieve via SSH from /www/server/panel/backups/panel-db/ retrieve backup files。</p>
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead class="border-b border-gray-700">
+                    <tr>
+                        <th class="table-header">Backup Time</th>
+                        <th class="table-header">Filename</th>
+                        <th class="table-header">Size</th>
+                        <th class="table-header">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <template x-for="b in backups" :key="b.filename">
+                        <tr class="border-b border-gray-700/50">
+                            <td class="table-cell text-sm" x-text="b.created_at"></td>
+                            <td class="table-cell text-xs font-mono" x-text="b.filename"></td>
+                            <td class="table-cell text-sm" x-text="b.size_text"></td>
+                            <td class="table-cell">
+                                <button @click="doDownload(b.filename)" class="btn-primary text-xs py-1 px-2">Download</button>
+                                <button @click="doRestore(b.filename)" class="btn-warning text-xs py-1 px-2 ml-1">Restore</button>
+                                <button @click="doDelete(b.filename)" class="btn-danger text-xs py-1 px-2 ml-1">Delete</button>
+                            </td>
+                        </tr>
+                    </template>
+                    <tr x-show="backups.length === 0">
+                        <td colspan="4" class="table-cell text-center text-gray-500 py-6">Nonebackup records</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card" x-data="operationLogs()" x-init="fetchLogs()">
+        <h3 class="text-lg font-semibold text-white mb-4">Recent Operation Logs</h3>
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead class="border-b border-gray-700">
+                    <tr>
+                        <th class="table-header">Time</th>
+                        <th class="table-header">Action</th>
+                        <th class="table-header">Target</th>
+                        <th class="table-header">Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <template x-for="log in logs" :key="log.id">
+                        <tr class="border-b border-gray-700/50">
+                            <td class="table-cell text-xs" x-text="fmtTime(log.created_at)"></td>
+                            <td class="table-cell text-sm" x-text="log.operation"></td>
+                            <td class="table-cell text-sm" x-text="log.target || '--'"></td>
+                            <td class="table-cell">
+                                <span :class="log.status === 'success' ? 'badge-success' : 'badge-danger'"
+                                      x-text="log.status === 'success' ? 'Success' : 'Failed'"></span>
+                            </td>
+                        </tr>
+                    </template>
+                    <tr x-show="logs.length === 0">
+                        <td colspan="4" class="table-cell text-center text-gray-500 py-8">NoneActionlogs</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <div x-show="logTotal > 0" class="flex items-center justify-between mt-4 pt-3 border-t border-gray-700/50">
+            <span class="text-sm text-gray-400" x-text="`Total ${logTotal} records`"></span>
+            <div class="flex items-center space-x-1" x-show="logTotalPages > 1">
+                <button @click="logGoPage(logPage-1)" :disabled="logPage <= 1" class="px-3 py-1 text-sm rounded bg-gray-700 hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed">Previous</button>
+                <template x-for="p in logPageNumbers" :key="p">
+                    <button @click="logGoPage(p)" :class="p === logPage ? 'bg-blue-600 text-white' : 'bg-gray-700 hover:bg-gray-600'" class="px-3 py-1 text-sm rounded" x-text="p"></button>
+                </template>
+                <button @click="logGoPage(logPage+1)" :disabled="logPage >= logTotalPages" class="px-3 py-1 text-sm rounded bg-gray-700 hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed">Next</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function wpPackage() {
+    return {
+        pkg: { available: false, size_text: '', updated_at: '' },
+        downloading: false,
+        uploading: false,
+        deleting: false,
+        msg: '',
+        msgOk: false,
+        async fetchStatus() {
+            try {
+                const r = await api('/settings/wp-package');
+                if (r.success) this.pkg = r.data;
+            } catch(e) {}
+        },
+        async downloadPkg() {
+            this.downloading = true;
+            this.msg = '';
+            try {
+                const r = await api('/settings/wp-package/download', { method: 'POST' });
+                this.msgOk = r.success;
+                this.msg = r.data?.message || 'Downloadcomplete';
+                if (r.success) this.fetchStatus();
+            } catch(e) { this.msgOk = false; this.msg = e.message; }
+            this.downloading = false;
+        },
+        async deletePkg() {
+            if (!await confirmModal('ConfirmDeletelocal WordPress Installation Package？Deletesite creation will auto-Online Download。')) return;
+            this.deleting = true;
+            this.msg = '';
+            try {
+                const r = await api('/settings/wp-package', { method: 'DELETE' });
+                this.msgOk = r.success;
+                this.msg = r.data?.message || 'Deleted';
+                if (r.success) this.fetchStatus();
+            } catch(e) { this.msgOk = false; this.msg = e.message; }
+            this.deleting = false;
+        },
+        async uploadPkg(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            if (!file.name.toLowerCase().endsWith('.zip')) {
+                showToast('Only .zip format supported', 'error');
+                event.target.value = '';
+                return;
+            }
+            this.uploading = true;
+            this.msg = '';
+            const prefix = document.body.dataset.panelPrefix || '';
+            const formData = new FormData();
+            formData.append('file', file);
+            try {
+                const resp = await fetch(prefix + '/api/settings/wp-package/upload', {
+                    method: 'POST',
+                    headers: { 'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.content || '' },
+                    body: formData,
+                });
+                const r = await resp.json();
+                if (r.success) {
+                    this.msgOk = true;
+                    this.msg = r.data?.message || 'Upload successful';
+                    this.fetchStatus();
+                } else {
+                    this.msgOk = false;
+                    this.msg = r.message || 'Upload failed';
+                }
+            } catch(e) { this.msgOk = false; this.msg = 'Upload failed: ' + e.message; }
+            this.uploading = false;
+            event.target.value = '';
+        }
+    }
+}
+function panelSettings() {
+    return {
+        panelTitle: 'WP Panel',
+        username: '',
+        basicAuthUser: '',
+        githubProxy: '',
+        timezone: '',
+        hostname: '',
+        serverTime: '',
+        serverTimeBase: 0,
+        serverTimeFetchedAt: 0,
+        ntpSynced: false,
+        proxyTesting: false,
+        proxyResult: '',
+        proxyOk: false,
+        ai: {
+            enabled: false,
+            provider: 'deepseek',
+            base_url: 'https://api.deepseek.com',
+            model: 'deepseek-v4-pro',
+            api_key: '',
+            api_key_masked: '',
+            timeout_seconds: 60
+        },
+        aiSaving: false,
+        aiTesting: false,
+        aiTestResult: '',
+        aiTestOK: false,
+        accountSaving: false,
+        accountSaved: false,
+        autoUpdate: {
+            enabled: false,
+            mode: 'patch_only',
+            window: '03:00-05:00',
+            delay: 15,
+            signatureTimeout: 120,
+            lastTarget: '',
+            lastStatus: '',
+            lastStage: '',
+            lastError: '',
+            lastSuccess: '',
+            lastSuccessVersion: ''
+        },
+        pw: { old: '', new1: '', new2: '', basic: '' },
+        async fetchSettings() {
+            try {
+                const r = await api('/settings');
+                if (r.success) {
+                    this.panelTitle = r.data.panel_title || 'WP Panel';
+                    this.username = r.data.username || '';
+                    this.basicAuthUser = r.data.basic_auth_user || '';
+                    this.githubProxy = r.data.github_proxy || '';
+                    this.timezone = r.data.timezone || '';
+                    this.hostname = r.data.hostname || '';
+                    this.ntpSynced = r.data.ntp_synced || false;
+                    if (r.data.server_time) {
+                        this.serverTimeBase = r.data.server_time;
+                        this.serverTimeFetchedAt = Date.now();
+                    }
+                    const au = r.data.panel_auto_update || {};
+                    this.autoUpdate.enabled = au.panel_auto_update_enabled === 'true';
+                    this.autoUpdate.mode = au.panel_auto_update_mode || 'patch_only';
+                    this.autoUpdate.window = au.panel_auto_update_window || '03:00-05:00';
+                    this.autoUpdate.delay = Number(au.panel_auto_update_release_delay_minutes || 15);
+                    this.autoUpdate.signatureTimeout = Number(au.panel_auto_update_signature_timeout_minutes || 120);
+                    this.autoUpdate.lastTarget = au.panel_auto_update_last_target_version || '';
+                    this.autoUpdate.lastStatus = au.panel_auto_update_last_status || '';
+                    this.autoUpdate.lastStage = au.panel_auto_update_last_stage || '';
+                    this.autoUpdate.lastError = au.panel_auto_update_last_error || '';
+                    this.autoUpdate.lastSuccess = au.panel_auto_update_last_success_at || '';
+                    this.autoUpdate.lastSuccessVersion = au.panel_auto_update_last_success_version || '';
+                }
+            } catch(e) {}
+            await this.fetchAISettings();
+            this.tickTime();
+            setInterval(() => this.tickTime(), 1000);
+        },
+        tickTime() {
+            if (this.serverTimeBase) {
+                const elapsed = Date.now() - this.serverTimeFetchedAt;
+                const d = new Date(this.serverTimeBase + elapsed);
+                const opts = { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false };
+                this.serverTime = d.toLocaleString('zh-CN', opts);
+            }
+        },
+        async saveAccount() {
+            const body = {};
+
+            if (this.basicAuthUser) body.basic_auth_user = this.basicAuthUser;
+            if (this.pw.basic && this.pw.basic.length >= 8) body.basic_auth_password = this.pw.basic;
+            else if (this.pw.basic && this.pw.basic.length < 8) { showToast('BasicAuth Passwordat least8', 'error'); return; }
+
+            if (this.username) body.username = this.username;
+            if (this.pw.new1 || this.pw.new2) {
+                if (!this.pw.old) { showToast('change Web Passwordrequires currentPassword', 'error'); return; }
+                if (this.pw.new1 !== this.pw.new2) { showToast('PasswordsPassworddo not match', 'error'); return; }
+                if (this.pw.new1.length < 8) { showToast('newPasswordat least8', 'error'); return; }
+                body.old_password = this.pw.old;
+                body.new_password = this.pw.new1;
+            }
+
+            if (Object.keys(body).length === 0) { showToast('No changes to save', 'info'); return; }
+
+            this.accountSaving = true;
+            try {
+                await api('/settings', { method: 'PUT', body });
+                this.accountSaved = true;
+                this.pw = { old: '', new1: '', new2: '', basic: '' };
+                showToast('Account settings saved, signing out...', 'success');
+                setTimeout(async () => {
+                    try { await api('/auth/logout', { method: 'POST' }); } catch(e) {}
+                    window.location.href = (document.body.dataset.panelPrefix || '') + '/login';
+                }, 1500);
+            } catch(e) { showToast(e.message, 'error'); this.accountSaving = false; }
+        },
+        async syncNTP() {
+            try {
+                const r = await api('/settings', { method: 'PUT', body: { ntp_sync: true } });
+                showToast(r.data?.message || 'Time sync triggered', 'success');
+                this.ntpSynced = true;
+            } catch(e) { showToast(e.message, 'error'); }
+        },
+        async saveBasic() {
+            try {
+                await api('/settings', { method: 'PUT', body: { panel_title: this.panelTitle } });
+                showToast('Saved', 'success');
+            } catch(e) { showToast(e.message, 'error'); }
+        },
+        async saveServerSetting(key, val) {
+            try {
+                const body = {};
+                body[key] = val;
+                await api('/settings', { method: 'PUT', body });
+                showToast('Updated', 'success');
+            } catch(e) { showToast(e.message, 'error'); }
+        },
+        async saveAutoUpdate() {
+            try {
+                await api('/settings', { method: 'PUT', body: {
+                    panel_auto_update_enabled: this.autoUpdate.enabled ? 'true' : 'false',
+                    panel_auto_update_mode: this.autoUpdate.mode,
+                    panel_auto_update_window: this.autoUpdate.window,
+                    panel_auto_update_release_delay_minutes: String(this.autoUpdate.delay || 15),
+                    panel_auto_update_signature_timeout_minutes: String(this.autoUpdate.signatureTimeout || 120)
+                } });
+                showToast('Auto UpdateSettingsSaved', 'success');
+            } catch(e) { showToast(e.message, 'error'); }
+        },
+        async testProxy() {
+            if (!this.githubProxy) {
+                showToast('Please enter a proxy URL first', 'error');
+                return;
+            }
+            this.proxyTesting = true;
+            this.proxyResult = '';
+            try {
+                const r = await api('/proxy/test?url=' + encodeURIComponent(this.githubProxy));
+                if (r.success) {
+                    const d = r.data;
+                    this.proxyOk = d.ok;
+                    this.proxyResult = d.ok
+                        ? 'Connection OK, latency  ' + d.latency + 'ms'
+                        : 'Connection failed: ' + (d.error || 'Unknown error');
+                } else {
+                    this.proxyOk = false;
+                    this.proxyResult = r.message || 'TestFailed';
+                }
+            } catch(e) {
+                this.proxyOk = false;
+                this.proxyResult = e.message;
+            }
+            this.proxyTesting = false;
+        },
+        async fetchAISettings() {
+            try {
+                const r = await api('/ai/settings', { silent: true });
+                if (r.success && r.data) {
+                    this.ai.enabled = r.data.enabled || false;
+                    this.ai.provider = r.data.provider || 'deepseek';
+                    this.ai.base_url = r.data.base_url || 'https://api.deepseek.com';
+                    this.ai.model = r.data.model || 'deepseek-v4-pro';
+                    this.ai.api_key = '';
+                    this.ai.api_key_masked = r.data.api_key_masked || '';
+                    this.ai.timeout_seconds = r.data.timeout_seconds || 60;
+                }
+            } catch(e) {}
+        },
+        applyAIProviderDefaults() {
+            if (this.ai.provider === 'deepseek') {
+                this.ai.base_url = 'https://api.deepseek.com';
+                if (!this.ai.model || this.ai.model === 'gpt-4.1-mini') this.ai.model = 'deepseek-v4-pro';
+            } else if (this.ai.provider === 'openai') {
+                this.ai.base_url = 'https://api.openai.com/v1';
+                if (!this.ai.model || this.ai.model.startsWith('deepseek-')) this.ai.model = 'gpt-4.1-mini';
+            }
+        },
+        aiPayload() {
+            return {
+                enabled: this.ai.enabled,
+                provider: this.ai.provider,
+                base_url: this.ai.base_url,
+                model: this.ai.model,
+                api_key: this.ai.api_key,
+                timeout_seconds: parseInt(this.ai.timeout_seconds) || 60
+            };
+        },
+        async saveAI() {
+            this.aiSaving = true;
+            try {
+                const r = await api('/ai/settings', { method: 'PUT', body: this.aiPayload() });
+                if (r.success && r.data) {
+                    this.ai.api_key = '';
+                    this.ai.api_key_masked = r.data.api_key_masked || this.ai.api_key_masked;
+                }
+                showToast('AI SettingsSaved', 'success');
+            } catch(e) { showToast(e.message, 'error'); }
+            this.aiSaving = false;
+        },
+        async testAI() {
+            this.aiTesting = true;
+            this.aiTestResult = '';
+            try {
+                const timeoutMs = Math.min((parseInt(this.ai.timeout_seconds) || 60) * 1000 + 30000, 210000);
+                const r = await api('/ai/test', { method: 'POST', body: this.aiPayload(), timeout: timeoutMs });
+                const d = r.data || {};
+                this.aiTestOK = !!d.ok;
+                this.aiTestResult = d.ok ? ('Connection OK, latency  ' + d.latency_ms + 'ms') : (d.message || 'Connection failed');
+            } catch(e) {
+                this.aiTestOK = false;
+                this.aiTestResult = e.message;
+            }
+            this.aiTesting = false;
+        }
+    }
+}
+function versionCheck() {
+    return {
+        currentVersion: "",
+        latestVersion: "",
+        releaseNotes: "",
+        hasUpdate: false,
+        checking: false,
+        updating: false,
+        updateError: "",
+        updateStatus: { running: false, completed: false, stage: "idle", message: "", percent: 0, download_percent: 0, downloaded_bytes: 0, total_bytes: 0, has_total: false, error: "" },
+        pollTimer: null,
+        updateStarting: false,
+        pollStartedAt: 0,
+        maxPollMs: 12 * 60 * 1000,
+        async fetchVersion() {
+            try {
+                const r = await api("/update/check");
+                if (r.success) {
+                    this.currentVersion = r.data.current_version;
+                    this.latestVersion = r.data.latest_version || "";
+                    this.releaseNotes = r.data.release_notes || "";
+                    this.hasUpdate = r.data.has_update;
+                    if (r.data.error) this.updateError = r.data.error;
+                }
+            } catch(e) {}
+        },
+        async checkUpdate() {
+            this.checking = true;
+            this.updateError = "";
+            await this.fetchVersion();
+            if (!this.hasUpdate && !this.updateError) showToast("New version", "success");
+            this.checking = false;
+        },
+        progressPercent() {
+            const percent = Number(this.updateStatus.percent || 0);
+            return Math.max(0, Math.min(100, percent));
+        },
+        progressLabel() {
+            if (this.updateStatus.stage === "download_binary" && this.updateStatus.has_total) {
+                return (this.updateStatus.download_percent || 0) + "%";
+            }
+            return this.progressPercent() + "%";
+        },
+        updateStatusText() {
+            if (this.updateStatus.error) return this.updateStatus.error;
+            if (this.updateStatus.stage === "download_binary") {
+                if (this.updateStatus.has_total) {
+                    return (this.updateStatus.message || "Downloading update package...") + " " + (this.updateStatus.download_percent || 0) + "%";
+                }
+                if (this.updateStatus.downloaded_bytes > 0) {
+                    return (this.updateStatus.message || "Downloading update package...") + " Downloaded " + formatBytes(this.updateStatus.downloaded_bytes);
+                }
+            }
+            return this.updateStatus.message || "Preparing update...";
+        },
+        async fetchUpdateStatus() {
+            const prefix = document.body.dataset.panelPrefix || "";
+            try {
+                const resp = await fetch(prefix + "/api/update/status", {
+                    headers: { "X-CSRF-Token": document.querySelector('meta[name="csrf-token"]')?.content || "" },
+                });
+                if (!resp.ok) throw new Error("status " + resp.status);
+                const r = await resp.json();
+                if (r.success) {
+                    const nextStatus = Object.assign({}, this.updateStatus, r.data || {});
+                    if (this.updateStarting && !nextStatus.running) {
+                        return;
+                    }
+                    if (nextStatus.running) this.updateStarting = false;
+                    this.updateStatus = nextStatus;
+                    if (!this.updateStatus.running && this.pollTimer && (!this.updating || this.updateStatus.completed || this.updateStatus.error)) {
+                        clearInterval(this.pollTimer);
+                        this.pollTimer = null;
+                    }
+                }
+            } catch(e) {
+                if (this.updating) {
+                    this.updateStatus = Object.assign({}, this.updateStatus, {
+                        running: true,
+                        message: "Panel is restarting or temporarily unreachable...",
+                        percent: Math.max(this.progressPercent(), 98),
+                    });
+                }
+            }
+            if (this.updating && this.pollStartedAt && Date.now() - this.pollStartedAt > this.maxPollMs) {
+                if (this.pollTimer) {
+                    clearInterval(this.pollTimer);
+                    this.pollTimer = null;
+                }
+                this.updateStarting = false;
+                this.updating = false;
+                this.updateStatus = Object.assign({}, this.updateStatus, {
+                    running: false,
+                    error: "Update status query timed out. Please refresh to confirm panel status.",
+                });
+            }
+        },
+        startStatusPolling() {
+            if (this.pollTimer) clearInterval(this.pollTimer);
+            this.updateStarting = true;
+            this.pollStartedAt = Date.now();
+            this.fetchUpdateStatus();
+            this.pollTimer = setInterval(() => this.fetchUpdateStatus(), 1000);
+        },
+        async doUpdate() {
+            if (!await confirmModal("Confirm update to " + this.latestVersion + "？The panel will be briefly unavailable during the update.")) return;
+            this.updating = true;
+            this.updateError = "";
+            this.updateStatus = { running: true, completed: false, stage: "fetch_release", message: "Preparing update...", percent: 5, download_percent: 0, downloaded_bytes: 0, total_bytes: 0, has_total: false, error: "" };
+            this.startStatusPolling();
+            try {
+                const r = await api("/update/do", { method: "POST" });
+                this.updateStarting = false;
+                await this.fetchUpdateStatus();
+                if (!this.updateStatus.completed) {
+                    this.updateStatus = Object.assign({}, this.updateStatus, { running: false, completed: true, message: this.updateStatus.message || "Update complete; panel is restarting...", percent: 100, error: "" });
+                }
+                showToast(r.data?.message || "Update started", "success");
+                this.updateError = "Update complete. Panel is restarting; auto-refresh in 3 seconds...";
+                setTimeout(() => { location.reload(); }, 3000);
+            } catch(e) {
+                this.updateStarting = false;
+                await this.fetchUpdateStatus();
+                this.updateError = e.message;
+                this.updateStatus = Object.assign({}, this.updateStatus, { running: false, error: this.updateStatus.error || e.message });
+                showToast(e.message, "error");
+                this.updating = false;
+            }
+        }
+    }
+}
+
+
+function dbBackup() {
+    return {
+        backups: [],
+        backingUp: false,
+        async fetchBackups() {
+            try { const r = await api('/settings/db-backup'); if (r.success) this.backups = r.data || []; } catch(e) {}
+        },
+        async doBackup() {
+            this.backingUp = true;
+            try {
+                const r = await api('/settings/db-backup', { method: 'POST' });
+                showToast(r.data?.message || 'Backup complete', 'success');
+                await this.fetchBackups();
+            } catch(e) { showToast(e.message, 'error'); }
+            this.backingUp = false;
+        },
+        doDownload(filename) {
+            const prefix = document.body.dataset.panelPrefix || '';
+            window.open(prefix + '/api/settings/db-backup/' + encodeURIComponent(filename) + '/download');
+        },
+        async doRestore(filename) {
+            if (!await confirmModal('Confirm restoring database from this backup?\n\nRestoreA safety backup will be made first，Restorepanel will auto-restart afterward。\nIfRestorepanel fails to start afterward，safety backupavailablefor rollback。')) return;
+            try {
+                const r = await api('/settings/db-backup/restore', { method: 'POST', body: { filename } });
+                showToast(r.data?.message || 'Restore...', 'success');
+                setTimeout(() => { location.reload(); }, 5000);
+            } catch(e) { showToast(e.message, 'error'); }
+        },
+        async doDelete(filename) {
+            if (!await confirmModal('ConfirmDeletethis backup？')) return;
+            try {
+                const r = await api('/settings/db-backup?filename=' + encodeURIComponent(filename), { method: 'DELETE' });
+                showToast(r.data?.message || 'Deleted', 'success');
+                await this.fetchBackups();
+            } catch(e) { showToast(e.message, 'error'); }
+        }
+    }
+}
+
+function operationLogs() {
+    return {
+        logs: [],
+        logPage: 1,
+        logTotalPages: 1,
+        logTotal: 0,
+        async fetchLogs() {
+            try {
+                const r = await api('/settings/logs?page=' + this.logPage);
+                if (r.success) {
+                    this.logs = r.data?.data || r.data || [];
+                    this.logTotal = r.data?.total || this.logs.length;
+                    this.logPage = r.data?.page || 1;
+                    this.logTotalPages = r.data?.total_pages || 1;
+                }
+            } catch(e) { console.error('fetchLogs error:', e); }
+        },
+        logGoPage(p) {
+            if (p < 1 || p > this.logTotalPages) return;
+            this.logPage = p;
+            this.fetchLogs();
+        },
+        get logPageNumbers() {
+            const pages = [];
+            const total = this.logTotalPages;
+            const current = this.logPage;
+            let start = Math.max(1, current - 2);
+            let end = Math.min(total, start + 4);
+            if (end - start < 4) start = Math.max(1, end - 4);
+            for (let i = start; i <= end; i++) pages.push(i);
+            return pages;
+        }
+    }
+}
+function remoteBackup() {
+    return {
+        cfg: { enabled: false, backup_type: 'rsync', host: '', port: 22, username: 'wpbackup', auth_type: 'key', password: '', remote_path: '', keep_local: true, s3_endpoint: '', s3_bucket: '', s3_region: 'auto', s3_access_key_id: '', s3_secret_key: '', s3_path_prefix: '' },
+        publicKey: '',
+        testing: false,
+        testResult: '',
+        testOK: false,
+        saving: false,
+        saveMsg: '',
+        saveOK: false,
+        showHelp: false,
+        helperPass: '',
+        helperMode: 'create',
+        async fetchRemote() {
+            try {
+                const r = await api('/settings/remote-backup');
+                if (r.success) {
+                    Object.assign(this.cfg, r.data);
+                }
+                if (!this.cfg.backup_type) this.cfg.backup_type = 'rsync';
+                if (!this.cfg.s3_region) this.cfg.s3_region = 'auto';
+                if (this.cfg.backup_type === 'rsync' && this.cfg.auth_type === 'key') this.loadPublicKey();
+            } catch(e) {}
+        },
+        async saveRemote() {
+            this.saving = true;
+            this.saveMsg = '';
+            try {
+                const r = await api('/settings/remote-backup', { method: 'PUT', body: this.cfg });
+                this.saveOK = r.success;
+                this.saveMsg = r.data?.message || (r.success ? 'SettingsSaved' : 'SaveFailed');
+                if (r.success && this.cfg.backup_type === 'rsync' && this.cfg.auth_type === 'key') this.loadPublicKey();
+            } catch(e) { this.saveOK = false; this.saveMsg = e.message; }
+            this.saving = false;
+        },
+        async loadPublicKey() {
+            try {
+                const r = await api('/settings/remote-backup');
+                if (r.success && r.data.ssh_key) this.publicKey = r.data.ssh_key;
+            } catch(e) {}
+        },
+        async testConnection() {
+            this.testing = true;
+            this.testResult = '';
+            this.testOK = false;
+            try {
+                const r = await api('/settings/remote-backup/test', { method: 'POST' });
+                this.testOK = r.success;
+                this.testResult = r.data?.message || (r.success ? 'Connection OK' : 'Connection failed');
+            } catch(e) { this.testResult = e.message; }
+            this.testing = false;
+        },
+        genPassword() {
+            const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+            let pw = '';
+            for (let i = 0; i < 20; i++) pw += chars[Math.floor(Math.random() * chars.length)];
+            if (this.cfg.auth_type === 'password') {
+                this.cfg.password = pw;
+            } else {
+                this.helperPass = pw;
+            }
+        },
+        genCmd() {
+            var u = this.cfg.username || 'wpbackup';
+            var dir = this.cfg.remote_path || '/home/' + u + '/backup';
+
+            var authType = this.cfg.auth_type || 'key';
+
+            if (this.helperMode === 'delete') {
+                return 'userdel -r ' + u + ' && rm -rf ' + dir;
+            }
+
+            var p;
+            if (authType === 'password') {
+                p = this.cfg.password;
+            } else {
+                if (!this.helperPass) this.genPassword();
+                p = this.helperPass;
+            }
+
+            var lines = [
+                'useradd -m -s /bin/bash ' + u,
+                "echo '" + u + ':' + p + "' | chpasswd",
+                'mkdir -p ' + dir
+            ];
+
+            if (authType === 'key' && this.publicKey) {
+                lines.push('mkdir -p /home/' + u + '/.ssh');
+                lines.push("echo '" + this.publicKey.trim() + "' >> /home/" + u + '/.ssh/authorized_keys');
+                lines.push('chmod 700 /home/' + u + '/.ssh');
+                lines.push('chmod 600 /home/' + u + '/.ssh/authorized_keys');
+            }
+
+            lines.push('chown -R ' + u + ':' + u + ' ' + dir + ' /home/' + u);
+            lines.push('chmod 755 ' + dir);
+
+            return lines.join(' && ');
+        },
+        async copyCmd() {
+            var cmd = this.genCmd();
+            if (!cmd) return;
+            try {
+                await navigator.clipboard.writeText(cmd);
+                showToast('Command copied. Paste and run as root on the remote server', 'success');
+            } catch(e) {
+                var ta = document.createElement('textarea');
+                ta.value = cmd;
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand('copy');
+                document.body.removeChild(ta);
+                showToast('Command copied', 'success');
+            }
+        }
+    }
+}
+function systemUpdate() {
+    return {
+        packages: [],
+        count: 0,
+        checking: false,
+        updating: false,
+        msg: '',
+        ok: false,
+        output: '',
+        async check() {
+            this.checking = true;
+            this.msg = '';
+            try {
+                const r = await api('/system/updates');
+                if (r.success) {
+                    this.packages = r.data.packages || [];
+                    this.count = r.data.count || 0;
+                }
+            } catch(e) { showToast(e.message, 'error'); }
+            this.checking = false;
+        },
+        async doUpdate() {
+            if (!await confirmModal('Confirm running system update?\n\nUpdates may take several minutes. If the page times out, do NOT click again — the backend is still running; repeated actions will cause dpkg lock conflicts.')) return;
+            this.updating = true;
+            this.msg = '';
+            this.output = '';
+            try {
+                const r = await api('/system/updates/do', { method: 'POST', timeout: 120000 });
+                this.ok = r.success;
+                this.msg = r.data?.message || (r.success ? 'Update complete' : 'Update failed');
+                this.output = r.data?.output || '';
+                if (r.success) { this.packages = []; this.count = 0; }
+            } catch(e) { this.ok = false; this.msg = e.message; }
+            this.updating = false;
+        }
+    }
+}
+</script>
+{{end}}

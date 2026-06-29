@@ -1,0 +1,434 @@
+{{template "base" .}}
+{{define "security_content"}}
+<div x-data="securitySettings()" x-init="fetchSettings(); fetchCDNGroups()">
+    <div class="flex items-center justify-between mb-6">
+        <h2 class="text-xl font-bold text-white">Security Settings</h2>
+        <button @click="showHelp = true" class="btn-secondary text-sm">Help & Info</button>
+    </div>
+
+    <div x-show="showHelp" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/60" @click.self="showHelp = false">
+        <div class="bg-gray-800 rounded-lg p-6 max-w-4xl w-full mx-4 shadow-xl max-h-[80vh] overflow-y-auto">
+            <h3 class="text-lg font-bold text-white mb-4">Security SettingsGuide</h3>
+            <div class="text-sm text-gray-300 space-y-4">
+                <div>
+                    <p class="text-white font-semibold mb-2">Fail2ban Configuration Items</p>
+                    <ul class="space-y-3 ml-2">
+                        <li>
+                            <p class="text-blue-400 font-medium">Trigger Threshold (hits)</p>
+                            <p>Within the tracking window, an IP reaching this many pattern hits is auto-banned. Default:  <span class="text-blue-400">5</span>  hits. Lower = more sensitive (risk of false positives); higher = more lenient. See Security Defense page for pattern details.</p>
+                        </li>
+                        <li>
+                            <p class="text-blue-400 font-medium">Tracking Window (seconds)</p>
+                            <p>Time range for accumulating violation counts. Default:  <span class="text-blue-400">60</span>  seconds. Works with trigger threshold: e.g., default means "5 violations in 60 seconds triggers ban". Larger window makes it easier to trigger.</p>
+                        </li>
+                        <li>
+                            <p class="text-blue-400 font-medium">Ban Duration (seconds)</p>
+                            <p>How long an IP is blocked after first violation triggers a ban. Default:  <span class="text-blue-400">600</span>  seconds (10 minutes). Fail2ban auto-releases on expiry, but if the IP re-violates within 24 hours, it escalates to a 24-hour ban.</p>
+                        </li>
+                    </ul>
+                </div>
+                <div>
+                    <p class="text-white font-semibold mb-2">Whitelist Mechanism</p>
+                    <ul class="space-y-3 ml-2">
+                        <li>
+                            <p class="text-blue-400 font-medium">Official Whitelist</p>
+                            <p>Panel auto-fetches the latest IP ranges from the following official sources and adds them to the Fail2ban whitelist to prevent blocking legitimate crawlers and CDN nodes:</p>
+                            <ul class="list-disc list-inside ml-2 mt-1 space-y-0.5">
+                                <li><span class="text-white">Cloudflare</span>  — global CDN and reverse proxy IP ranges (IPv4 + IPv6)</li>
+                                <li><span class="text-white">Googlebot</span>  — Google search crawler official IP ranges</li>
+                                <li><span class="text-white">Bingbot</span>  — Bing search crawler official IP ranges</li>
+                            </ul>
+                            <p class="text-gray-500 mt-1">When "Auto-update weekly" is enabled, the system re-fetches the latest IPs every Monday at 4:00 AM.</p>
+                        </li>
+                        <li>
+                            <p class="text-blue-400 font-medium">Custom Whitelist</p>
+                            <p>Manually add IPs or IP ranges that should never be banned, one per line. Supports IPv4/IPv6 addresses and CIDR format (e.g.  <code>10.0.0.0/8</code>）。Custom Whitelistdoes NOToverwritten by official fetches。</p>
+                        </li>
+                        <li>
+                            <p class="text-blue-400 font-medium">WordPress Security Log Path Whitelist</p>
+                            <p>Excludes normal files from search engines, ad platforms, site ownership verification, etc. This setting only affects WordPress anomaly access statistics, not generic PHP sites, and does not directly allow or block requests.</p>
+                        </li>
+                    </ul>
+                </div>
+                <div>
+                    <p class="text-white font-semibold mb-2">Rate Limiting Details</p>
+                    <ul class="space-y-3 ml-2">
+                        <li>
+                            <p class="text-blue-400 font-medium">How It Works: Token Bucket Algorithm</p>
+                            <p>The system maintains one token bucket per IP, with capacity equal to the burst buffer, refilling 1 token per second (based on request rate). Requests consume tokens; when depleted, returns 429. <span class="text-green-400">Human browsing has natural pauses (reading pages), during which the bucket auto-refills</span>; bots making continuous requests are limited to 1 request/sec once tokens are exhausted.</p>
+                        </li>
+                        <li>
+                            <p class="text-blue-400 font-medium">Request Rate (req/min)</p>
+                            <p>Controls the long-term sustained rate, i.e., token refill speed. Default:  <span class="text-blue-400">60</span>  req/min (= 1 req/sec). Bot scans usually far exceed this, depleting the token bucket within seconds — nearly all requests return 429.</p>
+                        </li>
+                        <li>
+                            <p class="text-blue-400 font-medium">Burst Buffer (hits)</p>
+                            <p>Controls token bucket capacity, i.e., maximum concurrent requests allowed at page open. Default:  <span class="text-blue-400">300</span>  hits, covering Elementor + multi-plugin sites (100+ requests/page) with 2-3 tabs open. For more concurrent tabs, set a larger value (e.g., 500-600). Non-Elementor / light sites can lower to 30-120.</p>
+                            <p class="text-green-400 mt-1">Increasing this value<span class="text-green-300 font-semibold">does NOT</span>delay bot blocking — bots are suppressed by the sustained rate (1 req/sec), independent of burst buffer size. Security is not weakened.</p>
+                        </li>
+                        <li>
+                            <p class="text-red-400 font-semibold">⚠️ Warning: IPs that repeatedly return 429 will be auto-banned by Fail2ban</p>
+                            <p class="text-red-400">429 responses are captured by Fail2ban rules and counted as violations (same level as wp-login brute force). Accumulating to the threshold triggers a firewall ban. Ensure the burst buffer is sufficient for normal use to avoid legitimate visitors accidentally triggering 429 and being blocked.</p>
+                        </li>
+                        <li>
+                            <p class="text-green-400 font-semibold">✓ Increasing burst buffer does not affect bot blocking</p>
+                            <p>Bots are characterized by continuous requests (no human browsing pauses) and are strictly limited to 1 req/sec by the request rate; after token depletion, nearly all requests return 429. Increasing burst buffer only gives human visitors more leeway for initial page load, <span class="text-green-400">security protection is completely unaffected</span>. The real constraint comes from the sustained rate, not the burst ceiling.</p>
+                        </li>
+                        <li>
+                            <p class="text-blue-400 font-medium">How to Test Configuration Suitability</p>
+                            <p>Open the site in a browser incognito window and browse 5-10 random pages (homepage, category, post). Open Developer Tools (F12) → Network tab and check for red 429 status codes. All 200/304 means the configuration is appropriate.</p>
+                        </li>
+                    </ul>
+                </div>
+                <div>
+                    <p class="text-white font-semibold mb-2">Bot Rate Limiting Guide</p>
+                    <ul class="space-y-3 ml-2">
+                        <li>
+                            <p class="text-blue-400 font-medium">Scope</p>
+                            <p>Bot Rate LimitingOff by default. When enabled, each site has its ownBot Rate Limitingbucket；Common bots hitting the same site Bot UA share that bucket，Regular browsersdoes NOTenter this rate limit layer。</p>
+                        </li>
+                        <li>
+                            <p class="text-blue-400 font-medium">Search Engine Exemption</p>
+                            <p>Googlebot/Bingbot are only exempt from bot rate limiting when their source IP matches official IP ranges. Requests impersonating search engines enter the site's bot rate limit bucket.</p>
+                        </li>
+                        <li>
+                            <p class="text-blue-400 font-medium">Default Bot Detection</p>
+                            <p>Currently matches Googlebot, Bingbot, Facebook/Meta (facebookexternalhit, facebook, meta-externalagent), Twitterbot, LinkedInBot, Slackbot, Discordbot, TelegramBot, SemrushBot, AhrefsBot, MJ12Bot, DotBot, and requests with bot, crawler, spider, scraper, or scan in the UA.</p>
+                        </li>
+                        <li>
+                            <p class="text-blue-400 font-medium">Recommended Defaults</p>
+                            <p>Default 30 req/min, burst 20, primarily used to suppress multi-IP fake crawler scanning and reduce WordPress dynamic 404 pressure. After adjusting, monitor 429 counts and normal crawl behavior in access logs.</p>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+            <div class="mt-5 text-right">
+                <button @click="showHelp = false" class="btn-primary text-sm">Got it</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-6">
+        <div class="card">
+            <h3 class="text-lg font-semibold text-white mb-4">Fail2ban Configuration</h3>
+            <form @submit.prevent="save">
+                <div class="mb-4">
+                    <label class="label">Trigger Threshold (hits)</label>
+                    <input type="number" x-model="settings.fail2ban_maxretry" class="input-field" min="1" max="20">
+                </div>
+                <div class="mb-4">
+                    <label class="label">Tracking Window (sec)</label>
+                    <input type="number" x-model="settings.fail2ban_findtime" class="input-field" min="10" max="3600">
+                </div>
+                <div class="mb-4">
+                    <label class="label">Ban Duration (sec)</label>
+                    <input type="number" x-model="settings.fail2ban_bantime" class="input-field" min="60" max="86400">
+                </div>
+                <div class="mb-6">
+                    <label class="flex items-center space-x-2 cursor-pointer">
+                        <input type="checkbox" x-model="settings.auto_whitelist_enabled" class="w-4 h-4 rounded border-gray-600 bg-gray-700 text-blue-600">
+                        <span class="text-gray-300">Weekly auto-updateOfficial Whitelist</span>
+                    </label>
+                </div>
+                <button type="submit" class="btn-primary">Save Settings</button>
+            </form>
+        </div>
+
+        <div class="card">
+            <h3 class="text-lg font-semibold text-white mb-4">Request Rate Limiting</h3>
+            <form @submit.prevent="saveRateLimit">
+                <div class="mb-4">
+                    <label class="flex items-center space-x-2 cursor-pointer">
+                        <input type="checkbox" x-model="settings.rate_limit_enabled" class="w-4 h-4 rounded border-gray-600 bg-gray-700 text-blue-600">
+                        <span class="text-gray-300">Enable Global Rate Limiting</span>
+                    </label>
+                    <p class="text-xs text-gray-500 mt-1">When enabled, unauthenticated visitors are rate-limited. Logged-in WordPress users are automatically exempt. Repeated 429 triggers will be banned by Fail2ban.</p>
+                </div>
+                <div class="mb-4">
+                    <label class="label">Request Rate Limiting (/)</label>
+                    <input type="number" x-model="settings.rate_limit_rpm" class="input-field" min="10" max="600">
+                    <p class="text-xs text-gray-500 mt-1">For non-Elementor heavy pages, 30-60 is recommended. Elementor / multi-plugin sites:  60-120。See the "Help & Info" button for adjustment and testing guidance.</p>
+                </div>
+                <div class="mb-4">
+                    <label class="label">Burst Buffer (hits)</label>
+                    <input type="number" x-model="settings.rate_limit_burst" class="input-field" min="5" max="600">
+                    <p class="text-xs text-gray-500 mt-1">Concurrent request buffer for initial page load.。Elementor / multi-plugin sites:  150-300，Non- Elementor Recommended 30-120。See the "Help & Info" button for adjustment and testing guidance.</p>
+                    <p class="text-xs text-red-400 mt-1">Note: IPs repeatedly triggering 429 will be auto-banned by Fail2ban; ensure sufficient buffer is reserved.</p>
+                </div>
+                <button type="submit" class="btn-primary">Save Rate Limit Settings</button>
+            </form>
+        </div>
+
+        <div class="card">
+            <h3 class="text-lg font-semibold text-white mb-4">Bot Rate Limiting</h3>
+            <form @submit.prevent="saveBotLimit">
+                <div class="mb-4">
+                    <label class="flex items-center space-x-2 cursor-pointer">
+                        <input type="checkbox" x-model="settings.bot_limit_enabled" class="w-4 h-4 rounded border-gray-600 bg-gray-700 text-blue-600">
+                        <span class="text-gray-300">Enable Bot UA Unified Rate Limiting</span>
+                    </label>
+                    <p class="text-xs text-gray-500 mt-1">Off by default. When enabled, each site has independent rate limits; common Bot UAs share that site's bucket. Regular browsers are unaffected.</p>
+                </div>
+                <div class="mb-4">
+                    <label class="label">Bot Request Rate (req/min)</label>
+                    <input type="number" x-model="settings.bot_limit_rpm" class="input-field" min="5" max="300">
+                    <p class="text-xs text-gray-500 mt-1">Default 30. Used to suppress multi-IP fake crawler scanning and prevent overwhelming WordPress dynamic 404.</p>
+                </div>
+                <div class="mb-4">
+                    <label class="label">Bot Burst Buffer (hits)</label>
+                    <input type="number" x-model="settings.bot_limit_burst" class="input-field" min="5" max="300">
+                    <p class="text-xs text-gray-500 mt-1">Default 20. Googlebot/Bingbot are only exempt when source IP matches official ranges; fake crawlers enter the rate limit bucket.</p>
+                </div>
+                <button type="submit" class="btn-primary">SaveBot Rate Limiting</button>
+            </form>
+        </div>
+        <div class="card">
+            <h3 class="text-lg font-semibold text-white mb-4">Whitelist Management</h3>
+        <div class="mb-4">
+            <div class="flex items-center justify-between mb-2">
+                <label class="label">Official Whitelist（auto-fetched by panel）</label>
+                <button @click="refreshWhitelist" class="text-sm py-1 px-3 rounded" style="background-color: #166534; color: #bbf7d0;">Fetch Now</button>
+            </div>
+            <textarea x-model="settings.official_whitelist_ips" class="input-field font-mono text-sm" rows="5" readonly disabled style="opacity: 0.6;"></textarea>
+            <p class="text-gray-500 text-xs mt-1" x-text="'Last updated: ' + (settings.last_whitelist_update || 'Never')"></p>
+        </div>
+        <div class="mb-4">
+            <label class="label">Custom Whitelist（does NOToverwritten by official fetches）</label>
+            <textarea x-model="settings.whitelist_ips" class="input-field font-mono text-sm" rows="4" placeholder="1.2.3.4&#10;10.0.0.0/8"></textarea>
+        </div>
+        <button @click="saveWhitelist" class="btn-primary">SaveCustom Whitelist</button>
+        <div class="mt-6 pt-4 border-t border-gray-700/50">
+            <label class="label">WordPress Security Log Path Whitelist</label>
+            <textarea x-model="settings.wp_security_log_whitelist" class="input-field font-mono text-sm" rows="5" placeholder="/google*.html&#10;/BingSiteAuth.xml&#10;/custom-verify-*.txt"></textarea>
+            <p class="text-xs text-gray-500 mt-1">One path per line; wildcard * allowed. Must start with /. No regex, spaces, semicolons, quotes, or ..</p>
+            <button @click="saveWPSecurityLogWhitelist" class="btn-primary mt-3">Save Path Whitelist</button>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-semibold text-white">CDN Real IP Config Groups</h3>
+            <span class="text-xs text-gray-500">Configure once, use everywhere</span>
+        </div>
+        <div class="rounded border border-blue-900/60 bg-blue-950/30 p-3 mb-4 text-sm text-blue-100">
+            <p class="font-medium text-blue-200">When CDN Real IP is enabled for a site, log analysis, anomaly detection, and auto-banning work based on the real visitor IP.</p>
+            <p class="text-xs text-blue-200/80 mt-1">does NOTfill in CDN origin IP ，choose“Generic CDN（Compatibility Mode）”。In normal CDN scenarios, CDN nodes are not mistakenly blocked.</p>
+            <p class="text-xs text-blue-200/80 mt-1">If you have the CDN origin IP ranges, create a config group and fill them in to reduce header spoofing risk. Cloudflare is handled automatically by the system.</p>
+        </div>
+        <div class="space-y-2 mb-4">
+            <template x-for="g in cdnGroups" :key="g.id">
+                <div class="rounded border border-gray-700 p-3 text-sm">
+                    <div class="flex items-start justify-between gap-3">
+                        <div>
+                            <div class="text-white font-medium">
+                                <span x-text="g.name"></span>
+                                <span x-show="g.builtin" class="badge-info ml-2">Built-in</span>
+                                <span x-show="!g.enabled" class="badge-warning ml-2">Disabled</span>
+                            </div>
+                            <div class="text-xs text-gray-400 mt-1">
+                                <span x-text="'Header: ' + g.header_name"></span>
+                                <span class="mx-2">|</span>
+                                <span x-text="cdnGroupModeLabel(g)"></span>
+                            </div>
+                            <p x-show="g.provider === 'compatible'" class="text-xs text-gray-500 mt-1">choose this mode if CDN origin IP ranges are unknown; suitable for most CDN scenarios.</p>
+                            <p x-show="g.provider === 'cloudflare'" class="text-xs text-gray-500 mt-1">Cloudflare real IP is handled globally by the system; no need to select this group on the site detail page.</p>
+                        </div>
+                        <div x-show="!g.builtin" class="flex items-center space-x-2">
+                            <button @click="editCDNGroup(g)" class="btn-secondary text-xs py-1 px-2">Edit</button>
+                            <button @click="deleteCDNGroup(g)" class="btn-danger text-xs py-1 px-2">Delete</button>
+                        </div>
+                    </div>
+                </div>
+            </template>
+        </div>
+        <div class="rounded border border-gray-700 p-3">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                    <label class="label text-xs">Name</label>
+                    <input x-model="cdnGroupForm.name" class="input-field text-sm" placeholder="Alibaba Cloud ESA">
+                </div>
+                <div>
+                    <label class="label text-xs">Real IP Header</label>
+                    <input x-model="cdnGroupForm.header_name" class="input-field text-sm font-mono" placeholder="X-Forwarded-For">
+                </div>
+            </div>
+            <div class="mt-3">
+                <label class="label text-xs">Trusted CDN Origin IP/CIDR</label>
+                <textarea x-model="cdnGroupForm.ip_ranges" class="input-field font-mono text-sm" rows="4" placeholder="One per line; leave empty for compatibility mode"></textarea>
+                <p class="text-xs text-gray-500 mt-1">does If you don't know the CDN origin IP ranges, you can leave it blank; the site will use compatibility mode. If you have the provider's origin IP ranges, fill them in here for stricter, more reliable logging and banning.</p>
+            </div>
+            <div class="mt-3">
+                <label class="label text-xs">Notes</label>
+                <input x-model="cdnGroupForm.description" class="input-field text-sm" placeholder="For describing CDN provider or usage">
+            </div>
+            <label class="flex items-center space-x-2 text-sm text-gray-300 mt-3">
+                <input type="checkbox" x-model="cdnGroupForm.enabled">
+                <span>Enable Config Group</span>
+            </label>
+            <div class="mt-3 flex items-center space-x-2">
+                <button @click="saveCDNGroup()" :disabled="cdnGroupSaving" class="btn-primary text-sm" x-text="cdnGroupForm.id ? 'Save Config Group' : 'Create Config Group'"></button>
+                <button x-show="cdnGroupForm.id" @click="resetCDNGroupForm()" class="btn-secondary text-sm">CancelEdit</button>
+            </div>
+            <p class="text-xs text-gray-500 mt-2">Common CDN providers typically use X-Forwarded-For; header names only allow letters, digits, and hyphens.</p>
+        </div>
+    </div>
+
+    <div class="card">
+        <h3 class="text-lg font-semibold text-white mb-4">Anonymous Installation Statistics</h3>
+        <div class="mb-4">
+            <label class="flex items-center space-x-2 cursor-pointer">
+                <input type="checkbox" x-model="settings.telemetry_enabled" @change="saveTelemetry" class="w-4 h-4 rounded border-gray-600 bg-gray-700 text-blue-600">
+                <span class="text-gray-300">EnablingAnonymous Installation Statistics</span>
+            </label>
+            <p class="text-xs text-gray-500 mt-2">Reports an anonymous heartbeat once daily to stats.wp-panel.org, containing only an anonymous machine identifier (SHA256 hash of /etc/machine-id) and the panel version. <strong>Does NOT include</strong> IP, domain, site info, or any sensitive data. This helps us know how many users support WP Panel.</p>
+        </div>
+    </div>
+</div>
+
+<script>
+function securitySettings() {
+    return {
+        settings: {},
+        showHelp: false,
+        cdnGroups: [],
+        cdnGroupSaving: false,
+        cdnGroupForm: { id: null, name: '', header_name: 'X-Forwarded-For', ip_ranges: '', enabled: true, description: '' },
+        async fetchSettings() {
+            try {
+                const r = await api('/security/settings');
+                if (r.success) {
+                    const map = {};
+                    r.data.forEach(s => {
+                        let v = s.svalue;
+                        if (['auto_whitelist_enabled','rate_limit_enabled','bot_limit_enabled','telemetry_enabled'].includes(s.skey)) v = v === 'true';
+                        else if (['fail2ban_maxretry','fail2ban_findtime','fail2ban_bantime','rate_limit_rpm','rate_limit_burst','bot_limit_rpm','bot_limit_burst'].includes(s.skey)) v = parseInt(v) || 0;
+                        map[s.skey] = v;
+                    });
+                    if (typeof map.bot_limit_enabled === 'undefined') map.bot_limit_enabled = false;
+                    if (typeof map.bot_limit_rpm === 'undefined') map.bot_limit_rpm = 30;
+                    if (typeof map.bot_limit_burst === 'undefined') map.bot_limit_burst = 20;
+                    this.settings = map;
+                }
+            } catch(e) {}
+        },
+        async fetchCDNGroups() {
+            try {
+                const r = await api('/security/cdn-realip-groups');
+                if (r.success) this.cdnGroups = r.data || [];
+            } catch(e) { showToast('Failed to read CDN config groups: ' + e.message, 'error'); }
+        },
+        cdnGroupModeLabel(group) {
+            if ((group.ip_ranges || '').trim()) return 'Strict mode: trusted origin IP ranges provided';
+            if (group.provider === 'cloudflare') return 'System-managed: auto-fetches Cloudflare IPs';
+            if (group.provider === 'compatible') return 'Compatibility Mode：does not fill in origin IP ranges.';
+            return 'Compatibility mode: no trusted origin IP ranges provided';
+        },
+        resetCDNGroupForm() {
+            this.cdnGroupForm = { id: null, name: '', header_name: 'X-Forwarded-For', ip_ranges: '', enabled: true, description: '' };
+        },
+        editCDNGroup(group) {
+            this.cdnGroupForm = {
+                id: group.id,
+                name: group.name || '',
+                header_name: group.header_name || 'X-Forwarded-For',
+                ip_ranges: group.ip_ranges || '',
+                enabled: !!group.enabled,
+                description: group.description || ''
+            };
+        },
+        async saveCDNGroup() {
+            this.cdnGroupSaving = true;
+            try {
+                const body = {
+                    name: this.cdnGroupForm.name || '',
+                    header_name: this.cdnGroupForm.header_name || '',
+                    ip_ranges: this.cdnGroupForm.ip_ranges || '',
+                    enabled: !!this.cdnGroupForm.enabled,
+                    description: this.cdnGroupForm.description || ''
+                };
+                const url = this.cdnGroupForm.id ? '/security/cdn-realip-groups/' + this.cdnGroupForm.id : '/security/cdn-realip-groups';
+                const method = this.cdnGroupForm.id ? 'PUT' : 'POST';
+                const r = await api(url, { method, body });
+                showToast(r.data?.message || 'CDN config group saved', 'success');
+                this.resetCDNGroupForm();
+                await this.fetchCDNGroups();
+            } catch(e) { showToast(e.message, 'error'); }
+            finally { this.cdnGroupSaving = false; }
+        },
+        async deleteCDNGroup(group) {
+            if (!await confirmModal('Confirm deletion of CDN config group "' + group.name + '"? Sites bound to it will no longer use this group.')) return;
+            try {
+                const r = await api('/security/cdn-realip-groups/' + group.id, { method: 'DELETE' });
+                showToast(r.data?.message || 'CDN config group deleted', 'success');
+                await this.fetchCDNGroups();
+            } catch(e) { showToast(e.message, 'error'); }
+        },
+        async save() {
+            try {
+                await api('/security/settings', { method: 'PUT', body: this.settings });
+                showToast('Settings saved', 'success');
+            } catch(e) { showToast(e.message, 'error'); }
+        },
+        async saveRateLimit() {
+            try {
+                await api('/security/settings', { method: 'PUT', body: {
+                    rate_limit_enabled: this.settings.rate_limit_enabled ? 'true' : 'false',
+                    rate_limit_rpm: String(this.settings.rate_limit_rpm || 60),
+                    rate_limit_burst: String(this.settings.rate_limit_burst || 300),
+                } });
+                showToast('rate limitSettings saved', 'success');
+            } catch(e) { showToast(e.message, 'error'); }
+        },
+        async saveBotLimit() {
+            try {
+                await api('/security/settings', { method: 'PUT', body: {
+                    bot_limit_enabled: this.settings.bot_limit_enabled ? 'true' : 'false',
+                    bot_limit_rpm: String(this.settings.bot_limit_rpm || 30),
+                    bot_limit_burst: String(this.settings.bot_limit_burst || 20),
+                } });
+                showToast('Bot Rate Limiting saved', 'success');
+            } catch(e) { showToast(e.message, 'error'); }
+        },
+        async saveTelemetry() {
+            if (!this.settings.telemetry_enabled) {
+                const confirmed = await confirmModal(
+                    'Disabling will stop counting your server in installation statistics.\n\n' +
+                    'Reported data contains absolutely no sensitive information — only the anonymous machine identifier (SHA256 hash) and panel version.' +
+                    'This is purely to let us know how many users support WP Panel.\n\n' +
+                    'Confirm disabling?'
+                );
+                if (!confirmed) {
+                    this.settings.telemetry_enabled = true;
+                    return;
+                }
+            }
+            try {
+                await api('/security/settings', { method: 'PUT', body: {
+                    telemetry_enabled: this.settings.telemetry_enabled ? 'true' : 'false',
+                } });
+                showToast(this.settings.telemetry_enabled ? 'Anonymous stats enabled' : 'Anonymous stats disabled', 'success');
+            } catch(e) { showToast(e.message, 'error'); }
+        },
+        async saveWhitelist() {
+            try {
+                await api('/security/settings', { method: 'PUT', body: { whitelist_ips: this.settings.whitelist_ips || '' } });
+                showToast('Whitelist updated', 'success');
+            } catch(e) { showToast(e.message, 'error'); }
+        },
+        async saveWPSecurityLogWhitelist() {
+            try {
+                await api('/security/settings', { method: 'PUT', body: { wp_security_log_whitelist: this.settings.wp_security_log_whitelist || '' } });
+                showToast('WordPress Security Log Path WhitelistUpdated', 'success');
+            } catch(e) { showToast(e.message, 'error'); }
+        },
+        async refreshWhitelist() {
+            try {
+                const r = await api('/security/whitelist/refresh', { method: 'POST' });
+                showToast(r.data?.message || 'Triggered', 'success');
+                await this.fetchSettings();
+            } catch(e) { showToast(e.message, 'error'); }
+        }
+    }
+}
+</script>
+{{end}}
