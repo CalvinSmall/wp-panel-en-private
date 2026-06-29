@@ -1,7 +1,7 @@
 <?php
 /**
  * Plugin Name: WP Panel Optimizer
- * Plugin URI:  https://github.com/naibabiji/wp-panel
+ * Plugin URI:  https://github.com/CalvinSmall/wp-panel-en-private
  * Description: Works with WP Panel to manage FastCGI cache, preloading, debug mode, post revisions, memory limit and other optimizations. Auto clears cache on publish/update posts.
  * Version:     1.1.5
  * Author:      WP Panel
@@ -265,7 +265,7 @@ class WP_Panel_Optimizer {
         <div class="wrap">
             <?php $pluginVersion = WP_Panel_Optimizer::VERSION; ?>
             <h1>WP Panel Optimizer</h1>
-            <p><?php _e('Managed by', 'wp-panel-optimizer'); ?> <a href="https://github.com/naibabiji/wp-panel" target="_blank">WP Panel</a>. <?php _e('Current site:', 'wp-panel-optimizer'); ?> <code><?php echo esc_html($currentDomain); ?></code></p>
+            <p><?php _e('Managed by', 'wp-panel-optimizer'); ?> <a href="https://github.com/CalvinSmall/wp-panel-en-private" target="_blank">WP Panel</a>. <?php _e('Current site:', 'wp-panel-optimizer'); ?> <code><?php echo esc_html($currentDomain); ?></code></p>
             <p><?php _e('Plugin version:', 'wp-panel-optimizer'); ?> <code><?php echo esc_html($pluginVersion); ?></code>
                 <button type="button" id="wpp-check-update-btn" class="button"><?php _e('Check for updates', 'wp-panel-optimizer'); ?></button>
                 <span id="wpp-update-result"></span>
@@ -987,7 +987,7 @@ class WP_Panel_Optimizer {
 
         $result = [
             'tag_name' => 'v' . $m[1],
-            'html_url' => 'https://github.com/naibabiji/wp-panel/releases',
+            'html_url' => 'https://github.com/CalvinSmall/wp-panel-en-private/releases',
         ];
         set_transient('wpp_optimizer_release_v2', $result, HOUR_IN_SECONDS);
         return $result;

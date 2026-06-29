@@ -975,7 +975,7 @@ chmod 600 "$CONFIG_FILE"
 log_info "Deploying panel binary..."
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-GITHUB_RELEASE="https://github.com/naibabiji/wp-panel/releases/latest/download/wp-panel"
+GITHUB_RELEASE="https://github.com/CalvinSmall/wp-panel-en-private/releases/latest/download/wp-panel"
 GHPROXY_RELEASE="${GHPROXY}/${GITHUB_RELEASE}"
 
 install_downloaded_binary() {
@@ -1090,7 +1090,7 @@ echo -e "${BOLD}============================================${NC}"
 echo ""
 echo -e "${BOLD}Official Sources:${NC}"
 echo -e "  Website:     ${BOLD}https://wp-panel.org${NC}"
-echo -e "  GitHub:     ${BOLD}https://github.com/naibabiji/wp-panel${NC}"
+echo -e "  GitHub:     ${BOLD}https://github.com/CalvinSmall/wp-panel-en-private${NC}"
 echo -e "  Aside from wp-panel.org and this GitHub repo, no other domain is affiliated with this project."
 echo ""
 echo -e "Public IP:   ${BOLD}${PUBLIC_IP}${NC}"

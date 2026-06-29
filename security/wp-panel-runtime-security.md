@@ -648,7 +648,7 @@ The panel only writes to the cron file when you **actively create a scheduled ta
 sha256sum /usr/local/bin/wp-panel
 
 # Compare with the checksum on GitHub Releases
-# https://github.com/naibabiji/wp-panel/releases
+# https://github.com/CalvinSmall/wp-panel-en-private/releases
 ```
 
 ### 8.4 View Panel Operation Logs

@@ -10,7 +10,7 @@ A dedicated server management panel for WordPress. One line of code turns a clea
 ## Official Sources
 
 - Official website: <https://wp-panel.org>
-- GitHub repository: <https://github.com/naibabiji/wp-panel>
+- GitHub repository: <https://github.com/CalvinSmall/wp-panel-en-private>
 
 Aside from `wp-panel.org` and this GitHub repository, no other domain is an official WP Panel website or affiliated with this project.
 
@@ -42,13 +42,13 @@ WP Panel does one thing: **efficiently manage WordPress sites on a VPS**. No Doc
 ## One-Click Install
 
 ```bash
-apt-get update && apt-get install -y wget ca-certificates && wget -qO- https://raw.githubusercontent.com/naibabiji/wp-panel/main/install.sh | bash
+apt-get update && apt-get install -y wget ca-certificates && wget -qO- https://raw.githubusercontent.com/CalvinSmall/wp-panel-en-private/main/install.sh | bash
 ```
 
 **Servers in China**: If GitHub is unreachable, use the China-optimized script:
 
 ```bash
-apt-get update && apt-get install -y wget ca-certificates && wget -qO- https://gh.wp-panel.org/https://raw.githubusercontent.com/naibabiji/wp-panel/main/install-cn.sh | bash
+apt-get update && apt-get install -y wget ca-certificates && wget -qO- https://raw.githubusercontent.com/CalvinSmall/wp-panel-en-private/main/install.sh | bash
 ```
 
 After installation, the panel URL and two-layer login credentials (BasicAuth + Web login) will be displayed.
@@ -115,7 +115,7 @@ More detailed security mechanisms:
 
 White-hat researchers and security professionals are welcome to test this project. If you discover a vulnerability, please report it via:
 
-- **Public report**: Submit a [GitHub Issue](https://github.com/naibabiji/wp-panel/issues) with `[Security]` in the title
+- **Public report**: Submit a [GitHub Issue](https://github.com/CalvinSmall/wp-panel-en-private/issues) with `[Security]` in the title
 - **Private report**: Submit a Private Vulnerability Report via the GitHub Security tab
 - Valid vulnerabilities will be acknowledged with credit to the reporter in the Release Notes after the fix
 
